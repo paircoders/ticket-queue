@@ -68,7 +68,7 @@
 | REQ-EVT-005 | 공연 상세 조회 | 공연 정보 및 잔여 좌석 수 조회 | A개발자 | 기능 | 필수 | P95 < 100ms |
 | REQ-EVT-006 | 공연 좌석 정보 조회 | 등급별(VIP/S/A/B) 그룹핑 조회 | A개발자 | 기능 | 필수 | P95 < 300ms |
 | REQ-EVT-007 | 공연 상태 관리 | UPCOMING / ONGOING / ENDED / CANCELLED | A개발자 | 기능 | 필수 | |
-| REQ-EVT-008 | 좌석 상태 관리 | AVAILABLE/HOLD/SOLD 상태 관리. 동기 API와 Kafka 이벤트로 상태 전이 | A개발자 | 기능 | 필수 | REQ-EVT-026 연계 |
+| REQ-EVT-008 | 좌석 상태 관리 | HOLD: Redis TTL 관리, SOLD: RDB 저장. Kafka 이벤트로 상태 전이 | A개발자 | 기능 | 필수 | REQ-EVT-026 연계 |
 | REQ-EVT-009 | 좌석 등급 관리 | VIP / S / A / B 등급 관리 | A개발자 | 기능 | 필수 | |
 | REQ-EVT-010 | 공연장 생성 (관리자) | 공연장명, 주소 등록 | A개발자 | 기능 | 필수 | |
 | REQ-EVT-011 | 공연장 수정 | 공연장 정보 수정 | A개발자 | 기능 | 선택 | |
@@ -116,18 +116,19 @@
 
 | 요구사항 ID | 요구사항명 | 요구사항 설명 | 담당자 | 분류 | 필수여부 | 비고 |
 |------------|-----------|-------------|-------|------|---------|-----|
-| REQ-RSV-001 | 좌석 선점 (임시 예매) | 좌석 선택 시 **Redis 분산 락(Redisson)**으로 동시성을 제어하고, **5분간** 좌석을 '결제 대기(PENDING)' 상태로 선점 | B개발자 | 기능 | 필수 | 좌석 선점권 |
-| REQ-RSV-002 | 분산 락 (동시성 제어) | **Redisson**을 활용한 좌석 단위 락(Lock) 구현으로 중복 예매 완벽 차단 및 데이터 무결성 보장 | B개발자 | 비기능 | 필수 | 데이터 무결성 |
-| REQ-RSV-003 | 예매 데이터 생성 | 락 획득 성공 시 RDB에 예매 정보를 생성(PENDING)하고, Redis에 TTL(5분)을 설정하여 선점 상태 관리 | B개발자 | 기능 | 필수 | 트랜잭션 |
+| REQ-RSV-001 | 좌석 선점 (임시 예매) | Redisson 분산 락으로 좌석 선점, Redis 5분 TTL, RDB 예매정보 생성(PENDING) | B개발자 | 기능 | 필수 | 좌석 선점권 |
+| REQ-RSV-002 | 좌석 변경 처리 | 선점 중 좌석 변경 시 기존 락 해제 → 신규 좌석 락 획득 → 예매정보 좌석값 업데이트 | B개발자 | 기능 | 필수 | REQ-RSV-001 연계 |
+| REQ-RSV-003 | 좌석 상태 조회 | 공연별 실시간 좌석 상태 조회 (Redis HOLD + RDB SOLD + 나머지 AVAILABLE) | B개발자 | 기능 | 필수 | REQ-EVT-006 연계 |
 | REQ-RSV-004 | 예매 확정 (결제 완료) | 결제 서비스의 성공 이벤트를 수신하여 예매 상태를 '확정(CONFIRMED)'으로 변경 | B개발자 | 기능 | 필수 | Kafka Consumer |
-| REQ-RSV-005 | 1인 예매 매수 제한 | 공연/회차별 1인당 최대 예매 가능 매수(예: 2매) 제한 로직 적용 | B개발자 | 기능 | 필수 | 비즈니스 규칙 |
+| REQ-RSV-005 | 1회 예매 매수 제한 | 좌석 선점(REQ-RSV-001) 시, 이번 거래에서 사용자가 선택한 좌석 개수를 확인하여 1회 최대 4장 제한. 초과 시 409 Conflict 응답 | B개발자 | 기능 | 필수 | REQ-RSV-001 연계 |
 | REQ-RSV-006 | 예매 취소 (사용자) | 사용자의 요청에 의한 예매 취소 처리 (공연일 기준 취소 수수료 정책 적용 가능) | B개발자 | 기능 | 필수 | 상태 변경 |
 | REQ-RSV-007 | 선점 만료 자동 해제 | 선점 시간(5분) 내 미결제 시 스케줄러/TTL을 통해 좌석 점유 해제 및 상태 변경(EXPIRED) | B개발자 | 기능 | 필수 | Redis Key Expire |
-| REQ-RSV-008 | 대기열 토큰 검증 | 예매 요청 진입 시, Waiting Service의 유효 토큰 보유 여부 2차 검증 (새치기 방지) | B개발자 | 기능 | 필수 | 인터셉터/필터 |
+| REQ-RSV-008 | 대기열 토큰 검증 | 좌석 조회/예매 요청 시 Queue Service의 Reservation Token(qr_xxx) 유효 여부 2차 검증 | B개발자 | 기능 | 필수 | 새치기 방지 |
 | REQ-RSV-009 | 나의 예매 내역 조회 | 사용자별 예매 목록 조회 (공연명, 일시, 좌석, 상태 등 포함) | B개발자 | 기능 | 필수 | 페이징 |
 | REQ-RSV-010 | 예매 상세 조회 | 특정 예매 건의 상세 정보 및 QR코드/티켓 번호 조회 | B개발자 | 기능 | 필수 | |
-| REQ-RSV-011 | 이벤트 발행 (Outbox) | 예매 생성/취소 시 Kafka 이벤트 발행, **Transactional Outbox Pattern**으로 메시지 유실 방지 | B개발자 | 비기능 | 필수 | 신뢰성 보장 |
-| REQ-RSV-012 | 예매 대기열 이탈 처리 | 예매 완료 시 대기열 서비스에 '작업 완료' 통지하여 토큰 만료 처리 | B개발자 | 기능 | 필수 | Feign Client |
+| REQ-RSV-011 | Kafka 이벤트 발행 | 예매 확정(CONFIRMED), 예매 취소(CANCELLED) 시 Kafka 이벤트 발행. Event Service가 구독하여 좌석 상태 업데이트 (Outbox 패턴 적용) | B개발자 | 기능 | 필수 | 신뢰성 |
+| REQ-RSV-012 | Transactional Outbox Pattern | Outbox로 메시지 유실 방지: 상태 변경과 기록을 동일 트랜잭션 처리 후 Poller/CDC로 Kafka 발행 | B개발자 | 비기능 | 필수 | 메시지 신뢰성 |
+| REQ-RSV-013 | 대기열 토큰 만료 처리 | 예매 확정(CONFIRMED) 후 Queue Service에 Payment Token(qp_xxx) 만료 요청 | B개발자 | 기능 | 필수 | Feign |
 
 ---
 
@@ -135,19 +136,21 @@
 
 | 요구사항 ID | 요구사항명 | 요구사항 설명 | 담당자 | 분류 | 필수여부 | 비고 |
 |------------|-----------|-------------|-------|------|---------|-----|
-| REQ-PAY-001 | 결제 생성 | 예매에 대한 결제 요청 | B개발자 | 기능 | 필수 | |
-| REQ-PAY-002 | 결제 확인 | PG 응답 검증 및 완료 처리 | B개발자 | 기능 | 필수 | |
-| REQ-PAY-003 | 결제 조회 | 결제 상세 정보 조회 | B개발자 | 기능 | 필수 | |
-| REQ-PAY-004 | 사용자 결제 내역 조회 | 마이페이지 결제 목록 | B개발자 | 기능 | 필수 | |
-| REQ-PAY-005 | 결제 상태 관리 | PENDING / SUCCESS / FAILED / REFUNDED | B개발자 | 기능 | 필수 | 상태 머신 |
-| REQ-PAY-006 | 결제 수단 지원 | CARD | B개발자 | 기능 | 필수 | 신용카드 |
-| REQ-PAY-007 | Mock PG API 서버 | 테스트용 가상 결제 | B개발자 | 기능 | 선택 | 개발/테스트 |
-| REQ-PAY-008 | Kafka Consumer | 예매 이벤트 수신 후 결제 처리 | B개발자 | 기능 | 필수 | reservation-events |
-| REQ-PAY-009 | SAGA 패턴 | 분산 트랜잭션 관리 | B개발자 | 기능 | 필수 | 오케스트레이션 |
-| REQ-PAY-010 | 보상 트랜잭션 | 결제 실패 시 예매 취소 | B개발자 | 기능 | 필수 | Rollback |
-| REQ-PAY-011 | Circuit Breaker | PG 장애 시 연쇄 장애 방지 | B개발자 | 비기능 | 필수 | Resilience4j |
-| REQ-PAY-012 | 결제 타임아웃 | PG 통신 10초 초과 시 | B개발자 | 비기능 | 필수 | Timeout |
-| REQ-PAY-013 | 멱등성 키 | 중복 결제 방지 | B개발자 | 비기능 | 필수 | paymentKey |
+| REQ-PAY-001 | 결제 수단 지원 | PortOne 기반 신용카드(CARD) 결제 | B개발자 | 기능 | 필수 | PortOne |
+| REQ-PAY-002 | PortOne 테스트 모드 | PortOne 테스트 모드로 가상 결제 처리 | B개발자 | 기능 | 선택 | 개발/테스트 |
+| REQ-PAY-003 | 결제 상태 관리 | PENDING / SUCCESS / FAILED / REFUNDED | B개발자 | 기능 | 필수 | 상태 머신 |
+| REQ-PAY-004 | 멱등성 키 | 중복 결제 방지용 멱등성 키(paymentKey) 사용. 이벤트/결제 처리는 멱등성 키 기반 검사로 중복 적용 방지 | B개발자 | 비기능 | 필수 | paymentKey |
+| REQ-PAY-005 | 결제 전 상태 검증 | 결제 진행 전 예매 상태(PENDING) 및 좌석 선점 유효성(Redis) 검증 | B개발자 | 기능 | 필수 | 유효성 검사 |
+| REQ-PAY-006 | 결제 정보 생성 | 예매 ID, 결제 금액, 결제 수단 등을 포함한 결제 레코드 생성 및 DB 저장 (상태: PENDING) | B개발자 | 기능 | 필수 | |
+| REQ-PAY-007 | PortOne 사전 검증 등록 | 생성된 결제 정보를 바탕으로 PortOne 사전 검증(Prepare) API 호출하여 금액 등록 | B개발자 | 기능 | 필수 | PortOne Prepare |
+| REQ-PAY-008 | 결제 타임아웃 | PortOne API 호출 10초 초과 시 | B개발자 | 비기능 | 필수 | Timeout |
+| REQ-PAY-009 | Circuit Breaker | PortOne 장애 시 연쇄 장애 방지 | B개발자 | 비기능 | 필수 | Resilience4j |
+| REQ-PAY-010 | 결제 확인 | PG 응답 검증 및 완료 처리. 결제 성공 시 결제 성공 이벤트 발행하여 Reservation Service가 수신하도록 함(Outbox 권장). 멱등성 키로 재시도 안전 보장 | B개발자 | 기능 | 필수 | |
+| REQ-PAY-011 | SAGA 패턴 | 결제 성공 시 이벤트 발행, 실패 시 보상 트랜잭션 실행 | B개발자 | 기능 | 필수 | 오케스트레이션 |
+| REQ-PAY-012 | 보상 트랜잭션 | 결제 실패 시 Outbox로 보상 이벤트 발행하여 Reservation이 예매 취소(CANCELLED) 처리 | B개발자 | 기능 | 필수 | Rollback |
+| REQ-PAY-013 | Kafka 이벤트 발행 | 결제 성공/실패 이벤트 발행하여 Reservation/Event Service가 수신하도록 함 | B개발자 | 기능 | 필수 | Outbox 권장 |
+| REQ-PAY-014 | 결제 조회 | 결제 상세 정보 조회 | B개발자 | 기능 | 필수 | |
+| REQ-PAY-015 | 사용자 결제 내역 조회 | 마이페이지 결제 목록 조회 | B개발자 | 기능 | 필수 | |
 
 ---
 
