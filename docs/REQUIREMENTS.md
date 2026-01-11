@@ -8,14 +8,14 @@
 
 | 분류 | 개수 | 비율 |
 |------|------|------|
-| 기능 요구사항 | 68 | 61.3% |
-| 비기능 요구사항 | 43 | 38.7% |
-| **합계** | **111** | **100%** |
+| 기능 요구사항 | 72 | 59.5% |
+| 비기능 요구사항 | 49 | 40.5% |
+| **합계** | **121** | **100%** |
 
 | 우선순위 | 개수 | 비율 |
 |----------|------|------|
-| 필수 | 86 | 77.5% |
-| 선택 | 23 | 20.7% |
+| 필수 | 94 | 77.7% |
+| 선택 | 27 | 22.3% |
 
 ### MSA 구성
 
@@ -172,5 +172,22 @@
 | REQ-GW-024 | Payment 엔드포인트 Rate Limiting 강화 | Payment 엔드포인트에 추가 Rate Limiting 적용 (User: 20회/분, IP: 50회/분, Global: 1000 TPS) 하여 PG 과부하 방지 | A개발자 | 비기능 | 선택 | REQ-GW-005,006,007 확장 |
 | REQ-GW-025 | JWT 검증 실패 응답 세분화 | JWT 검증 실패 시 원인별 응답 구분 (만료/변조/누락별 에러 코드)으로 클라이언트 자동 복구 지원 | A개발자 | 기능 | 필수 | |
 | REQ-GW-026 | Graceful Shutdown | 배포/스케일링 시 진행 중 요청 보호 (신규 요청 거부, 진행 중 요청 완료 대기, ALB Deregistration 연동) | A개발자 | 비기능 | 선택 | |
+
+---
+
+## 7. 서비스 간 통신 보안 (INTERNAL)
+
+| 요구사항 ID | 요구사항명 | 요구사항 설명 | 담당자 | 분류 | 필수여부 | 비고 |
+|------------|-----------|-------------|-------|------|---------|-----|
+| REQ-INT-001 | 내부 API 인증 메커니즘 | `/internal/**` 경로 요청 시 API Key (UUID 기반) 검증 | A/B개발자 | 비기능 | 필수 | ARCHITECTURE.md 연계 |
+| REQ-INT-002 | API Key 발급 | 각 서비스별 고유 API Key 발급 (UUID v4 형식, 예: `550e8400-e29b-41d4-a716-446655440000`) | A/B개발자 | 기능 | 필수 | 서비스별 고유 Key |
+| REQ-INT-003 | API Key 저장 | API Key를 환경 변수 또는 AWS Secrets Manager에 안전하게 저장 | A/B개발자 | 비기능 | 필수 | 보안 저장소 |
+| REQ-INT-004 | API Key 헤더 전송 | Feign Client 요청 시 `X-Service-Api-Key` 헤더에 API Key 포함 | A/B개발자 | 기능 | 필수 | RequestInterceptor |
+| REQ-INT-005 | 내부 API 인증 검증 | Controller/Interceptor에서 `X-Service-Api-Key` 헤더 검증, 불일치 시 401 응답 | A/B개발자 | 기능 | 필수 | HandlerInterceptor |
+| REQ-INT-006 | 인증 실패 로깅 | 내부 API 인증 실패 시 호출자 서비스, IP, 시간 기록 (보안 감사) | A/B개발자 | 비기능 | 필수 | 보안 감사 추적 |
+| REQ-INT-007 | 네트워크 레벨 보안 | VPC Private Subnet 내에서만 `/internal/**` 접근 가능 (Security Group 설정) | A/B개발자 | 비기능 | 필수 | AWS 인프라 |
+| REQ-INT-008 | Gateway 내부 API 차단 | API Gateway에서 `/internal/**` 경로 라우팅 명시적 차단 (404 응답) | A개발자 | 비기능 | 필수 | 외부 접근 차단 |
+| REQ-INT-009 | API Key 로테이션 | API Key 만료 정책 (권장: 무기한, 필요 시 수동 로테이션) 및 갱신 프로세스 정의 | A/B개발자 | 기능 | 선택 | Key 관리 |
+| REQ-INT-010 | 내부 API Rate Limiting | 서비스 간 호출에도 Rate Limiting 적용 (서비스당 1000 req/분) | A/B개발자 | 비기능 | 선택 | 과부하 방지 |
 
 ---
