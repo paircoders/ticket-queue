@@ -191,14 +191,10 @@ ProducerRecord<String, String> record = new ProducerRecord<>(
 **Consumer:** 없음 (모니터링/감사용)
 **용도:** 좌석 상태 변경 이력 추적 (선택 사항)
 
-**4. `compensation.events` - 보상 트랜잭션 이벤트 (선택)**
-
-**Producer:** Payment Service
-**Consumer:** Reservation Service
-**용도:** SAGA 패턴의 보상 트랜잭션 명시적 관리
-
-**이벤트 타입:**
-- `CompensateReservation`: 예매 취소 보상
+**설계 결정:** compensation.events 토픽은 제외됨
+- **이유:** payment.events의 PaymentFailed 이벤트가 이미 보상 트랜잭션을 트리거함
+- **현재 플로우:** PaymentFailed → Reservation Consumer → 예매 취소 (CANCELLED) → ReservationCancelled 이벤트 발행 → Event Consumer → 좌석 복구
+- **판단:** 명시적 보상 토픽은 중복이며 복잡도만 증가시킴 (YAGNI 원칙)
 
 #### 1.2.3 Topic 생성 스크립트
 
@@ -298,6 +294,35 @@ sequenceDiagram
     Event->>Event: 좌석 선점 해제 (AVAILABLE)
 ```
 
+### 1.3.4 보상 트랜잭션 플로우 (Payment Failed)
+
+**결정: Event Service는 reservation.events만 구독**
+
+```
+Payment Service (Orchestrator)
+├─ PortOne 결제 실패
+├─ PaymentFailed 이벤트 발행 (payment.events)
+│
+Reservation Service Consumer
+├─ payment.events 구독
+├─ PaymentFailed 수신
+├─ 예매 상태: PENDING → CANCELLED
+├─ ReservationCancelled 이벤트 발행 (reservation.events)
+│
+Event Service Consumer
+├─ reservation.events 구독 (단일 토픽)
+├─ ReservationCancelled 수신
+└─ 좌석 선점 해제: HOLD → AVAILABLE
+    (Redis: SREM held_seats:{eventId} {seatId})
+```
+
+**장점:**
+- 서비스별 단일 토픽 구독 (복잡도 감소)
+- 보상 체인: Payment → Reservation → Event (명확한 책임)
+
+**단점:**
+- 3-hop 레이턴시 (예상: 100-300ms)
+
 ### 1.4 Event Schema 정의
 
 #### 1.4.1 공통 이벤트 구조
@@ -391,16 +416,37 @@ public class KafkaConsumerConfig {
             backOff
         );
 
-        // 재시도 가능한 예외
+        // ✅ Fixed: Expanded exception classification for production reliability
+
+        // 재시도 가능한 예외 (Transient errors)
         errorHandler.addRetryableExceptions(
-            DataAccessException.class,
-            TimeoutException.class
+            // Infrastructure/Network
+            TimeoutException.class,
+            KafkaException.class,
+            TemporaryDataAccessException.class,
+            QueryTimeoutException.class,
+            PessimisticLockingFailureException.class,
+            CannotAcquireLockException.class,
+
+            // Circuit Breaker
+            CircuitBreakerOpenException.class
         );
 
-        // 재시도 불가능한 예외 (즉시 DLQ)
+        // 재시도 불가능한 예외 (Permanent errors → immediate DLQ)
         errorHandler.addNotRetryableExceptions(
+            // Business Logic
             ValidationException.class,
-            IllegalArgumentException.class
+            IllegalArgumentException.class,
+            ReservationNotFoundException.class,
+            InvalidPaymentStatusException.class,
+
+            // Data Integrity
+            DataIntegrityViolationException.class,
+            ConstraintViolationException.class,
+
+            // Serialization
+            JsonProcessingException.class,
+            SerializationException.class
         );
 
         return errorHandler;
@@ -492,22 +538,28 @@ public class ProcessedEvent {
 @KafkaListener(topics = "payment.events")
 @Transactional
 public void handlePaymentSuccess(PaymentSuccessEvent event) {
-    // 멱등성 체크: event_id로 중복 방지
-    if (processedEventRepository.existsById(event.getEventId())) {
+    // ✅ Fixed: Insert idempotency key FIRST (atomic check)
+    try {
+        processedEventRepository.save(new ProcessedEvent(event.getEventId(), event.getEventType()));
+    } catch (DataIntegrityViolationException e) {
         log.info("이미 처리된 이벤트: {}", event.getEventId());
-        return;
+        return;  // Already processed by another consumer
     }
 
-    // 비즈니스 로직
+    // Safe to execute business logic (guaranteed single execution)
     Reservation reservation = reservationRepository.findById(event.getReservationId())
-        .orElseThrow();
+        .orElseThrow(() -> new ReservationNotFoundException(event.getReservationId()));
     reservation.confirm();
     reservationRepository.save(reservation);
 
-    // 처리 완료 기록 (동일 트랜잭션)
-    processedEventRepository.save(new ProcessedEvent(event.getEventId(), event.getEventType()));
+    log.info("예매 확정 완료: {}", event.getReservationId());
 }
 ```
+
+**멱등성 보장 원리:**
+- `processed_events.event_id`에 Unique Constraint 존재
+- 동시 처리 시도 시 두 번째 INSERT는 Constraint Violation 발생
+- DB가 원자적으로 중복 방지 (Race Condition 해결)
 
 **방법 2: Redis Set (빠른 조회)**
 ```java

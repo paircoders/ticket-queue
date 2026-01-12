@@ -65,7 +65,7 @@
 | REQ-EVT-003 | 공연 삭제 | Soft Delete 방식, 예매 건 있으면 삭제 불가 | A개발자 | 기능 | 선택 | |
 | REQ-EVT-004 | 공연 목록 조회 | 페이징, 필터링, 정렬, 검색 지원 | A개발자 | 기능 | 필수 | P95 < 200ms |
 | REQ-EVT-005 | 공연 상세 조회 | 공연 정보 조회 | A개발자 | 기능 | 필수 | P95 < 100ms |
-| REQ-EVT-006 | 공연 좌석 정보 조회 | 등급별(VIP/S/A/B) 그룹핑, 등급별 가격 조회 | A개발자 | 기능 | 필수 | P95 < 300ms, 좌석행열은 어떻게 조회하는지 확인 필요 |
+| REQ-EVT-006 | 공연 좌석 정보 조회 | 등급별(VIP/S/A/B) 그룹핑, 등급별 가격 조회 | A개발자 | 기능 | 필수 | **비고:** P95 < 300ms<br><br>**API 응답 스키마:**<br>```json<br>{<br>  "eventId": "uuid",<br>  "seats": [<br>    {<br>      "id": "uuid",<br>      "seatNumber": "A-1",  // Format: ROW-COLUMN<br>      "row": "A",<br>      "column": 1,<br>      "grade": "VIP\|S\|A\|B",<br>      "price": 150000,<br>      "status": "AVAILABLE\|HOLD\|SOLD"<br>    }<br>  ],<br>  "layout": {<br>    "rows": ["A", "B", "C", ...],<br>    "seatsPerRow": 20,<br>    "gradeMapping": {"A": "VIP", "B": "S", ...}<br>  }<br>}<br>```<br><br>클라이언트는 `seatNumber` 또는 `row`+`column` 조합으로 좌석 선택.<br>좌석 배치 시각화는 `layout` 객체 활용. |
 | REQ-EVT-007 | 공연 상태 관리 | UPCOMING / ONGOING / ENDED / CANCELLED | A개발자 | 기능 | 필수 | |
 | REQ-EVT-008 | 좌석 상태 관리 | SOLD: RDB 저장. Kafka 이벤트로 상태 수신 | A개발자 | 기능 | 필수 | |
 | REQ-EVT-009 | 좌석 등급 관리 | VIP / S / A / B 등급 관리 | A개발자 | 기능 | 필수 | |
@@ -98,8 +98,9 @@
 | REQ-QUEUE-005 | 배치 승인 처리 | 1초마다 10명씩 승인, Lua 스크립트 원자성 보장 | A개발자 | 기능 | 필수 | 36,000명/시간 |
 | REQ-QUEUE-010 | 대기열 용량 제한 | 공연별 최대 50,000명, 초과 시 503 응답 | A개발자 | 기능 | 필수 | 과부하 방지 |
 | REQ-QUEUE-012 | 대기열 모니터링 API | 관리자용 대기열 통계 조회 API | A개발자 | 기능 | 선택 | ADMIN 권한 |
-| REQ-QUEUE-014 | Rate Limiting | GET /queue/status: 60회/분 per user, 초과 시 429 | A개발자 | 비기능 | 필수 | REQ-GW-006 연계 |
+| REQ-QUEUE-014 | Rate Limiting | GET /queue/status: 15회/분 per user (5초 폴링 권장), 초과 시 429 | A개발자 | 비기능 | 필수 | REQ-GW-006 연계. 60회/분은 과도(2초 폴링 유도), 15회/분(4초 간격)으로 조정하여 Redis 부하 감소 |
 | REQ-QUEUE-015 | 대기열 성능 목표 | 진입 P95<100ms, 조회 P95<50ms, Redis 가용성 99.9% | A개발자 | 비기능 | 필수 | SLO |
+| REQ-QUEUE-016 | Queue Token 헤더 전달 및 검증 | API Gateway가 Queue Service에서 발급한 토큰(qr_xxx, qp_xxx)을 각 서비스로 X-Queue-Token 헤더로 전달. 각 서비스는 Redis에서 토큰 유효성 검증 후 요청 처리 | A개발자 | 기능 | 필수 | REQ-QUEUE-004, REQ-GW-021 연계 |
 | REQ-QUEUE-021 | 다중 대기열 제한 | 사용자당 동시 대기 최대 1개 공연, 초과 시 409 | A개발자 | 기능 | 필수 | 어뷰징 방지 |
 
 ---
@@ -121,7 +122,7 @@
 | REQ-RSV-011 | Kafka 이벤트 발행 | 예매 취소(CANCELLED) 시 Kafka 이벤트 발행. Event Service가 구독하여 좌석 상태 업데이트 (Outbox 패턴 적용) | B개발자 | 기능 | 필수 | 신뢰성 |
 | REQ-RSV-012 | Transactional Outbox Pattern | Outbox로 메시지 유실 방지: 상태 변경과 기록을 동일 트랜잭션 처리 후 Poller/CDC로 Kafka 발행 | B개발자 | 비기능 | 필수 | 메시지 신뢰성 |
 | REQ-RSV-013 | 대기열 토큰 만료 처리 | 예매 확정(CONFIRMED) 후 Queue Service에 Payment Token(qp_xxx) 만료 요청 | B개발자 | 기능 | 선택 | Feign |
-* 좌석 상태 업데이트는 언제하는 것인지 확인 필요
+
 ---
 
 ## 5. 결제 (PAYMENT)

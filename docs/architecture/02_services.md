@@ -165,8 +165,9 @@ graph TB
 - `seats`: 좌석 정보 (eventId, seatNumber, grade, price, status)
 
 **Kafka Consumer:**
-- `reservation.events`: 예매 이벤트 수신하여 좌석 상태 SOLD 업데이트
-- `payment.events`: 결제 실패 시 좌석 상태 복구
+- `reservation.events` - 예매 이벤트 수신
+  - ReservationConfirmed: 좌석 상태 SOLD 업데이트 (RDB)
+  - ReservationCancelled: Redis hold_seats 정리
 
 **데이터 저장소:**
 - PostgreSQL 스키마: `event_service`
@@ -265,7 +266,12 @@ return members
 **데이터 저장소:**
 - PostgreSQL 스키마: `reservation_service`
 - Redis 분산 락: `seat:hold:{eventId}:{seatId}` (TTL: 5분)
-- Outbox: `common.outbox_events` (선택)
+- Outbox: `common.outbox_events` (필수) ✅
+
+**Outbox Pattern 필수 적용 근거:**
+- Reservation Service: ReservationCancelled 이벤트 유실 시 좌석 HOLD 미해제
+- Payment Service: PaymentSuccess 이벤트 유실 시 예매 PENDING 상태 고착
+- 두 서비스 모두 이벤트 발행 실패 시 데이터 불일치 발생 (P0 위험)
 
 **관련 요구사항:** REQ-RSV-001 ~ REQ-RSV-013 (12개)
 
@@ -306,7 +312,12 @@ return members
 
 **데이터 저장소:**
 - PostgreSQL 스키마: `payment_service`
-- Outbox: `common.outbox_events` (필수)
+- Outbox: `common.outbox_events` (필수) ✅
+
+**Outbox Pattern 필수 적용 근거:**
+- Reservation Service: ReservationCancelled 이벤트 유실 시 좌석 HOLD 미해제
+- Payment Service: PaymentSuccess 이벤트 유실 시 예매 PENDING 상태 고착
+- 두 서비스 모두 이벤트 발행 실패 시 데이터 불일치 발생
 
 **관련 요구사항:** REQ-PAY-001 ~ REQ-PAY-015 (15개)
 
@@ -327,10 +338,10 @@ return members
 
 | Producer | Topic | Consumer | Event Type |
 |----------|-------|----------|------------|
-| Reservation | reservation.events | Event | 예매 취소 → 좌석 복구 |
-| Payment | payment.events | Reservation | 결제 성공 → 예매 확정 |
-| Payment | payment.events | Reservation | 결제 실패 → 예매 취소 |
-| Payment | payment.events | Event | 결제 성공 → 좌석 SOLD |
+| Reservation | reservation.events | Event | ReservationConfirmed → 좌석 SOLD 업데이트 |
+| Reservation | reservation.events | Event | ReservationCancelled → 좌석 복구 |
+| Payment | payment.events | Reservation | PaymentSuccess → 예매 확정 |
+| Payment | payment.events | Reservation | PaymentFailed → 예매 취소 |
 
 #### 1.3.3 의존성 그래프
 

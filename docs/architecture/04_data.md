@@ -73,11 +73,23 @@ spring:
     username: user_svc_user
     password: ${DB_PASSWORD}  # AWS Secrets Manager 또는 환경변수
     schema: user_service  # 기본 스키마 설정
+    hikari:
+      maximum-pool-size: 5          # 6 services × 5 = 30 connections (< RDS free tier limit)
+      minimum-idle: 2
+      connection-timeout: 30000      # 30 seconds
+      idle-timeout: 600000           # 10 minutes
+      max-lifetime: 1800000          # 30 minutes
+      leak-detection-threshold: 60000  # Detect 1+ min leaks
   jpa:
     properties:
       hibernate:
         default_schema: user_service
 ```
+
+**HikariCP 설정 이유:**
+- 6개 서비스 × 5 connections = 30개 (RDS t2.micro 무료티어 제한 고려)
+- Auto Scaling 시 커넥션 고갈 방지
+- 커넥션 누수 감지로 장기 트랜잭션 모니터링
 
 #### 1.1.3 향후 물리적 분리 마이그레이션 계획
 
@@ -128,7 +140,12 @@ erDiagram
         uuid id PK
         uuid user_id FK
         varchar refresh_token UK
+        uuid token_family "RTR tracking"
+        varchar access_token_jti "Optional"
+        timestamp issued_at
         timestamp expires_at
+        boolean revoked "Default false"
+        timestamp revoked_at
         timestamp created_at
     }
 
@@ -165,10 +182,36 @@ erDiagram
 - **status**: ACTIVE / INACTIVE / DORMANT (1년 미접속) / DELETED (Soft Delete)
 - **관련 요구사항**: REQ-AUTH-001, REQ-AUTH-014, REQ-AUTH-017, REQ-AUTH-019
 
-**`auth_tokens` 테이블:**
-- Refresh Token 저장 (Access Token은 JWT 자체로 검증)
-- TTL: 7일
-- **관련 요구사항**: REQ-AUTH-009 (토큰 갱신)
+**`auth_tokens` 테이블:** ✅
+- **refresh_token**: Refresh Token (Unique, 7일 TTL)
+- **token_family**: RTR (Refresh Token Rotation) 추적용 UUID - 동일 세션 토큰 그룹핑
+- **access_token_jti**: Access Token의 JTI (JWT ID) - 선택적 추적
+- **issued_at**: 토큰 발급 시각
+- **revoked**: 폐기 여부 (기본 false, RTR 시 true로 변경)
+- **revoked_at**: 폐기 시각 (탈취 감지 시 token_family 전체 무효화)
+- **Refresh Token Rotation (RTR) 필수 구현**
+  - 매 토큰 갱신 시 신규 Refresh Token 발급 및 기존 토큰 폐기
+  - 폐기된 토큰 재사용 시 해당 token_family 전체 무효화 (보안 강화)
+- **관련 요구사항**: REQ-AUTH-009 (토큰 갱신), REQ-AUTH-012 (RTR)
+
+**SQL Schema:**
+```sql
+CREATE TABLE user_service.auth_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES user_service.users(id) ON DELETE CASCADE,
+    refresh_token VARCHAR(500) NOT NULL UNIQUE,
+    token_family UUID NOT NULL,
+    access_token_jti VARCHAR(100),
+    issued_at TIMESTAMP NOT NULL DEFAULT now(),
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN DEFAULT false,
+    revoked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT now()
+);
+
+CREATE INDEX idx_user_tokens ON user_service.auth_tokens(user_id, revoked);
+CREATE INDEX idx_token_family ON user_service.auth_tokens(token_family);
+```
 
 **`login_history` 테이블:**
 - 로그인 이력 추적 (선택)
@@ -258,6 +301,54 @@ erDiagram
   }
   ```
 - **관련 요구사항**: REQ-EVT-013
+
+**설계 검토 노트 (장기 유지보수):**
+
+현재 `seat_template` JSONB 설계는 단순 공연장에 적합하나, 복잡한 좌석 배치(스탠딩, VIP 라운지, 장애인석 등)에는 한계가 있음.
+
+**현재 제약사항:**
+- 균일한 행/열 구조만 지원 (불규칙 배치 불가)
+- 등급별 가격 차등이 행 단위로만 가능
+- 좌석 예외 처리 어려움 (기둥, 시야 제한석 등)
+
+**향후 개선 방향 (트래픽 안정화 후 검토):**
+
+1. **좌석 배치 정규화 (별도 테이블)**
+```sql
+CREATE TABLE event_service.seat_layouts (
+    id UUID PRIMARY KEY,
+    hall_id UUID NOT NULL REFERENCES halls(id),
+    row_label VARCHAR(5) NOT NULL,
+    seat_number INT NOT NULL,
+    x_position INT,  -- 시각적 배치 좌표
+    y_position INT,
+    grade VARCHAR(10),
+    accessible BOOLEAN DEFAULT false,  -- 장애인석
+    view_restricted BOOLEAN DEFAULT false,
+    UNIQUE (hall_id, row_label, seat_number)
+);
+```
+
+2. **또는 더 유연한 JSONB 스키마**
+```json
+{
+  "layout_type": "grid",  // or "irregular"
+  "sections": [
+    {
+      "name": "VIP",
+      "seats": [
+        {"row": "A", "number": 1, "x": 100, "y": 50, "accessible": false}
+      ]
+    }
+  ]
+}
+```
+
+**전환 조건 (정량화):**
+- 공연장 수 > 10개이고 불규칙 배치 요청 > 3건
+- 또는 고객 요구사항으로 명시적 지정 시
+
+**현재 판단:** MVP에서는 현재 JSONB 구조 유지, 실제 사용 패턴 수집 후 결정
 
 **`events` 테이블:**
 - 공연 정보
@@ -491,18 +582,28 @@ EXISTS queue:active:user-abc
 ```java
 // Redisson 분산 락
 RLock lock = redissonClient.getLock("seat:hold:event-123:seat-456");
-boolean acquired = lock.tryLock(3, 300, TimeUnit.SECONDS);  // waitTime: 3초, leaseTime: 300초
+
+// ✅ Fixed: waitTime increased to 15s to handle high-concurrency scenarios
+// (36,000 queue admits/hour = peak seat selection traffic)
+boolean acquired = lock.tryLock(15, 300, TimeUnit.SECONDS);  // waitTime: 15초, leaseTime: 300초
 
 if (acquired) {
     try {
+        // ✅ Fixed: Use Redis SET to track held seats instead of KEYS command
+        redisTemplate.opsForSet().add("held_seats:event-123", "seat-456");
+
         // 좌석 선점 로직
         // 예매 정보 DB 저장 (PENDING)
     } finally {
         lock.unlock();
+        redisTemplate.opsForSet().remove("held_seats:event-123", "seat-456");
     }
 } else {
     throw new SeatAlreadyHoldException();
 }
+
+// HOLD 상태 조회 (KEYS 대신 SET 사용)
+Set<String> holdSeatIds = redisTemplate.opsForSet().members("held_seats:event-123");
 ```
 
 **수동 락 관리 (대안):**
@@ -610,32 +711,69 @@ save 3600 1    # 1시간마다 1개 이상 키 변경 시 저장
 
 **문제:** 캐시 만료 시 동시 다발적 DB 조회로 DB 과부하
 
-**해결책: Lua 스크립트 락 기반 갱신**
+**해결책: Redisson 분산 락 기반 갱신** ✅
 
 ```lua
--- cache_get_or_set.lua
+-- cache_get_or_set.lua (Simplified)
 local key = KEYS[1]
-local lock_key = key .. ":lock"
-local ttl = tonumber(ARGV[1])
-
 local value = redis.call('GET', key)
 if value then
     return value
-end
-
-local lock = redis.call('SET', lock_key, '1', 'NX', 'EX', 10)
-if lock then
-    return nil  -- 호출자가 DB 조회 후 캐시 설정
 else
-    -- 다른 스레드가 이미 갱신 중, 잠시 대기 후 재시도
-    redis.call('SLEEP', 0.1)
-    return redis.call('GET', key)
+    return nil  -- Client handles lock acquisition
 end
+```
+
+**Java 구현: Redisson Lock으로 Cache Stampede 방지**
+
+```java
+// Cache Stampede Prevention with Redisson Lock
+public String getCachedEvent(String eventId) {
+    String cacheKey = "cache:event:" + eventId;
+    String value = redisTemplate.opsForValue().get(cacheKey);
+
+    if (value != null) {
+        return value;
+    }
+
+    // Lock to prevent stampede
+    RLock lock = redisson.getLock(cacheKey + ":lock");
+    try {
+        boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+        if (!acquired) {
+            // Wait and retry (another thread is loading)
+            Thread.sleep(100);
+            return redisTemplate.opsForValue().get(cacheKey);  // Try again
+        }
+
+        // Double-check after acquiring lock
+        value = redisTemplate.opsForValue().get(cacheKey);
+        if (value != null) {
+            return value;
+        }
+
+        // Load from DB and cache
+        value = eventRepository.findById(eventId).toString();
+        redisTemplate.opsForValue().set(cacheKey, value, Duration.ofMinutes(5));
+        return value;
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new CacheException("Interrupted while waiting for cache", e);
+    } finally {
+        if (lock.isHeldByCurrentThread()) {
+            lock.unlock();
+        }
+    }
+}
 ```
 
 **대안: Probabilistic Early Expiration**
 - TTL의 90% 시점에 확률적으로 재갱신 (Beta: 1)
 - 동시 만료 회피
+
+**변경 이유:**
+- Redis에는 SLEEP 명령이 존재하지 않음 (Lua 스크립트 실행 시 에러 발생)
+- Redisson Lock을 사용하면 동일한 stampede 방지 효과 + 안전한 재시도 로직
 
 **관련 요구사항:** REQ-EVT-027
 
@@ -744,35 +882,56 @@ public class ReservationService {
 ```java
 @Component
 public class OutboxPoller {
+
     @Scheduled(fixedDelay = 1000)  // 1초마다
-    @Transactional
     public void pollAndPublish() {
-        List<OutboxEvent> events = outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
+        // ✅ Fixed: Read in transaction, publish outside
+        List<OutboxEvent> events = fetchUnpublishedEvents();
 
         for (OutboxEvent event : events) {
-            try {
-                // Kafka 발행
-                kafkaTemplate.send(getTopic(event), event.getPayload());
+            publishEventWithCallback(event);
+        }
+    }
 
-                // 발행 성공 표시
-                event.setPublished(true);
-                event.setPublishedAt(Instant.now());
-                outboxRepository.save(event);
-            } catch (Exception e) {
-                // 재시도 카운트 증가
-                event.setRetryCount(event.getRetryCount() + 1);
-                outboxRepository.save(event);
+    @Transactional(readOnly = true)
+    private List<OutboxEvent> fetchUnpublishedEvents() {
+        return outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
+    }
 
-                if (event.getRetryCount() > 3) {
-                    // Dead Letter Queue로 이동
-                    dlqRepository.save(event);
-                    outboxRepository.delete(event);
-                }
-            }
+    private void publishEventWithCallback(OutboxEvent event) {
+        kafkaTemplate.send(getTopic(event), event.getPayload())
+            .addCallback(
+                success -> markAsPublished(event),
+                failure -> handlePublishFailure(event, failure)
+            );
+    }
+
+    @Transactional
+    private void markAsPublished(OutboxEvent event) {
+        event.setPublished(true);
+        event.setPublishedAt(Instant.now());
+        outboxRepository.save(event);
+    }
+
+    @Transactional
+    private void handlePublishFailure(OutboxEvent event, Throwable e) {
+        event.setRetryCount(event.getRetryCount() + 1);
+        event.setLastError(e.getMessage());
+
+        if (event.getRetryCount() > 3) {
+            dlqRepository.save(DLQEvent.from(event));
+            outboxRepository.delete(event);
+        } else {
+            outboxRepository.save(event);
         }
     }
 }
 ```
+
+**변경 이유:**
+- Kafka send는 비동기이므로 callback으로 성공/실패 처리
+- 각 작업을 독립적인 트랜잭션으로 분리 (장기 락 방지)
+- Kafka 실패를 정확하게 감지하고 재시도 로직 실행
 
 **3. 멱등성 보장**
 
@@ -796,3 +955,78 @@ public void handlePaymentSuccess(PaymentSuccessEvent event) {
 ```
 
 **관련 요구사항:** REQ-RSV-012, REQ-PAY-004, REQ-PAY-013
+
+#### 1.4.4 Outbox Poller 고가용성 전략 (Multi-Instance)
+
+**과제:** Outbox Poller를 다중 인스턴스로 실행 시 동일 이벤트 중복 처리 방지
+
+**해결책 1: FOR UPDATE SKIP LOCKED (권장)**
+
+```java
+@Scheduled(fixedDelay = 1000)
+@Transactional
+public void pollAndPublish() {
+    List<OutboxEvent> events = outboxRepository.findUnpublishedEventsWithLock(100);
+
+    for (OutboxEvent event : events) {
+        try {
+            kafkaTemplate.send(event.getTopic(), event.getPayload()).get(5, TimeUnit.SECONDS);
+            event.markAsPublished();
+            outboxRepository.save(event);
+        } catch (Exception e) {
+            event.incrementRetry();
+            if (event.getRetryCount() >= 3) {
+                event.markAsFailed();
+            }
+            outboxRepository.save(event);
+        }
+    }
+}
+```
+
+**Repository 쿼리:**
+```java
+@Query(value = "SELECT * FROM common.outbox_events " +
+               "WHERE published = false AND retry_count < 3 " +
+               "ORDER BY created_at ASC " +
+               "LIMIT :limit " +
+               "FOR UPDATE SKIP LOCKED", nativeQuery = true)
+List<OutboxEvent> findUnpublishedEventsWithLock(@Param("limit") int limit);
+```
+
+**동작 원리:**
+- `FOR UPDATE`: 선택된 행에 배타적 락 설정
+- `SKIP LOCKED`: 이미 락된 행은 건너뛰고 다음 행 선택
+- 결과: 각 Poller 인스턴스가 서로 다른 이벤트 처리 (자동 분산)
+
+**해결책 2: Redisson 분산 락 (대안)**
+
+```java
+@Scheduled(fixedDelay = 1000)
+public void pollAndPublish() {
+    RLock lock = redissonClient.getLock("outbox:poller:lock");
+
+    if (lock.tryLock()) {
+        try {
+            // Outbox 처리 로직 (위와 동일)
+        } finally {
+            lock.unlock();
+        }
+    }
+    // 락 획득 실패 시 다음 스케줄까지 대기
+}
+```
+
+**비교:**
+
+| 방식 | 장점 | 단점 | 권장 |
+|------|------|------|------|
+| FOR UPDATE SKIP LOCKED | DB 네이티브, 추가 의존성 없음, 자동 분산 | PostgreSQL 9.5+ 필요 | ✅ 권장 |
+| Redisson 분산 락 | Redis 기반, 명시적 제어 | 락 획득 경쟁, 처리량 제한 (단일 인스턴스) | 차선책 |
+
+**운영 고려사항:**
+- Auto Scaling 시 Poller 인스턴스 수 제한 (최대 3-5개 권장)
+- CloudWatch Metric: `outbox.events.lag` (미발행 이벤트 수 > 100 알람)
+- DLQ 모니터링: 3회 재시도 실패 이벤트는 `failed=true`로 표시, 별도 알람 발송
+
+**관련 요구사항:** REQ-RSV-012, REQ-PAY-013
