@@ -101,18 +101,20 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA common TO user_svc_user, event_svc_
 erDiagram
     users ||--o{ auth_tokens : has
     users ||--o{ login_history : has
-    users ||--o{ terms_agreements : has
 
     users {
         uuid id PK
-        varchar email UK "암호화"
-        varchar password_hash "BCrypt"
-        varchar name "암호화"
-        varchar phone "암호화"
-        varchar ci UK "본인인증 CI"
+        varchar email "이메일 (AES-256-GCM 암호화)"
+        varchar email_hash UK "이메일 해시 (HMAC-SHA256, 검색용)"
+        varchar password "비밀번호 (BCrypt 해시)"
+        varchar name "사용자명 (AES-256-GCM 암호화)"
+        varchar phone "휴대폰번호 (AES-256-GCM 암호화)"
+        varchar phone_hash "휴대폰번호 해시 (HMAC-SHA256, 검색용)"
+        varchar ci "본인인증 CI (AES-256-GCM 암호화)"
+        varchar ci_hash UK "본인인증 CI 해시 (HMAC-SHA256, 중복체크)"
         varchar di "본인인증 DI"
         varchar role "USER/ADMIN"
-        varchar status "ACTIVE/INACTIVE/DORMANT/DELETED"
+        varchar status "ACTIVE/DORMANT/DELETED"
         timestamp created_at
         timestamp updated_at
         timestamp last_login_at
@@ -129,7 +131,6 @@ erDiagram
         timestamp expires_at
         boolean revoked "Default false"
         timestamp revoked_at
-        timestamp created_at
     }
 
     login_history {
@@ -142,45 +143,42 @@ erDiagram
         varchar failure_reason
         timestamp created_at
     }
-
-    terms_agreements {
-        uuid id PK
-        uuid user_id FK
-        varchar terms_type "SERVICE/PRIVACY/MARKETING"
-        boolean agreed
-        varchar terms_version
-        timestamp agreed_at
-    }
 ```
 
 **주요 테이블 설명:**
 
 **`users` 테이블:**
 - **id**: UUID Primary Key
-- **email**: 이메일 (Unique, AES-256 암호화 - 선택)
-- **password_hash**: BCrypt 해시
-- **name, phone**: 개인정보 (AES-256 암호화 - 선택)
-- **ci, di**: 본인인증 CI/DI (Unique, CI는 1인 1계정 강제)
+- **email**: 이메일 원본 (AES-256-GCM 암호화)
+- **email_hash**: 이메일 검색용 해시 (HMAC-SHA256, Unique)
+- **password_hash**: 비밀번호 BCrypt 해시
+- **name, phone**: 개인정보 (AES-256-GCM 암호화)
+- **phone_hash**: 휴대폰번호 검색용 해시 (HMAC-SHA256)
+- **ci**: 본인인증 CI (AES-256-GCM 암호화)
+- **ci_hash**: CI 중복체크용 해시 (HMAC-SHA256, Unique)
+- **di**: 본인인증 DI
 - **role**: USER / ADMIN
-- **status**: ACTIVE / INACTIVE / DORMANT (1년 미접속) / DELETED (Soft Delete)
-- **관련 요구사항**: REQ-AUTH-001, REQ-AUTH-014, REQ-AUTH-017, REQ-AUTH-019
+- **status**: ACTIVE / DORMANT (휴면) / DELETED (탈퇴)
+- **관련 요구사항**: REQ-AUTH-001, REQ-AUTH-014, REQ-AUTH-017, REQ-AUTH-018, REQ-AUTH-019
 
 **SQL Schema:**
 ```sql
 -- 스키마 및 확장 생성
 CREATE SCHEMA IF NOT EXISTS user_service;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";  -- AES-256 암호화용 (선택)
 
 -- users 테이블
 CREATE TABLE user_service.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) NOT NULL,
+    email VARCHAR(512) NOT NULL,            -- AES-256-GCM 암호문 (Base64)
+    email_hash VARCHAR(64) NOT NULL,        -- HMAC-SHA256 검색용 해시
     password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(100),
-    phone VARCHAR(20),
-    ci VARCHAR(88) UNIQUE,  -- PortOne CI (Base64 인코딩, 88자)
-    di VARCHAR(64),         -- PortOne DI
+    name VARCHAR(255),                      -- AES-256-GCM 암호문
+    phone VARCHAR(255),                     -- AES-256-GCM 암호문
+    phone_hash VARCHAR(64),                 -- HMAC-SHA256 검색용 해시
+    ci VARCHAR(512),                        -- AES-256-GCM 암호문
+    ci_hash VARCHAR(64),                    -- HMAC-SHA256 중복체크용 해시
+    di VARCHAR(64),                         -- PortOne DI
     role VARCHAR(10) NOT NULL DEFAULT 'USER',
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMP NOT NULL DEFAULT now(),
@@ -189,12 +187,12 @@ CREATE TABLE user_service.users (
     deleted_at TIMESTAMP,
 
     CONSTRAINT chk_users_role CHECK (role IN ('USER', 'ADMIN')),
-    CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'DORMANT', 'DELETED'))
+    CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'DORMANT', 'DELETED'))
 );
 
 -- 인덱스
-CREATE UNIQUE INDEX idx_users_email ON user_service.users(email) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX idx_users_ci ON user_service.users(ci) WHERE ci IS NOT NULL;
+CREATE UNIQUE INDEX idx_users_email_hash ON user_service.users(email_hash) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_users_ci_hash ON user_service.users(ci_hash) WHERE ci_hash IS NOT NULL;
 CREATE INDEX idx_users_status_created ON user_service.users(status, created_at);
 CREATE INDEX idx_users_last_login ON user_service.users(last_login_at) WHERE status = 'ACTIVE';
 
@@ -217,26 +215,25 @@ COMMENT ON COLUMN user_service.users.ci IS 'PortOne 본인인증 CI. 1인 1계�
 COMMENT ON COLUMN user_service.users.email IS '이메일. AES-256 암호화 선택 가능 (pgcrypto 사용).';
 ```
 
-**암호화 전략 (선택사항):**
-- **컬럼**: email, phone, ci (개인정보)
-- **방법**: AES-256-GCM
-- **키 관리**: AWS Secrets Manager 또는 KMS
-- **쿼리 예시**:
-  ```sql
-  -- 암호화 저장
-  INSERT INTO users (email) VALUES (pgp_sym_encrypt('user@example.com', :encryption_key));
-
-  -- 복호화 조회
-  SELECT pgp_sym_decrypt(email::bytea, :encryption_key) AS email FROM users WHERE id = :user_id;
-  ```
-- **성능 영향**: 조회 쿼리 10-30% 느려짐. WHERE 절 암호화 컬럼은 인덱스 활용 불가.
+**암호화 및 검색 전략 (Blind Index):**
+- **기본 원칙**: 복호화가 필요한 데이터는 암호화하고, 검색이 필요한 데이터는 별도의 해시 컬럼(Blind Index)을 사용
+- **보관용 (암호화)**:
+  - **대상**: email, name, phone, ci
+  - **방법**: AES-256-GCM (Application Level - JPA `AttributeConverter`)
+  - **특징**: 매 암호화마다 랜덤 IV를 사용하여 동일 평문도 다른 암호문으로 저장 (보안 극대화)
+- **검색용 (Blind Index)**:
+  - **대상**: email_hash, phone_hash, ci_hash
+  - **방법**: HMAC-SHA256 (Application Level)
+  - **특징**: 고정된 키를 섞어 해싱하여 동일 평문은 항상 동일한 해시값 생성 (DB 인덱스 활용 가능)
+- **키 관리**: AWS Secrets Manager 또는 KMS (암호화 키와 Blind Index용 HMAC 키 분리 관리)
+- **성능 영향**: 암호화 연산 부하가 애플리케이션으로 분산되어 해시 컬럼 인덱스로 인해 검색 성능은 평문과 동일
 
 **`auth_tokens` 테이블:**
 - **refresh_token**: Refresh Token (Unique, 7일 TTL)
-- **token_family**: RTR (Refresh Token Rotation) 추적용 UUID - 동일 세션 토큰 그룹핑
+- **token_family**: RTR (Refresh Token Rotation) 추적용 UUID - 로그인마다 발급됨
 - **access_token_jti**: Access Token의 JTI (JWT ID) - 선택적 추적
 - **issued_at**: 토큰 발급 시각
-- **revoked**: 폐기 여부 (기본 false, RTR 시 true로 변경)
+- **revoked**: 폐기 여부 (기본 false, 로그아웃 또는 RTR 시 true로 변경)
 - **revoked_at**: 폐기 시각 (탈취 감지 시 token_family 전체 무효화)
 - **Refresh Token Rotation (RTR) 필수 구현**
   - 매 토큰 갱신 시 신규 Refresh Token 발급 및 기존 토큰 폐기
@@ -256,7 +253,6 @@ CREATE TABLE user_service.auth_tokens (
     expires_at TIMESTAMP NOT NULL,
     revoked BOOLEAN DEFAULT false,
     revoked_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT now(),
 
     CONSTRAINT chk_tokens_expires CHECK (expires_at > issued_at),
     CONSTRAINT chk_tokens_revoked CHECK (
@@ -275,8 +271,8 @@ COMMENT ON TABLE user_service.auth_tokens IS 'Refresh Token 관리. RTR (Refresh
 COMMENT ON COLUMN user_service.auth_tokens.token_family IS 'RTR 추적용 UUID. 동일 세션 토큰 그룹핑.';
 ```
 
-**`login_history` 테이블:**
-- 로그인 이력 추적 (선택)
+**`login_history` 테이블 (선택):**
+- 로그인 이력 추적
 - 의심 접속 탐지용
 - **관련 요구사항**: REQ-AUTH-020
 
@@ -308,35 +304,6 @@ COMMENT ON TABLE user_service.login_history IS '로그인 이력. 의심 접속 
 COMMENT ON TABLE user_service.login_history IS '파티셔닝 고려: 월별 파티셔닝 (created_at 기준). 예: login_history_2026_01';
 ```
 
-**`terms_agreements` 테이블:**
-- 약관 동의 이력
-- 약관 버전 관리
-- **관련 요구사항**: REQ-AUTH-002
-
-**SQL Schema:**
-```sql
--- terms_agreements 테이블
-CREATE TABLE user_service.terms_agreements (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES user_service.users(id) ON DELETE CASCADE,
-    terms_type VARCHAR(20) NOT NULL,
-    agreed BOOLEAN NOT NULL,
-    terms_version VARCHAR(20) NOT NULL,
-    agreed_at TIMESTAMP NOT NULL DEFAULT now(),
-
-    CONSTRAINT chk_terms_type CHECK (terms_type IN ('SERVICE', 'PRIVACY', 'MARKETING')),
-    CONSTRAINT uk_terms_user_type_version UNIQUE (user_id, terms_type, terms_version)
-);
-
--- 인덱스
-CREATE INDEX idx_terms_user_type ON user_service.terms_agreements(user_id, terms_type);
-CREATE INDEX idx_terms_version ON user_service.terms_agreements(terms_version, created_at);
-
--- 테이블 코멘트
-COMMENT ON TABLE user_service.terms_agreements IS '약관 동의 이력. 버전 관리 지원.';
-COMMENT ON COLUMN user_service.terms_agreements.terms_version IS '약관 버전. 예: v1.0, v1.1';
-```
-
 #### 1.2.2 Event Service 스키마 ERD
 
 **스키마: `event_service`**
@@ -345,7 +312,8 @@ COMMENT ON COLUMN user_service.terms_agreements.terms_version IS '약관 버전.
 erDiagram
     venues ||--o{ halls : has
     halls ||--o{ events : hosts
-    events ||--o{ seats : contains
+    events ||--o{ event_schedules : has
+    event_schedules ||--o{ seats : contains
 
     venues {
         uuid id PK
@@ -373,6 +341,15 @@ erDiagram
         text description
         uuid venue_id FK
         uuid hall_id FK
+        varchar status "PREPARING/OPEN/ENDED/CANCELLED"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    event_schedules {
+        uuid id PK
+        uuid event_id FK
+        int play_sequence "1회차, 2회차..."
         timestamp event_start_at
         timestamp event_end_at
         timestamp sale_start_at
@@ -384,7 +361,7 @@ erDiagram
 
     seats {
         uuid id PK
-        uuid event_id FK
+        uuid event_schedule_id FK
         varchar seat_number "A-1, B-10 등"
         varchar grade "VIP/S/A/B"
         decimal price
@@ -523,8 +500,8 @@ COMMENT ON COLUMN event_service.halls.seat_template IS '좌석 배치 템플릿:
 ```
 
 **`events` 테이블:**
-- 공연 정보
-- **status**: UPCOMING (판매 전) / ONGOING (판매 중) / ENDED (종료) / CANCELLED (취소)
+- 공연 메타 정보 (일정 제외)
+- **status**: 공연 전체 생명주기 관리 (PREPARING, OPEN, ENDED, CANCELLED)
 - **관련 요구사항**: REQ-EVT-001, REQ-EVT-007
 
 **SQL Schema:**
@@ -537,24 +514,17 @@ CREATE TABLE event_service.events (
     description TEXT,
     venue_id UUID NOT NULL REFERENCES event_service.venues(id) ON DELETE RESTRICT,
     hall_id UUID NOT NULL REFERENCES event_service.halls(id) ON DELETE RESTRICT,
-    event_start_at TIMESTAMP NOT NULL,
-    event_end_at TIMESTAMP NOT NULL,
-    sale_start_at TIMESTAMP NOT NULL,
-    sale_end_at TIMESTAMP NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
+    status VARCHAR(20) NOT NULL DEFAULT 'PREPARING',
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
 
-    CONSTRAINT chk_events_status CHECK (status IN ('UPCOMING', 'ONGOING', 'ENDED', 'CANCELLED')),
-    CONSTRAINT chk_events_time CHECK (event_start_at < event_end_at),
-    CONSTRAINT chk_events_sale_time CHECK (sale_start_at < sale_end_at)
+    CONSTRAINT chk_events_status CHECK (status IN ('PREPARING', 'OPEN', 'ENDED', 'CANCELLED'))
 );
 
 -- 인덱스
-CREATE INDEX idx_events_status_sale_start ON event_service.events(status, sale_start_at);
-CREATE INDEX idx_events_venue_date ON event_service.events(venue_id, event_start_at);
+CREATE INDEX idx_events_status ON event_service.events(status);
 CREATE INDEX idx_events_artist ON event_service.events(artist);
-CREATE INDEX idx_events_sale_start ON event_service.events(sale_start_at) WHERE status = 'UPCOMING';
+CREATE INDEX idx_events_venue ON event_service.events(venue_id);
 
 -- 전문 검색 인덱스 (선택)
 CREATE INDEX idx_events_fts ON event_service.events
@@ -566,15 +536,57 @@ BEFORE UPDATE ON event_service.events
 FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
 
 -- 테이블 코멘트
-COMMENT ON TABLE event_service.events IS '공연 정보. 티켓팅 판매 일정 관리.';
-COMMENT ON COLUMN event_service.events.status IS 'UPCOMING: 판매 전, ONGOING: 판매 중, ENDED: 종료, CANCELLED: 취소';
+COMMENT ON TABLE event_service.events IS '공연 메타 정보. status는 공연 전체의 생명주기(노출 여부 등)를 관리.';
+COMMENT ON COLUMN event_service.events.status IS 'PREPARING: 준비중(미노출), OPEN: 공개됨, ENDED: 전체 종료, CANCELLED: 전체 취소';
+```
+
+**`event_schedules` 테이블:**
+- 공연 회차 및 일정 정보
+- **play_sequence**: 1회차, 2회차 등 순번
+- **status**: 회차별 판매/진행 상태
+- **관련 요구사항**: REQ-EVT-001, REQ-EVT-007
+
+**SQL Schema:**
+```sql
+-- event_schedules 테이블
+CREATE TABLE event_service.event_schedules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES event_service.events(id) ON DELETE CASCADE,
+    play_sequence INT NOT NULL DEFAULT 1,
+    event_start_at TIMESTAMP NOT NULL,
+    event_end_at TIMESTAMP NOT NULL,
+    sale_start_at TIMESTAMP NOT NULL,
+    sale_end_at TIMESTAMP NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_schedules_status CHECK (status IN ('UPCOMING', 'ONGOING', 'ENDED', 'CANCELLED')),
+    CONSTRAINT chk_schedules_time CHECK (event_start_at < event_end_at),
+    CONSTRAINT chk_schedules_sale_time CHECK (sale_start_at < sale_end_at),
+    CONSTRAINT uk_schedules_event_seq UNIQUE (event_id, play_sequence)
+);
+
+-- 인덱스
+CREATE INDEX idx_schedules_status_sale_start ON event_service.event_schedules(status, sale_start_at);
+CREATE INDEX idx_schedules_event_date ON event_service.event_schedules(event_id, event_start_at);
+CREATE INDEX idx_schedules_sale_start ON event_service.event_schedules(sale_start_at) WHERE status = 'UPCOMING';
+
+-- updated_at 트리거
+CREATE TRIGGER trg_schedules_updated_at
+BEFORE UPDATE ON event_service.event_schedules
+FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+
+-- 테이블 코멘트
+COMMENT ON TABLE event_service.event_schedules IS '공연 회차 및 판매 일정 정보. status는 회차별 티켓 판매 상태 관리.';
+COMMENT ON COLUMN event_service.event_schedules.status IS 'UPCOMING: 판매 전, ONGOING: 판매 중, ENDED: 종료, CANCELLED: 취소';
 ```
 
 **`seats` 테이블:**
-- 공연별 좌석 정보
+- 회차별 좌석 정보
+- **event_schedule_id**: 회차 ID 참조
 - **status**: AVAILABLE / SOLD (HOLD는 Redis로 관리)
-- 공연 생성 시 hall의 seat_template 기반으로 자동 생성
-- **인덱스**: `idx_seats_event_status (event_id, status)` - 좌석 조회 성능 최적화
+- **인덱스**: `idx_seats_schedule_status (event_schedule_id, status)`
 - **관련 요구사항**: REQ-EVT-008, REQ-EVT-019
 
 **SQL Schema:**
@@ -582,7 +594,7 @@ COMMENT ON COLUMN event_service.events.status IS 'UPCOMING: 판매 전, ONGOING:
 -- seats 테이블
 CREATE TABLE event_service.seats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_id UUID NOT NULL REFERENCES event_service.events(id) ON DELETE CASCADE,
+    event_schedule_id UUID NOT NULL REFERENCES event_service.event_schedules(id) ON DELETE CASCADE,
     seat_number VARCHAR(10) NOT NULL,  -- "A-1", "B-10" 등
     grade VARCHAR(10) NOT NULL,
     price DECIMAL(10, 0) NOT NULL,
@@ -593,13 +605,12 @@ CREATE TABLE event_service.seats (
     CONSTRAINT chk_seats_grade CHECK (grade IN ('VIP', 'S', 'A', 'B')),
     CONSTRAINT chk_seats_status CHECK (status IN ('AVAILABLE', 'SOLD')),
     CONSTRAINT chk_seats_price CHECK (price >= 0),
-    CONSTRAINT uk_seats_event_number UNIQUE (event_id, seat_number)
+    CONSTRAINT uk_seats_schedule_number UNIQUE (event_schedule_id, seat_number)
 );
 
 -- 핵심 인덱스 (조회 성능 최적화)
-CREATE INDEX idx_seats_event_status ON event_service.seats(event_id, status);
+CREATE INDEX idx_seats_schedule_status ON event_service.seats(event_schedule_id, status);
 CREATE INDEX idx_seats_grade_price ON event_service.seats(grade, price);
-CREATE INDEX idx_seats_event_grade ON event_service.seats(event_id, grade);
 
 -- updated_at 트리거
 CREATE TRIGGER trg_seats_updated_at
@@ -607,9 +618,8 @@ BEFORE UPDATE ON event_service.seats
 FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
 
 -- 테이블 코멘트
-COMMENT ON TABLE event_service.seats IS '공연별 좌석 재고. HOLD 상태는 Redis로 관리 (seat:hold:{eventId}:{seatId}).';
-COMMENT ON COLUMN event_service.seats.status IS 'AVAILABLE: 판매 가능, SOLD: 판매 완료. HOLD는 Redis 분산 락.';
-COMMENT ON TABLE event_service.seats IS '파티셔닝 고려: 10M rows 초과 시 event_id 기준 파티셔닝 검토.';
+COMMENT ON TABLE event_service.seats IS '회차별 좌석 재고. HOLD 상태는 Redis로 관리 (seat:hold:{scheduleId}:{seatId}).';
+COMMENT ON TABLE event_service.seats IS '파티셔닝 고려: event_schedule_id 기준 파티셔닝 검토.';
 ```
 
 #### 1.2.3 Reservation Service 스키마 ERD
@@ -623,7 +633,7 @@ erDiagram
     reservations {
         uuid id PK
         uuid user_id "User Service 참조 (ID만)"
-        uuid event_id "Event Service 참조 (ID만)"
+        uuid event_schedule_id "Event Service 참조 (ID만)"
         varchar status "PENDING/CONFIRMED/CANCELLED"
         decimal total_amount
         timestamp hold_expires_at "선점 만료 시간 (5분)"
@@ -645,12 +655,13 @@ erDiagram
 
 **`reservations` 테이블:**
 - 예매 정보
+- **event_schedule_id**: 회차 ID (FK 없음, MSA 원칙)
 - **status**:
   - PENDING: 좌석 선점 완료, 결제 대기
   - CONFIRMED: 결제 완료, 예매 확정
   - CANCELLED: 예매 취소
 - **hold_expires_at**: 선점 만료 시간 (현재 시간 + 5분)
-- **user_id, event_id**: 다른 서비스의 ID만 참조 (FK 없음, MSA 원칙)
+- **user_id, event_schedule_id**: 다른 서비스의 ID만 참조 (FK 없음, MSA 원칙)
 - **관련 요구사항**: REQ-RSV-001, REQ-RSV-004, REQ-RSV-006
 
 **SQL Schema:**
@@ -662,7 +673,7 @@ CREATE SCHEMA IF NOT EXISTS reservation_service;
 CREATE TABLE reservation_service.reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,  -- FK 없음 (MSA 원칙)
-    event_id UUID NOT NULL,  -- FK 없음
+    event_schedule_id UUID NOT NULL,  -- FK 없음 (회차 ID)
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     total_amount DECIMAL(10, 0) NOT NULL,
     hold_expires_at TIMESTAMP NOT NULL,
@@ -675,7 +686,7 @@ CREATE TABLE reservation_service.reservations (
 
 -- 인덱스
 CREATE INDEX idx_reservations_user_status ON reservation_service.reservations(user_id, status);
-CREATE INDEX idx_reservations_event_created ON reservation_service.reservations(event_id, created_at DESC);
+CREATE INDEX idx_reservations_schedule_created ON reservation_service.reservations(event_schedule_id, created_at DESC);
 CREATE INDEX idx_reservations_hold_expires ON reservation_service.reservations(hold_expires_at)
     WHERE status = 'PENDING';  -- 부분 인덱스 (만료 처리용)
 CREATE INDEX idx_reservations_status_created ON reservation_service.reservations(status, created_at DESC);
@@ -686,7 +697,7 @@ BEFORE UPDATE ON reservation_service.reservations
 FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
 
 -- 테이블 코멘트
-COMMENT ON TABLE reservation_service.reservations IS '예매 정보. user_id/event_id는 FK 없음 (MSA 원칙).';
+COMMENT ON TABLE reservation_service.reservations IS '예매 정보. event_schedule_id는 회차 ID.';
 COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 만료 시간 (현재 + 5분). 배치 작업으로 자동 취소.';
 ```
 
@@ -856,7 +867,7 @@ erDiagram
   {
     "reservationId": "uuid",
     "userId": "uuid",
-    "eventId": "uuid",
+    "eventScheduleId": "uuid",
     "seatIds": ["uuid1", "uuid2"],
     "totalAmount": 100000,
     "confirmedAt": "2026-01-11T10:00:00Z"
@@ -964,48 +975,49 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. ev
 
 | Key Pattern | 데이터 타입 | 용도 | TTL | 서비스 |
 |-------------|------------|------|-----|--------|
-| `queue:{eventId}` | Sorted Set | 대기열 (score: timestamp) | 없음 | Queue |
+| `queue:{scheduleId}` | Sorted Set | 대기열 (score: timestamp) | 없음 | Queue |
 | `queue:token:{token}` | String | Queue Token (qr_xxx, qp_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 사용자 활성 대기열 (중복 방지) | 10분 | Queue |
-| `seat:hold:{eventId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
+| `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
 | `token:blacklist:{token}` | String | Access Token 블랙리스트 | 1시간 | User |
 | `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
-| `cache:event:{eventId}` | Hash | 공연 상세 캐시 | 5분 | Event |
-| `cache:seats:{eventId}` | Hash | 좌석 정보 캐시 | 5분 | Event |
+| `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
+| `cache:schedule:{scheduleId}` | Hash | 회차 상세정보 캐시 | 5분 | Event |
+| `cache:seats:{scheduleId}` | Hash | 좌석 정보 캐시 | 5분 | Event |
 
 #### 1.3.3 대기열 (Queue Service)
 
 **1. Sorted Set - 대기열**
 
-**Key:** `queue:{eventId}`
+**Key:** `queue:{scheduleId}`
 **타입:** Sorted Set
 **Score:** Unix Timestamp (진입 시각)
 **Member:** `userId`
 
 ```redis
-ZADD queue:event-123 1736582400 user-abc
-ZADD queue:event-123 1736582401 user-def
+ZADD queue:schedule-001 1736582400 user-abc
+ZADD queue:schedule-001 1736582401 user-def
 
 # 순위 조회 (0-based)
-ZRANK queue:event-123 user-abc  # 결과: 0 (1등)
+ZRANK queue:schedule-001 user-abc  # 결과: 0 (1등)
 
 # 대기열 크기
-ZCARD queue:event-123
+ZCARD queue:schedule-001
 
 # 상위 10명 조회
-ZRANGE queue:event-123 0 9 WITHSCORES
+ZRANGE queue:schedule-001 0 9 WITHSCORES
 
 # 배치 승인 (Lua 스크립트)
-EVAL "..." 1 queue:event-123 10
+EVAL "..." 1 queue:schedule-001 10
 ```
 
 **2. String - Queue Token**
 
 **Key:** `queue:token:{token}`
-**Value:** JSON (userId, eventId, type, issuedAt)
+**Value:** JSON (userId, scheduleId, type, issuedAt)
 
 ```redis
-SET queue:token:qr_abc123xyz '{"userId":"user-abc","eventId":"event-123","type":"RESERVATION","issuedAt":"2026-01-11T10:00:00Z"}' EX 600
+SET queue:token:qr_abc123xyz '{"userId":"user-abc","scheduleId":"schedule-001","type":"RESERVATION","issuedAt":"2026-01-11T10:00:00Z"}' EX 600
 
 # Token 검증
 GET queue:token:qr_abc123xyz
@@ -1014,10 +1026,10 @@ GET queue:token:qr_abc123xyz
 **3. String - 중복 대기 방지**
 
 **Key:** `queue:active:{userId}`
-**Value:** `eventId`
+**Value:** `scheduleId`
 
 ```redis
-SET queue:active:user-abc event-123 EX 600
+SET queue:active:user-abc schedule-001 EX 600
 
 # 중복 대기 확인
 EXISTS queue:active:user-abc
@@ -1029,41 +1041,41 @@ EXISTS queue:active:user-abc
 
 **분산 락 - Redisson**
 
-**Key:** `seat:hold:{eventId}:{seatId}`
+**Key:** `seat:hold:{scheduleId}:{seatId}`
 **Value:** `userId`
 **TTL:** 5분
 
 ```java
 // Redisson 분산 락
-RLock lock = redissonClient.getLock("seat:hold:event-123:seat-456");
+RLock lock = redissonClient.getLock("seat:hold:schedule-001:seat-456");
 
 boolean acquired = lock.tryLock(15, 300, TimeUnit.SECONDS);  // waitTime: 15초, leaseTime: 300초
 
 if (acquired) {
     try {
-        redisTemplate.opsForSet().add("held_seats:event-123", "seat-456");
+        redisTemplate.opsForSet().add("held_seats:schedule-001", "seat-456");
 
         // 좌석 선점 로직
         // 예매 정보 DB 저장 (PENDING)
     } finally {
         lock.unlock();
-        redisTemplate.opsForSet().remove("held_seats:event-123", "seat-456");
+        redisTemplate.opsForSet().remove("held_seats:schedule-001", "seat-456");
     }
 } else {
     throw new SeatAlreadyHoldException();
 }
 
 // HOLD 상태 조회 (KEYS 대신 SET 사용)
-Set<String> holdSeatIds = redisTemplate.opsForSet().members("held_seats:event-123");
+Set<String> holdSeatIds = redisTemplate.opsForSet().members("held_seats:schedule-001");
 ```
 
 **수동 락 관리 (대안):**
 ```redis
 # 락 획득 (NX: Not Exists)
-SET seat:hold:event-123:seat-456 user-abc NX EX 300
+SET seat:hold:schedule-001:seat-456 user-abc NX EX 300
 
 # 락 해제
-DEL seat:hold:event-123:seat-456
+DEL seat:hold:schedule-001:seat-456
 ```
 
 **관련 요구사항:** REQ-RSV-001, REQ-RSV-007
@@ -1096,29 +1108,30 @@ EXISTS token:blacklist:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SET cache:event:list:0:20:upcoming '[{"id":"event-123","title":"콘서트 A",...}]' EX 300
 ```
 
-**2. 공연 상세 캐시**
+**2. 공연/회차 상세 캐시**
 
-**Key:** `cache:event:{eventId}`
+**Key:** `cache:event:{eventId}` / `cache:schedule:{scheduleId}`
 **타입:** Hash
 **TTL:** 5분
 
 ```redis
 HSET cache:event:event-123 title "콘서트 A" artist "아티스트 A" ...
+HSET cache:schedule:schedule-001 eventId "event-123" date "2026-06-01" ...
 EXPIRE cache:event:event-123 300
 
 # 조회
-HGETALL cache:event:event-123
+HGETALL cache:schedule:schedule-001
 ```
 
 **3. 좌석 정보 캐시**
 
-**Key:** `cache:seats:{eventId}`
+**Key:** `cache:seats:{scheduleId}`
 **타입:** Hash (grade별 그룹핑)
 **TTL:** 5분
 
 ```redis
-HSET cache:seats:event-123 VIP '{"available":50,"price":150000}' S '{"available":100,"price":100000}'
-EXPIRE cache:seats:event-123 300
+HSET cache:seats:schedule-001 VIP '{"available":50,"price":150000}' S '{"available":100,"price":100000}'
+EXPIRE cache:seats:schedule-001 300
 ```
 
 **캐시 무효화 전략:**

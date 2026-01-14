@@ -126,9 +126,10 @@ graph TB
 - 공연 CRUD (관리자)
 - 공연 목록 조회 (페이징, 필터링, 검색)
 - 공연 상세 조회
-- 좌석 정보 조회 (등급별 그룹핑)
+- 공연 회차(Schedule) 관리
+- 좌석 정보 조회 (등급별 그룹핑, 회차별)
 - 공연장/홀 관리
-- 좌석 초기화 (공연 생성 시)
+- 좌석 초기화 (공연 회차 생성 시)
 - Kafka 이벤트 구독하여 좌석 상태 업데이트 (SOLD)
 - Redis 캐싱으로 조회 성능 최적화
 
@@ -136,33 +137,35 @@ graph TB
 - `POST /events` - 공연 생성 (관리자)
 - `GET /events` - 공연 목록 조회
 - `GET /events/{id}` - 공연 상세 조회
-- `GET /events/{id}/seats` - 좌석 정보 조회
+- `GET /events/{id}/schedules` - 공연 회차 목록 조회
+- `GET /events/schedules/{scheduleId}/seats` - 회차별 좌석 정보 조회
 - `POST /venues` - 공연장 생성 (관리자)
 - `POST /venues/{venueId}/halls` - 홀 생성 (관리자)
 
 **내부 API (서비스 간 통신 전용):**
-- `GET /internal/seats/status/{eventId}` - SOLD 좌석 ID 목록 조회 (Reservation Service용)
+- `GET /internal/seats/status/{scheduleId}` - SOLD 좌석 ID 목록 조회 (Reservation Service용)
 
 **내부 API 상세:**
 
-`GET /internal/seats/status/{eventId}`
+`GET /internal/seats/status/{scheduleId}`
 - **목적**: Reservation Service가 좌석 상태 조회 시 SOLD 좌석 확인용
 - **인증**: 서비스 간 내부 호출 (API Key 또는 서비스 토큰)
 - **응답 예시**:
   ```json
   {
-    "eventId": "evt_123",
+    "scheduleId": "sch_123",
     "soldSeatIds": ["seat_001", "seat_042", "seat_103"]
   }
   ```
-- **쿼리**: `SELECT id FROM seats WHERE event_id = ? AND status = 'SOLD'`
+- **쿼리**: `SELECT id FROM seats WHERE event_schedule_id = ? AND status = 'SOLD'`
 - **Rate Limiting**: 불필요 (내부 통신)
 
 **데이터 모델:**
-- `events`: 공연 정보
+- `events`: 공연 메타 정보 (제목, 아티스트 등)
+- `event_schedules`: 공연 회차 및 일정 (scheduleId, eventDate, saleDate)
 - `venues`: 공연장 정보
 - `halls`: 홀 정보 (좌석 템플릿 포함)
-- `seats`: 좌석 정보 (eventId, seatNumber, grade, price, status)
+- `seats`: 회차별 좌석 정보 (scheduleId, seatNumber, grade, price, status)
 
 **Kafka Consumer:**
 - `reservation.events` - 예매 이벤트 수신
@@ -173,8 +176,9 @@ graph TB
 - PostgreSQL 스키마: `event_service`
 - Redis 캐시:
   - `cache:event:list` - 공연 목록 (TTL: 5분)
-  - `cache:event:{eventId}` - 공연 상세 (TTL: 5분)
-  - `cache:seats:{eventId}` - 좌석 정보 (TTL: 5분)
+  - `cache:event:{eventId}` - 공연 메타 상세 (TTL: 5분)
+  - `cache:schedule:{scheduleId}` - 회차 상세 (TTL: 5분)
+  - `cache:seats:{scheduleId}` - 좌석 정보 (TTL: 5분)
 
 **성능 목표:**
 - 공연 목록 조회: P95 < 200ms (REQ-EVT-004)
@@ -192,8 +196,8 @@ graph TB
 - 대기열 상태 조회 (REST 폴링, 5초 권장)
 - 배치 승인 (1초마다 10명, Lua 스크립트)
 - Queue Token 발급 (Reservation Token, Payment Token)
-- 대기열 용량 제한 (공연당 50,000명)
-- 사용자당 동시 대기 1개 공연 제한
+- 대기열 용량 제한 (회차당 50,000명)
+- 사용자당 동시 대기 1개 회차 제한
 - Token 만료 처리 (TTL 10분)
 
 **주요 API:**
@@ -203,18 +207,18 @@ graph TB
 - `GET /queue/admin/stats` - 대기열 통계 (관리자, 선택)
 
 **데이터 모델 (Redis):**
-- `queue:{eventId}`: Sorted Set (score: timestamp, member: userId)
-- `queue:token:{token}`: String (userId, eventId, type) - TTL 10분
-- `queue:active:{userId}`: String (eventId) - 중복 대기 방지
+- `queue:{scheduleId}`: Sorted Set (score: timestamp, member: userId)
+- `queue:token:{token}`: String (userId, scheduleId, type) - TTL 10분
+- `queue:active:{userId}`: String (scheduleId) - 중복 대기 방지
 
 **Lua 스크립트 (배치 승인):**
 ```lua
 -- 1초마다 10명 승인
-local eventId = KEYS[1]
+local scheduleId = KEYS[1]
 local count = tonumber(ARGV[1]) or 10
-local members = redis.call('ZRANGE', 'queue:' .. eventId, 0, count - 1)
+local members = redis.call('ZRANGE', 'queue:' .. scheduleId, 0, count - 1)
 if #members > 0 then
-  redis.call('ZREM', 'queue:' .. eventId, unpack(members))
+  redis.call('ZREM', 'queue:' .. scheduleId, unpack(members))
   -- Token 발급 로직
 end
 return members
@@ -246,7 +250,7 @@ return members
 - Queue Token 검증 (Reservation Token)
 
 **주요 API:**
-- `GET /reservations/seats/{eventId}` - 좌석 상태 조회
+- `GET /reservations/seats/{scheduleId}` - 좌석 상태 조회
 - `POST /reservations/hold` - 좌석 선점
 - `PUT /reservations/hold/{reservationId}` - 좌석 변경
 - `DELETE /reservations/hold/{reservationId}` - 선점 해제
@@ -254,7 +258,7 @@ return members
 - `DELETE /reservations/{id}` - 예매 취소
 
 **데이터 모델:**
-- `reservations`: 예매 정보 (userId, eventId, seatIds, status, createdAt)
+- `reservations`: 예매 정보 (userId, scheduleId, seatIds, status, createdAt)
   - status: PENDING / CONFIRMED / CANCELLED
 
 **Kafka Producer:**
@@ -265,7 +269,7 @@ return members
 
 **데이터 저장소:**
 - PostgreSQL 스키마: `reservation_service`
-- Redis 분산 락: `seat:hold:{eventId}:{seatId}` (TTL: 5분)
+- Redis 분산 락: `seat:hold:{scheduleId}:{seatId}` (TTL: 5분)
 - Outbox: `common.outbox_events` (필수) ✅
 
 **Outbox Pattern 필수 적용 근거:**
@@ -370,11 +374,11 @@ graph LR
 @FeignClient(name = "event-service", url = "${event.service.url:http://event-service:8082}")
 public interface EventServiceClient {
 
-    @GetMapping("/internal/seats/status/{eventId}")
-    SoldSeatsResponse getSoldSeats(@PathVariable String eventId);
+    @GetMapping("/internal/seats/status/{scheduleId}")
+    SoldSeatsResponse getSoldSeats(@PathVariable String scheduleId);
 
-    @GetMapping("/events/{id}/seats")
-    List<Seat> getEventSeats(@PathVariable String id);
+    @GetMapping("/events/schedules/{scheduleId}/seats")
+    List<Seat> getEventSeats(@PathVariable String scheduleId);
 }
 ```
 
@@ -382,7 +386,7 @@ public interface EventServiceClient {
 
 ```java
 public class SoldSeatsResponse {
-    private String eventId;
+    private String scheduleId;
     private List<String> soldSeatIds;
 }
 ```
