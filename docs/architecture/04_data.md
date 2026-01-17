@@ -371,6 +371,10 @@ erDiagram
     }
 ```
 
+**트리거 함수:**
+- `event_service.update_timestamp()`: 테이블 업데이트 시 `updated_at` 자동 갱신
+- 스코프: Event Service 스키마 내에서만 사용 (MSA 원칙)
+
 **주요 테이블 설명:**
 
 **`venues` 테이블:**
@@ -381,6 +385,15 @@ erDiagram
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS event_service;
+
+-- updated_at 자동 업데이트 트리거 함수 (Event Service 전용)
+CREATE OR REPLACE FUNCTION event_service.update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- venues 테이블
 CREATE TABLE event_service.venues (
@@ -396,10 +409,10 @@ CREATE TABLE event_service.venues (
 CREATE INDEX idx_venues_city ON event_service.venues(city);
 CREATE INDEX idx_venues_name ON event_service.venues(name);
 
--- updated_at 트리거 (user_service 함수 재사용)
+-- updated_at 트리거
 CREATE TRIGGER trg_venues_updated_at
 BEFORE UPDATE ON event_service.venues
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE event_service.venues IS '공연장 정보. 위치 기반 검색 지원.';
@@ -421,7 +434,8 @@ COMMENT ON TABLE event_service.venues IS '공연장 정보. 위치 기반 검색
   ```
 - **관련 요구사항**: REQ-EVT-013
 
-**설계 검토 노트 (장기 유지보수):**
+
+**향후 개선 방향 (트래픽 안정화 후 검토):**
 
 현재 `seat_template` JSONB 설계는 단순 공연장에 적합하나, 복잡한 좌석 배치(스탠딩, VIP 라운지, 장애인석 등)에는 한계가 있음.
 
@@ -429,8 +443,6 @@ COMMENT ON TABLE event_service.venues IS '공연장 정보. 위치 기반 검색
 - 균일한 행/열 구조만 지원 (불규칙 배치 불가)
 - 등급별 가격 차등이 행 단위로만 가능
 - 좌석 예외 처리 어려움 (기둥, 시야 제한석 등)
-
-**향후 개선 방향 (트래픽 안정화 후 검토):**
 
 1. **좌석 배치 정규화 (별도 테이블)**
 ```sql
@@ -463,12 +475,6 @@ CREATE TABLE event_service.seat_layouts (
 }
 ```
 
-**전환 조건 (정량화):**
-- 공연장 수 > 10개이고 불규칙 배치 요청 > 3건
-- 또는 고객 요구사항으로 명시적 지정 시
-
-**현재 판단:** MVP에서는 현재 JSONB 구조 유지, 실제 사용 패턴 수집 후 결정
-
 **SQL Schema:**
 ```sql
 -- halls 테이블
@@ -492,7 +498,7 @@ CREATE INDEX idx_halls_seat_template ON event_service.halls USING GIN (seat_temp
 -- updated_at 트리거
 CREATE TRIGGER trg_halls_updated_at
 BEFORE UPDATE ON event_service.halls
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE event_service.halls IS '공연장 홀 정보. JSONB 좌석 템플릿 사용.';
@@ -533,7 +539,7 @@ CREATE INDEX idx_events_fts ON event_service.events
 -- updated_at 트리거
 CREATE TRIGGER trg_events_updated_at
 BEFORE UPDATE ON event_service.events
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE event_service.events IS '공연 메타 정보. status는 공연 전체의 생명주기(노출 여부 등)를 관리.';
@@ -575,7 +581,7 @@ CREATE INDEX idx_schedules_sale_start ON event_service.event_schedules(sale_star
 -- updated_at 트리거
 CREATE TRIGGER trg_schedules_updated_at
 BEFORE UPDATE ON event_service.event_schedules
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE event_service.event_schedules IS '공연 회차 및 판매 일정 정보. status는 회차별 티켓 판매 상태 관리.';
@@ -615,7 +621,7 @@ CREATE INDEX idx_seats_grade_price ON event_service.seats(grade, price);
 -- updated_at 트리거
 CREATE TRIGGER trg_seats_updated_at
 BEFORE UPDATE ON event_service.seats
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE event_service.seats IS '회차별 좌석 재고. HOLD 상태는 Redis로 관리 (seat:hold:{scheduleId}:{seatId}).';
@@ -651,6 +657,10 @@ erDiagram
     }
 ```
 
+**트리거 함수:**
+- `reservation_service.update_timestamp()`: 테이블 업데이트 시 `updated_at` 자동 갱신
+- 스코프: Reservation Service 스키마 내에서만 사용 (MSA 원칙)
+
 **주요 테이블 설명:**
 
 **`reservations` 테이블:**
@@ -668,6 +678,15 @@ erDiagram
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS reservation_service;
+
+-- updated_at 자동 업데이트 트리거 함수 (Reservation Service 전용)
+CREATE OR REPLACE FUNCTION reservation_service.update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- reservations 테이블
 CREATE TABLE reservation_service.reservations (
@@ -694,7 +713,7 @@ CREATE INDEX idx_reservations_status_created ON reservation_service.reservations
 -- updated_at 트리거
 CREATE TRIGGER trg_reservations_updated_at
 BEFORE UPDATE ON reservation_service.reservations
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION reservation_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE reservation_service.reservations IS '예매 정보. event_schedule_id는 회차 ID.';
@@ -762,6 +781,10 @@ erDiagram
     }
 ```
 
+**트리거 함수:**
+- `payment_service.update_timestamp()`: 테이블 업데이트 시 `updated_at` 자동 갱신
+- 스코프: Payment Service 스키마 내에서만 사용 (MSA 원칙)
+
 **주요 테이블 설명:**
 
 **`payments` 테이블:**
@@ -780,6 +803,15 @@ erDiagram
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS payment_service;
+
+-- updated_at 자동 업데이트 트리거 함수 (Payment Service 전용)
+CREATE OR REPLACE FUNCTION payment_service.update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- payments 테이블
 CREATE TABLE payment_service.payments (
@@ -812,7 +844,7 @@ CREATE INDEX idx_payments_portone_response ON payment_service.payments USING GIN
 -- updated_at 트리거
 CREATE TRIGGER trg_payments_updated_at
 BEFORE UPDATE ON payment_service.payments
-FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
+FOR EACH ROW EXECUTE FUNCTION payment_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE payment_service.payments IS '결제 정보. payment_key로 멱등성 보장.';
