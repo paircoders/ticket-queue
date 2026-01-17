@@ -721,6 +721,7 @@ COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 �
 ```
 
 **만료 예매 자동 취소 배치:**
+- Spring schedular 사용
 - **실행 주기**: 1분마다
 - **SQL**:
   ```sql
@@ -875,7 +876,7 @@ COMMENT ON COLUMN payment_service.payments.portone_response IS 'PortOne API 응�
 erDiagram
     outbox_events {
         uuid id PK
-        varchar aggregate_type "Reservation/Payment/Event"
+        varchar aggregate_type "reservation/payment/event"
         uuid aggregate_id
         varchar event_type "ReservationConfirmed/PaymentSuccess 등"
         jsonb payload "이벤트 데이터"
@@ -884,6 +885,14 @@ erDiagram
         timestamp published_at
         int retry_count
     }
+    
+    processed_events {
+        UUID event_id PK "outbox_evnets의 id"
+        varchar consumer_service PK "reservation/payment/event"
+        UUID aggregate_id
+        varchar event_type "ReservationConfirmed/PaymentSuccess 등"
+        timestamp processed_at
+    }
 ```
 
 **주요 테이블 설명:**
@@ -891,8 +900,9 @@ erDiagram
 **`outbox_events` 테이블:**
 - Transactional Outbox 패턴 구현
 - 비즈니스 로직과 동일 트랜잭션 내 INSERT
-- Poller/CDC가 주기적으로 읽어 Kafka 발행
+- Poller가 주기적으로 읽어 Kafka 발행 (여유가 있을 경우 Debezium(CDC)으로 개발)
 - **aggregate_type**: 이벤트 발행 주체 (Reservation, Payment, Event)
+- **aggregate_id**: 이벤트 발행 대상 ID
 - **event_type**: 이벤트 타입 (ReservationConfirmed, PaymentSuccess, PaymentFailed 등)
 - **payload (JSONB)**: 이벤트 데이터
   ```json
@@ -959,13 +969,13 @@ COMMENT ON COLUMN common.outbox_events.payload IS '이벤트 데이터 (JSONB). 
 ```sql
 -- processed_events 테이블
 CREATE TABLE common.processed_events (
-    event_id UUID PRIMARY KEY,
-    event_type VARCHAR(100) NOT NULL,
-    aggregate_id UUID NOT NULL,
+    event_id UUID NOT NULL,
     consumer_service VARCHAR(50) NOT NULL,  -- 'reservation', 'event', 'payment'
+    aggregate_id UUID NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
     processed_at TIMESTAMP NOT NULL DEFAULT now(),
 
-    CONSTRAINT uk_processed_event_consumer UNIQUE (event_id, consumer_service)
+    PRIMARY KEY (event_id, consumer_service)
 );
 
 -- 인덱스
@@ -973,7 +983,7 @@ CREATE INDEX idx_processed_events_aggregate ON common.processed_events(aggregate
 CREATE INDEX idx_processed_events_processed_at ON common.processed_events(processed_at);
 
 -- 테이블 코멘트
-COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. event_id 중복 시 Constraint Violation.';
+COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (event_id, consumer_service) 중복 시 Constraint Violation.';
 ```
 
 **정리 배치 작업:**
@@ -992,7 +1002,8 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. ev
 **로컬 개발:**
 - Docker Redis 7.x 단일 인스턴스
 - 포트: 6379
-- Persistence: AOF + RDB
+- Persistence: AOF(Append Only File) + RDB(Redis Database)  
+    → 명령 로그와 스냅샷을 결합하여 데이터 안정성 및 빠른 복구 보장
 
 **AWS 운영:**
 - ElastiCache Redis 7.x
