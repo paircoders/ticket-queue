@@ -476,7 +476,7 @@ return {ok = "TOKEN_EXTENDED"}
 // Set<String> holdSeatIds = redisTemplate.keys("seat:hold:" + eventId + ":*")
 
 // ✅ 수정 (O(1) SET 조회)
-Set<String> holdSeatIds = redisTemplate.opsForSet().members("held_seats:" + eventId);
+Set<String> holdSeatIds = redisTemplate.opsForSet().members("hold_seats:" + eventId);
 
 // Event Service 내부 API: SOLD 좌석 조회
 Set<String> soldSeatIds = eventServiceClient.getInternalSoldSeats(eventId);
@@ -498,7 +498,7 @@ List<Seat> seats = allSeats.stream()
 
 **변경 이유:**
 - Redis KEYS는 O(N) 복잡도로 전체 DB 스캔 (production 금지)
-- `held_seats:{eventId}` SET은 좌석 선점/해제 시 원자적으로 업데이트
+- `hold_seats:{eventId}` SET은 좌석 선점/해제 시 원자적으로 업데이트
 - SET 조회는 O(N)이지만 N은 실제 HOLD된 좌석 수 (최대 4 × 동시 예매 수)
 
 **관련 요구사항:** REQ-RSV-003, REQ-EVT-008
@@ -551,7 +551,7 @@ Event Service Consumer
 ├─ reservation.events 구독
 ├─ ReservationConfirmed 수신
 └─ 좌석 상태 업데이트: seats.status = SOLD (RDB)
-    (Redis held_seats는 그대로 유지 - 예매 완료 표시)
+    (Redis hold_seats는 그대로 유지 - 예매 완료 표시)
 ```
 
 #### 실패 플로우 (좌석 HOLD 해제)
@@ -570,7 +570,7 @@ Reservation Service Consumer
 Event Service Consumer
 ├─ reservation.events 구독
 ├─ ReservationCancelled 수신
-└─ Redis held_seats에서 제거: SREM held_seats:{eventId} {seatId}
+└─ Redis hold_seats에서 제거: SREM hold_seats:{eventId} {seatId}
     (RDB seats.status는 AVAILABLE 유지 - 원래 상태)
 ```
 

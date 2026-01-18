@@ -313,7 +313,7 @@ Event Service Consumer
 ├─ reservation.events 구독 (단일 토픽)
 ├─ ReservationCancelled 수신
 └─ 좌석 선점 해제: HOLD → AVAILABLE
-    (Redis: SREM held_seats:{eventId} {seatId})
+    (Redis: SREM hold_seats:{eventId} {seatId})
 ```
 
 **장점:**

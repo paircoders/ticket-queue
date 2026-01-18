@@ -783,7 +783,7 @@ CREATE INDEX idx_outbox_published ON common.outbox_events(published, created_at)
 
 **프로젝트 구조:**
 ```
-ticket-queue-frontend/
+ticket-queue/frontend/
 ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
