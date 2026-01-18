@@ -1011,6 +1011,7 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. ev
 | `queue:token:{token}` | String | Queue Token (qr_xxx, qp_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 사용자 활성 대기열 (중복 방지) | 10분 | Queue |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
+| `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
 | `token:blacklist:{token}` | String | Access Token 블랙리스트 | 1시간 | User |
 | `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
 | `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
@@ -1067,6 +1068,14 @@ SET queue:active:user-abc schedule-001 EX 600
 EXISTS queue:active:user-abc
 ```
 
+**대기열 정리 배치 작업:**
+- **실행 주기**: 매일 03:00 UTC
+- **정리 조건**: 공연 회차 종료 + 24시간 경과
+- **로직**:
+  1. PostgreSQL에서 종료된 회차 조회 (`event_schedules.status = 'ENDED' AND event_end_at < now() - INTERVAL '24 hours'`)
+  2. 해당 회차의 Redis 대기열 삭제 (`DEL queue:{scheduleId}`)
+- **목적**: Redis 메모리 절약, 고아 데이터 제거
+
 **관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-003, REQ-QUEUE-004, REQ-QUEUE-021
 
 #### 1.3.4 좌석 선점 (Reservation Service)
@@ -1085,20 +1094,20 @@ boolean acquired = lock.tryLock(15, 300, TimeUnit.SECONDS);  // waitTime: 15초,
 
 if (acquired) {
     try {
-        redisTemplate.opsForSet().add("held_seats:schedule-001", "seat-456");
+        redisTemplate.opsForSet().add("hold_seats:schedule-001", "seat-456");
 
         // 좌석 선점 로직
         // 예매 정보 DB 저장 (PENDING)
     } finally {
         lock.unlock();
-        redisTemplate.opsForSet().remove("held_seats:schedule-001", "seat-456");
+        redisTemplate.opsForSet().remove("hold_seats:schedule-001", "seat-456");
     }
 } else {
     throw new SeatAlreadyHoldException();
 }
 
 // HOLD 상태 조회 (KEYS 대신 SET 사용)
-Set<String> holdSeatIds = redisTemplate.opsForSet().members("held_seats:schedule-001");
+Set<String> holdSeatIds = redisTemplate.opsForSet().members("hold_seats:schedule-001");
 ```
 
 **수동 락 관리 (대안):**
@@ -1109,6 +1118,17 @@ SET seat:hold:schedule-001:seat-456 user-abc NX EX 300
 # 락 해제
 DEL seat:hold:schedule-001:seat-456
 ```
+
+**HOLD 좌석 정리 배치 작업:**
+- **실행 주기**: 5분마다
+- **정리 조건**: `hold_seats:{scheduleId}` SET의 TTL 만료 또는 애플리케이션 비정상 종료로 인한 고아 데이터
+- **로직**:
+  1. PostgreSQL에서 회차별 SOLD 좌석 조회 (`event_service.seats WHERE status = 'SOLD'`)
+  2. Redis `hold_seats:{scheduleId}` SET 조회
+  3. SET에 있지만 DB에 SOLD가 아닌 좌석 → 예매 테이블 확인 (PENDING이면 유지, 없으면 삭제)
+  4. 고아 데이터 제거 (`SREM hold_seats:{scheduleId} {seatId}`)
+- **TTL 전략**: `hold_seats:{scheduleId}` SET에 10분 TTL 설정 (좌석 선점 시 갱신)
+- **목적**: 애플리케이션 비정상 종료 시 좌석 락 해제 보장
 
 **관련 요구사항:** REQ-RSV-001, REQ-RSV-007
 
@@ -1179,6 +1199,7 @@ EXPIRE cache:seats:schedule-001 300
 |--------|-----|------|--------------|
 | Queue Token | 10분 | 대기열 진입 후 충분한 대기 시간 | REQ-QUEUE-003 |
 | 좌석 선점(HOLD) | 5분 | 선점 후 결제까지 여유 시간 | REQ-RSV-007 |
+| HOLD 좌석 SET | 10분 | 선점 연장 시 갱신, 배치 작업 보완 | REQ-RSV-007 |
 | Access Token 블랙리스트 | 1시간 | Access Token 만료 시간과 동일 | REQ-AUTH-010 |
 | 공연 목록/상세 캐시 | 5분 | 적절한 신선도, 오픈 시 1분으로 단축 | REQ-EVT-031 |
 | 좌석 정보 캐시 | 5분 | 실시간성 요구, 변경 빈도 고려 | REQ-EVT-017 |

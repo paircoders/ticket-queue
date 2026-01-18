@@ -90,7 +90,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Redisson 분산 락**: `seat:hold:{scheduleId}:{seatId}` (TTL 5분)
   - `tryLock(15초 대기, 300초 보유)` - 경합 시 최대 15초 대기
 - **좌석 상태 조회 최적화**:
-  - **HOLD 상태**: Redis SET `held_seats:{scheduleId}` 조회 (O(1), KEYS 명령 금지)
+  - **HOLD 상태**: Redis SET `hold_seats:{scheduleId}` 조회 (O(1), KEYS 명령 금지)
   - **SOLD 상태**: Event Service 내부 API `/internal/seats/status/{scheduleId}` 호출 (Feign)
   - **AVAILABLE**: HOLD도 SOLD도 아닌 좌석
 - **좌석 상태 업데이트 책임**:
@@ -151,7 +151,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `queue:token:{token}` | String (JSON) | Queue Token (qr_xxx, qp_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 중복 대기 방지 (scheduleId 저장) | 10분 | Queue |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (Redisson) | 5분 | Reservation |
-| `held_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 없음 | Reservation |
+| `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 없음 | Reservation |
 | `token:blacklist:{token}` | String | Access Token 블랙리스트 | 1시간 | User |
 | `cache:event:list:{page}:{size}:{filters}` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
 | `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
@@ -265,7 +265,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. **Outbox 패턴**: 이벤트 발행 시 Transactional Outbox 적용 (Reservation, Payment Service 필수)
 5. **내부 API 보안**: `/internal/**` 엔드포인트는 API Key 검증 필수
 6. **Redis KEYS 명령 금지**: Production 환경에서 KEYS 명령 사용 금지 (O(N) 복잡도, 전체 DB 스캔)
-   - 대신 SET, HASH 등 O(1) 자료구조 사용 (예: `held_seats:{scheduleId}`)
+   - 대신 SET, HASH 등 O(1) 자료구조 사용 (예: `hold_seats:{scheduleId}`)
 7. **Queue Token 만료 시 UX**:
    - Reservation Token 만료: 401 에러 + 대기열 페이지 리디렉션
    - Payment Token 만료 (결제 중): PortOne Callback에서는 Token 검증 제외 (merchantUid + 금액 검증으로 대체)
@@ -437,7 +437,7 @@ ZRANGE queue:schedule-001 0 -1 WITHSCORES
 GET queue:token:qr_abc123
 
 # HOLD 좌석 확인
-SMEMBERS held_seats:schedule-001
+SMEMBERS hold_seats:schedule-001
 
 # 캐시 확인
 HGETALL cache:event:event-123
@@ -516,7 +516,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 4. API Gateway 라우팅 및 JWT 검증 필터 구현
 5. Queue Service 대기열 로직 구현 (Redis Sorted Set, Lua 스크립트)
 6. Reservation Service 분산 락 및 좌석 선점 로직 구현
-   - `held_seats:{scheduleId}` SET 관리 로직
+   - `hold_seats:{scheduleId}` SET 관리 로직
 7. Payment Service PortOne 연동 및 SAGA 패턴 구현
    - Outbox Pattern 적용
 8. 통합 테스트 및 부하 테스트 (k6)
@@ -524,7 +524,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 ## 핵심 설계 결정 (ADR 요약)
 
 1. **단일 PostgreSQL 인스턴스**: 비용 효율성, 향후 물리 분리 가능
-2. **Redis KEYS 명령 금지**: `held_seats:{scheduleId}` SET으로 대체
+2. **Redis KEYS 명령 금지**: `hold_seats:{scheduleId}` SET으로 대체
 3. **Outbox Pattern 필수**: Reservation, Payment Service (P0 정합성 이슈)
 4. **Consumer 멱등성**: `common.processed_events` 테이블 + Unique Constraint (원자적 중복 방지)
 5. **Queue Token 만료 UX**: PortOne Callback은 Token 검증 제외 (merchantUid + 금액 검증)
