@@ -177,7 +177,7 @@ resilience4j.circuitbreaker:
 - **보안 헤더**: CORS, XSS 방지, HSTS
 - **Circuit Breaker**: 다운스트림 장애 격리
 
-**관련 요구사항**: REQ-GW-001 ~ REQ-GW-026 (26개)
+**관련 요구사항**: REQ-GW-001 ~ REQ-GW-018 (18개)
 
 ### 1.8 CQRS 패턴 적용 여부 검토
 

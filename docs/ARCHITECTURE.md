@@ -40,10 +40,10 @@
     *   각 서비스별 책임과 경계 (Gateway, User, Event, Queue, Reservation, Payment)
     *   서비스 간 의존성 및 통신
 *   [03. 인프라 및 배포](./architecture/03_infrastructure.md)
-    *   AWS 클라우드 인프라 구성 (무료티어 최적화)
-    *   로컬 개발 환경 (LocalStack)
+    *   Docker Compose 기반 로컬/운영 환경 통합
+    *   AWS EC2 단일 인스턴스 배포 전략 (비용 및 운영 최적화)
     *   프론트엔드 인프라 (Next.js, Vercel)
-    *   배포 및 CI/CD 파이프라인
+    *   단순화된 배포 파이프라인
 
 ### 3. 데이터 및 메시징
 *   [04. 데이터 아키텍처](./architecture/04_data.md)

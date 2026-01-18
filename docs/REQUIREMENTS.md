@@ -8,14 +8,14 @@
 
 | 분류 | 개수 | 비율 |
 |------|------|------|
-| 기능 요구사항 | 72 | 59.5% |
-| 비기능 요구사항 | 49 | 40.5% |
-| **합계** | **121** | **100%** |
+| 기능 요구사항 | 74 | 67.3% |
+| 비기능 요구사항 | 36 | 32.7% |
+| **합계** | **110** | **100%** |
 
 | 우선순위 | 개수 | 비율 |
 |----------|------|------|
-| 필수 | 94 | 77.7% |
-| 선택 | 27 | 22.3% |
+| 필수 | 74 | 67.3% |
+| 선택 | 36 | 32.7% |
 
 ### MSA 구성
 
@@ -50,9 +50,8 @@
 | REQ-AUTH-016 | 비밀번호 변경 | 로그인 상태에서 기존 비밀번호 확인 후 변경 | B개발자 | 기능 | 선택 | |
 | REQ-AUTH-017 | 회원 탈퇴 | DB 내 상태값 변경(Soft Delete) 및 개인정보 파기 시점 관리 | B개발자 | 기능 | 필수 | 개인정보보호법 |
 | REQ-AUTH-018 | 휴면 계정 처리 | 1년 이상 미로그인 계정 분리 보관 또는 자동 탈퇴 처리 | B개발자 | 기능 | 선택 | 배치 작업 |
-| REQ-AUTH-019 | 개인정보 컬럼 암호화 | 이메일, 전화번호, CI 등 민감 정보 **AES-256** 암호화 저장 | B개발자 | 기능 | 선택 | DB 보안 |
-| REQ-AUTH-020 | 로그인 이력 관리 | 접속 IP, User-Agent, 접속 시간 기록 및 의심 접속 탐지 | B개발자 | 기능 | 선택 | 보안 감사 |
-| REQ-AUTH-021 | 이메일 인증 | (선택) 회원가입 시 이메일 소유 확인을 위한 인증번호 발송 | B개발자 | 기능 | 선택 | SMTP |
+| REQ-AUTH-019 | 로그인 이력 관리 | 접속 IP, User-Agent, 접속 시간 기록 및 의심 접속 탐지 | B개발자 | 기능 | 선택 | 보안 감사 |
+| REQ-AUTH-020 | 이메일 인증 | (선택) 회원가입 시 이메일 소유 확인을 위한 인증번호 발송 | B개발자 | 기능 | 선택 | SMTP |
 
 ---
 
@@ -65,7 +64,7 @@
 | REQ-EVT-003 | 공연 삭제 | Soft Delete 방식, 예매 건 있으면 삭제 불가 | A개발자 | 기능 | 선택 | |
 | REQ-EVT-004 | 공연 목록 조회 | 페이징, 필터링, 정렬, 검색 지원 | A개발자 | 기능 | 필수 | P95 < 200ms |
 | REQ-EVT-005 | 공연 상세 조회 | 공연 정보 조회 | A개발자 | 기능 | 필수 | P95 < 100ms |
-| REQ-EVT-006 | 공연 좌석 정보 조회 | 등급별(VIP/S/A/B) 그룹핑, 등급별 가격 조회 | A개발자 | 기능 | 필수 | **비고:** P95 < 300ms<br><br>클라이언트는 `seatNumber` 또는 `row`+`column` 조합으로 좌석 선택.<br>좌석 배치 시각화는 `layout` 객체 활용. |
+| REQ-EVT-006 | 공연 좌석 정보 조회 | 등급별(VIP/S/A/B) 그룹핑, 등급별 가격 조회 | A개발자 | 기능 | 필수 | P95 < 300ms |
 | REQ-EVT-007 | 공연 상태 관리 | UPCOMING / ONGOING / ENDED / CANCELLED | A개발자 | 기능 | 필수 | |
 | REQ-EVT-008 | 좌석 상태 관리 | SOLD: RDB 저장. Kafka 이벤트로 상태 수신 | A개발자 | 기능 | 필수 | |
 | REQ-EVT-009 | 좌석 등급 관리 | VIP / S / A / B 등급 관리 | A개발자 | 기능 | 필수 | |
@@ -76,14 +75,14 @@
 | REQ-EVT-014 | 홀 정보 수정 | 홀 정보 수정 | A개발자 | 기능 | 선택 | |
 | REQ-EVT-015 | 홀 정보 삭제 | 홀 정보 삭제 | A개발자 | 기능 | 선택 | |
 | REQ-EVT-016 | Kafka Consumer 구현 | 예매 이벤트 수신하여 좌석 상태 업데이트 | A개발자 | 기능 | 필수 | |
-| REQ-EVT-017 | Redis 캐싱 전략 | 조회 성능 향상을 위한 캐싱 (공연 목록, 공연 상세, 좌석 정보 ) | A개발자 | 비기능 | 필수 | |
-| REQ-EVT-019 | 좌석 초기화 로직 | 공연 생성 시 좌석 재고 데이터 자동 생성 | A개발자 | 기능 | 필수 | |
-| REQ-EVT-020 | 캐시 무효화 이벤트 처리 | 상태 변경 시 캐시 삭제  (공연 목록, 공연 상세, 좌석 정보 ) | A개발자 | 비기능 | 필수 | |
-| REQ-EVT-024 | Dead Letter Queue 처리 | 실패 이벤트 보관 및 모니터링 | A개발자 | 비기능 | 선택 | |
-| REQ-EVT-027 | Redis 캐시 Stampede 방지 | 대규모 동시 조회 시 DB 보호 | A개발자 | 비기능 | 필수 | |
-| REQ-EVT-028 | 공연 취소 처리 | 공연 취소 시 예매자 보호 | A개발자 | 기능 | 선택 | |
-| REQ-EVT-030 | 좌석 재고 정합성 검증 | 서비스 간 좌석 상태 불일치 탐지 | A개발자 | 비기능 | 선택 | |
-| REQ-EVT-031 | 티켓팅 오픈 시 캐시 정책 | 오픈 직후 캐시 TTL 동적 조정 | A개발자 | 비기능 | 선택 | |
+| REQ-EVT-017 | Redis 캐싱 전략 | 조회 성능 향상을 위한 캐싱 (공연 목록, 공연 상세, 좌석 정보) | A개발자 | 비기능 | 필수 | |
+| REQ-EVT-018 | 좌석 초기화 로직 | 공연 생성 시 좌석 재고 데이터 자동 생성 | A개발자 | 기능 | 필수 | |
+| REQ-EVT-019 | 캐시 무효화 이벤트 처리 | 상태 변경 시 캐시 삭제 (공연 목록, 공연 상세, 좌석 정보) | A개발자 | 비기능 | 필수 | |
+| REQ-EVT-020 | Dead Letter Queue 처리 | 실패 이벤트 보관 및 모니터링 | A개발자 | 비기능 | 선택 | |
+| REQ-EVT-021 | Redis 캐시 Stampede 방지 | 대규모 동시 조회 시 DB 보호 (Lua Script 등) | A개발자 | 비기능 | 필수 | |
+| REQ-EVT-022 | 공연 취소 처리 | 공연 취소 시 예매자 보호 | A개발자 | 기능 | 선택 | |
+| REQ-EVT-023 | 좌석 재고 정합성 검증 | 서비스 간 좌석 상태 불일치 탐지 | A개발자 | 비기능 | 선택 | |
+| REQ-EVT-024 | 티켓팅 오픈 시 캐시 정책 | 오픈 직후 캐시 TTL 동적 조정 | A개발자 | 비기능 | 선택 | |
 
 ---
 
@@ -94,14 +93,14 @@
 | REQ-QUEUE-001 | 대기열 진입 | 예매하기 버튼 클릭 시 Redis Sorted Set 진입, 중복 시 기존 순서 반환 | A개발자 | 기능 | 필수 | ZADD NX |
 | REQ-QUEUE-002 | 대기열 상태 조회 | REST API 폴링(5초 권장)으로 현재 순서, 예상 대기 시간, 토큰 상태 조회 | A개발자 | 기능 | 필수 | 60회/분 제한 |
 | REQ-QUEUE-003 | 대기열 만료 처리 | Queue Token TTL 10분 | A개발자 | 기능 | 필수 | Redis TTL |
-| REQ-QUEUE-004 | Queue Token 발급/검증 | 이중 Token 모델: Reservation Token(qr_xxx), Payment Token(qp_xxx) 1회용 검증 | A개발자 | 기능 | 필수 | REQ-QUEUE-016 연계 |
+| REQ-QUEUE-004 | Queue Token 발급/검증 | 단일 Token 모델: Reservation Token(qr_xxx) 발급 및 검증 | A개발자 | 기능 | 필수 | |
 | REQ-QUEUE-005 | 배치 승인 처리 | 1초마다 10명씩 승인, Lua 스크립트 원자성 보장 | A개발자 | 기능 | 필수 | 36,000명/시간 |
-| REQ-QUEUE-010 | 대기열 용량 제한 | **회차별** 최대 50,000명, 초과 시 503 응답 | A개발자 | 기능 | 필수 | 과부하 방지 |
-| REQ-QUEUE-012 | 대기열 모니터링 API | 관리자용 대기열 통계 조회 API | A개발자 | 기능 | 선택 | ADMIN 권한 |
-| REQ-QUEUE-014 | Rate Limiting | GET /queue/status: 15회/분 per user (5초 폴링 권장), 초과 시 429 | A개발자 | 비기능 | 필수 | REQ-GW-006 연계. 60회/분은 과도(2초 폴링 유도), 15회/분(4초 간격)으로 조정하여 Redis 부하 감소 |
-| REQ-QUEUE-015 | 대기열 성능 목표 | 진입 P95<100ms, 조회 P95<50ms, Redis 가용성 99.9% | A개발자 | 비기능 | 필수 | SLO |
-| REQ-QUEUE-016 | Queue Token 헤더 전달 및 검증 | API Gateway가 Queue Service에서 발급한 토큰(qr_xxx, qp_xxx)을 각 서비스로 X-Queue-Token 헤더로 전달. 각 서비스는 Redis에서 토큰 유효성 검증 후 요청 처리 | A개발자 | 기능 | 필수 | REQ-QUEUE-004, REQ-GW-021 연계 |
-| REQ-QUEUE-021 | 다중 대기열 제한 | 사용자당 동시 대기 최대 1개 **회차**, 초과 시 409 | A개발자 | 기능 | 필수 | 어뷰징 방지 |
+| REQ-QUEUE-006 | 대기열 용량 제한 | **회차별** 최대 50,000명, 초과 시 503 응답 | A개발자 | 기능 | 필수 | 과부하 방지 |
+| REQ-QUEUE-007 | 대기열 모니터링 API | 관리자용 대기열 통계 조회 API | A개발자 | 기능 | 선택 | ADMIN 권한 |
+| REQ-QUEUE-008 | Rate Limiting | GET /queue/status: 15회/분 per user (5초 폴링 권장), 초과 시 429 | A개발자 | 비기능 | 필수 | Redis 부하 감소 |
+| REQ-QUEUE-009 | 대기열 성능 목표 | 진입 P95<100ms, 조회 P95<50ms, Redis 가용성 99.9% | A개발자 | 비기능 | 필수 | SLO |
+| REQ-QUEUE-010 | Queue Token 헤더 전달 및 검증 | API Gateway가 Queue Service에서 발급한 토큰(qr_xxx)을 각 서비스로 X-Queue-Token 헤더로 전달 | A개발자 | 기능 | 필수 | |
+| REQ-QUEUE-011 | 다중 대기열 제한 | 사용자당 동시 대기 최대 1개 **회차**, 초과 시 409 | A개발자 | 기능 | 필수 | 어뷰징 방지 |
 
 ---
 
@@ -121,7 +120,6 @@
 | REQ-RSV-010 | 예매 상세 조회 | 특정 예매 건의 상세 정보 및 QR코드/티켓 번호 조회 | B개발자 | 기능 | 선택 | |
 | REQ-RSV-011 | Kafka 이벤트 발행 | 예매 취소(CANCELLED) 시 Kafka 이벤트 발행. Event Service가 구독하여 좌석 상태 업데이트 (Outbox 패턴 적용) | B개발자 | 기능 | 필수 | 신뢰성 |
 | REQ-RSV-012 | Transactional Outbox Pattern | Outbox로 메시지 유실 방지: 상태 변경과 기록을 동일 트랜잭션 처리 후 Poller/CDC로 Kafka 발행 | B개발자 | 비기능 | 필수 | 메시지 신뢰성 |
-| REQ-RSV-013 | 대기열 토큰 만료 처리 | 예매 확정(CONFIRMED) 후 Queue Service에 Payment Token(qp_xxx) 만료 요청 | B개발자 | 기능 | 선택 | Feign |
 
 ---
 
@@ -155,24 +153,20 @@
 | REQ-GW-002 | JWT 토큰 검증 필터 | JWT 토큰 검증 (만료/변조 확인) 후 사용자 정보를 다운스트림 서비스로 전달 | A개발자 | 기능 | 필수 | |
 | REQ-GW-003 | 공개 엔드포인트 허용 | 인증 없이 접근 가능한 경로 허용 (회원가입, 로그인, 공연/공연장 조회) | A개발자 | 기능 | 필수 | |
 | REQ-GW-004 | CORS 설정 | 프론트엔드 Cross-Origin 요청 허용 (Vercel Origin, 허용 메서드/헤더 설정, 인증정보 포함) | A개발자 | 기능 | 필수 | |
-| REQ-GW-005 | IP 기반 Rate Limiting | 엔드포인트별 IP 기반 Rate Limiting 적용 (읽기: 300회/분, 기타: 100회/분) | A개발자 | 비기능 | 선택 | |
-| REQ-GW-006 | 사용자 기반 Rate Limiting | 엔드포인트별 사용자 기반 Rate Limiting 적용 (대기열 조회: 60회/분, 예매/결제: 20회/분, 로그인: 10회/분, 기타: 200회/분) | A개발자 | 비기능 | 필수 | |
-| REQ-GW-007 | Circuit Breaker 통합 | 다운스트림 서비스 장애 시 Circuit Breaker로 연쇄 장애 방지 (실패율 임계값 초과 시 Circuit Open, Payment 서비스: 대기시간 60초) | A개발자 | 비기능 | 선택 | |
-| REQ-GW-008 | 글로벌 타임아웃 설정 | 모든 라우트에 기본 타임아웃 30초 적용 (무응답 시 504 Gateway Timeout) | A개발자 | 비기능 | 필수 | |
-| REQ-GW-009 | 라우트별 타임아웃 커스터마이징 | 특정 라우트에 타임아웃 커스터마이징 (Payment: 60초, Queue: 10초, 기타: 30초) | A개발자 | 비기능 | 선택 | |
-| REQ-GW-010 | Request ID 전파 | 모든 요청에 고유 Request ID 생성/전달하여 분산 추적 지원 | A개발자 | 비기능 | 필수 | userKey를 로그에 추가할 수 있는지 확인 필요 |
-| REQ-GW-011 | 요청/응답 로깅 | 요청 메서드, 경로, 상태 코드, 처리 시간을 JSON 구조화 로그로 CloudWatch에 전송 | A개발자 | 비기능 | 선택 | |
-| REQ-GW-012 | 보안 헤더 추가 | 모든 응답에 보안 헤더 추가 (XSS 방지, Clickjacking 방지, HSTS) | A개발자 | 비기능 | 선택 | |
-| REQ-GW-014 | CloudWatch 메트릭 통합 | 라우트별 요청 수, 응답 시간, 에러율 메트릭을 CloudWatch로 전송 및 알람 설정 | A개발자 | 비기능 | 선택 | |
-| REQ-GW-015 | Response Body 압축 | 1KB 이상 응답을 gzip 압축하여 네트워크 대역폭 절감 | A개발자 | 비기능 | 선택 | |
-| REQ-GW-018 | 요청 크기 제한 | 요청 Body 크기 제한으로 대용량 페이로드 공격 방지 (일반: 1MB, 인증: 10KB, 헤더: 16KB) | A개발자 | 비기능 | 선택 | |
-| REQ-GW-020 | Admin 엔드포인트 권한 검증 | 관리자 전용 엔드포인트 접근 제어 (JWT role 검증, ADMIN 아닌 경우 403 Forbidden) | A개발자 | 기능 | 필수 | |
-| REQ-GW-021 | Queue Token 헤더 전달 (이중 Token) | 대기열 토큰 헤더를 각 서비스로 전달 (Reservation Token → Reservation, Payment Token → Payment). 검증은 각 서비스에서 수행 | A개발자 | 기능 | 필수 | REQ-QUEUE-016 연계 |
-| REQ-GW-022 | Fallback 응답 정의 | Circuit Breaker Open 시 Fallback 응답 정의 (503 응답, 서비스별 커스터마이징, Payment는 이중 결제 방지 안내 포함) | A개발자 | 기능 | 필수 | REQ-GW-007 연계 |
-| REQ-GW-023 | Retry Policy | 일시적 장애 시 자동 재시도 (GET/PUT/DELETE만 재시도, 최대 2회, Exponential Backoff) | A개발자 | 비기능 | 선택 | |
-| REQ-GW-024 | Payment 엔드포인트 Rate Limiting 강화 | Payment 엔드포인트에 추가 Rate Limiting 적용 (User: 20회/분, IP: 50회/분, Global: 1000 TPS) 하여 PG 과부하 방지 | A개발자 | 비기능 | 선택 | REQ-GW-005,006,007 확장 |
-| REQ-GW-025 | JWT 검증 실패 응답 세분화 | JWT 검증 실패 시 원인별 응답 구분 (만료/변조/누락별 에러 코드)으로 클라이언트 자동 복구 지원 | A개발자 | 기능 | 필수 | |
-| REQ-GW-026 | Graceful Shutdown | 배포/스케일링 시 진행 중 요청 보호 (신규 요청 거부, 진행 중 요청 완료 대기, ALB Deregistration 연동) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-005 | API Throttling | 대기열 토큰이 없는 과도한 요청 차단 (기본적인 DoS 방지 수준) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-006 | Circuit Breaker 통합 | 다운스트림 서비스 장애 시 Circuit Breaker로 연쇄 장애 방지 (실패율 임계값 초과 시 Circuit Open, Payment 서비스: 대기시간 60초) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-007 | 글로벌 타임아웃 설정 | 모든 라우트에 기본 타임아웃 30초 적용 (무응답 시 504 Gateway Timeout) | A개발자 | 비기능 | 필수 | |
+| REQ-GW-008 | 라우트별 타임아웃 커스터마이징 | 특정 라우트에 타임아웃 커스터마이징 (Payment: 60초, Queue: 10초, 기타: 30초) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-009 | Request ID 전파 | 모든 요청에 고유 Request ID 생성/전달하여 분산 추적 지원 | A개발자 | 비기능 | 필수 | userKey를 로그에 추가할 수 있는지 확인 필요 |
+| REQ-GW-010 | 요청/응답 로깅 | 요청 메서드, 경로, 상태 코드, 처리 시간을 JSON 구조화 로그로 CloudWatch에 전송 | A개발자 | 비기능 | 선택 | |
+| REQ-GW-011 | 보안 헤더 추가 | 모든 응답에 보안 헤더 추가 (XSS 방지, Clickjacking 방지, HSTS) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-012 | Monitoring 통합 | 라우트별 요청 수, 응답 시간, 에러율 메트릭을 수집 (CloudWatch 또는 Prometheus) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-013 | Response Body 압축 | 1KB 이상 응답을 gzip 압축하여 네트워크 대역폭 절감 | A개발자 | 비기능 | 선택 | |
+| REQ-GW-014 | 요청 크기 제한 | 요청 Body 크기 제한으로 대용량 페이로드 공격 방지 (일반: 1MB, 인증: 10KB, 헤더: 16KB) | A개발자 | 비기능 | 선택 | |
+| REQ-GW-015 | Admin 엔드포인트 권한 검증 | 관리자 전용 엔드포인트 접근 제어 (JWT role 검증, ADMIN 아닌 경우 403 Forbidden) | A개발자 | 기능 | 필수 | |
+| REQ-GW-016 | Queue Token 헤더 전달 (단일 Token) | 대기열 토큰 헤더를 Reservation Service로 전달 (Reservation Token). 검증은 해당 서비스에서 수행 | A개발자 | 기능 | 필수 | REQ-QUEUE-016 연계 |
+| REQ-GW-017 | Fallback 응답 정의 | Circuit Breaker Open 시 Fallback 응답 정의 (503 응답, 서비스별 커스터마이징, Payment는 이중 결제 방지 안내 포함) | A개발자 | 기능 | 필수 | REQ-GW-007 연계 |
+| REQ-GW-018 | Payment 엔드포인트 Rate Limiting 강화 | Payment 엔드포인트에 추가 Rate Limiting 적용 (User: 20회/분, IP: 50회/분, Global: 1000 TPS) 하여 PG 과부하 방지 | A개발자 | 비기능 | 선택 | |
 
 ---
 
@@ -190,5 +184,3 @@
 | REQ-INT-008 | Gateway 내부 API 차단 | API Gateway에서 `/internal/**` 경로 라우팅 명시적 차단 (404 응답) | A개발자 | 비기능 | 필수 | 외부 접근 차단 |
 | REQ-INT-009 | API Key 로테이션 | API Key 만료 정책 (권장: 무기한, 필요 시 수동 로테이션) 및 갱신 프로세스 정의 | A/B개발자 | 기능 | 선택 | Key 관리 |
 | REQ-INT-010 | 내부 API Rate Limiting | 서비스 간 호출에도 Rate Limiting 적용 (서비스당 1000 req/분) | A/B개발자 | 비기능 | 선택 | 과부하 방지 |
-
----

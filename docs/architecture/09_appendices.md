@@ -57,187 +57,36 @@
 
 #### 무료티어 종료 후 비용 계획 (12개월 경과 시)
 
-**현재 월별 비용 (무료티어 적용):**
-- **총 비용**: $12-17/month
-- RDS PostgreSQL (db.t3.micro, 750시간/월 무료): $0
-- ElastiCache Redis (cache.t2.micro, 750시간/월 무료): $0
-- EC2 Kafka (t2.micro, 750시간/월 무료): $0
-- ECS Fargate (6 서비스 × 1 vCPU, 0.5GB): $12.17/month (무료티어 소진)
-- Application Load Balancer: $16.20/month
-- 기타 (CloudWatch, S3): $1-2/month
+**현재 월별 비용 (최적화 적용):**
+- **총 비용**: $30-50/month (예상)
+- **EC2**: t3.large (약 $30, Spot Instance 사용 시 절감 가능) - 모든 컨테이너(App, DB, Kafka) 실행
+- **EBS**: 50GB ($5)
+- **Route 53**: $0.5
+- **기타**: Data Transfer 등
 
-**12개월 후 비용 (무료티어 종료, 최적화 미적용):**
+**비용 절감 전략:**
+1. **NAT Gateway 제거**: Public Subnet + Security Group 사용으로 월 $30+ 절감.
+2. **Managed Service 최소화**: RDS, ElastiCache, MSK 대신 EC2 내 Docker Container 사용.
+3. **Spot Instance 활용**: 비운영 시간 또는 테스트 시 Spot Instance 활용으로 EC2 비용 최대 70% 절감.
 
-| 항목 | 스펙 | 월 비용 | 설명 |
-|------|------|--------|------|
-| **RDS PostgreSQL** | db.t3.micro, Single-AZ, 20GB SSD | $17.89 | 무료티어 종료 ($0.017/시간 × 730시간 + $2.30 스토리지) |
-| **ElastiCache Redis** | cache.t2.micro, Single-AZ | $11.52 | 무료티어 종료 ($0.017/시간 × 730시간) |
-| **EC2 Kafka** | t2.micro, Single-AZ, 20GB EBS | $8.93 | 무료티어 종료 ($0.0116/시간 × 730시간 + $2 EBS) |
-| **ECS Fargate** | 6 서비스 × 1 vCPU × 0.5GB | $12.17 | 동일 (무료티어 없음) |
-| **Application Load Balancer** | Single ALB | $16.20 | 동일 ($0.0225/시간 + 데이터 전송) |
-| **CloudWatch Logs** | 5GB/월 (무료 5GB 종료) | $2.50 | $0.50/GB × 5GB (초과분만) |
-| **Route 53** | Hosted Zone 1개 + Health Check 1개 | $1.00 | $0.50/hosted zone + $0.50/health check |
-| **기타 (S3, Data Transfer)** | - | $1.18 | ECS 로그, ALB 액세스 로그 |
-| **합계** | - | **$71.39** | 5.9배 증가 ($12.17 → $71.39) |
+**장기 비용 예측 (실제 상용화 시):**
+상용화 단계에서는 안정성을 위해 RDS, ElastiCache, MSK 도입이 필요하며, 이때는 월 $500+ 비용이 예상됩니다.
 
-**최적화 적용 후 비용 (권장):**
-
-| 최적화 방법 | 적용 대상 | 절감액 | 적용 후 비용 |
-|-----------|----------|-------|------------|
-| **Reserved Instances (RI)** | RDS, ElastiCache | -$12.17 (41% 할인) | $17.24 |
-| **Spot Instances** | EC2 Kafka (t2.micro) | -$4.90 (70% 할인) | $4.03 |
-| **Savings Plans** | ECS Fargate (1년 약정) | -$4.87 (40% 할인) | $7.30 |
-| **CloudWatch Logs 보존 단축** | 7일 보존 (기존 30일) | -$1.88 (75% 절감) | $0.62 |
-| **ALB 유지 (단일 사용)** | NAT Gateway 제거로 이미 최적화 | $0 | $16.20 |
-| **합계 절감액** | - | **-$23.40** | - |
-| **최적화 후 월 비용** | - | - | **$47.99** |
-
-**비용 절감 효과:**
-- **최적화 전**: $71.39/월
-- **최적화 후**: $47.99/월
-- **절감액**: $23.40/월 (32.8% 절감)
-- **연간 절감액**: $280.80/년
-
-**구체적인 최적화 조치:**
-
-**1. Reserved Instances (RI) 구매 (무료티어 만료 1개월 전)**
-- **대상**: RDS db.t3.micro, ElastiCache cache.t2.micro
-- **약정 기간**: 1년 (No Upfront)
-- **할인율**: 41%
-- **적용 시점**: 무료티어 만료 1개월 전 구매 (자동 적용)
-- **AWS CLI 예시**:
-```bash
-aws rds purchase-reserved-db-instances-offering \
-  --reserved-db-instances-offering-id <offering-id> \
-  --reserved-db-instance-id ticketing-rds-ri-2027 \
-  --db-instance-count 1
-
-aws elasticache purchase-reserved-cache-nodes-offering \
-  --reserved-cache-nodes-offering-id <offering-id> \
-  --reserved-cache-node-id ticketing-redis-ri-2027 \
-  --cache-node-count 1
-```
-
-**2. Spot Instances (EC2 Kafka)**
-- **대상**: EC2 t2.micro (Kafka 브로커)
-- **할인율**: 평균 70% (변동 가능)
-- **리스크**: 중단 가능 (평균 중단률 < 5%)
-- **중단 대응**:
-  - Spot Instance Interruption Notification (2분 전 알림)
-  - 자동 재시작 (User Data 스크립트로 Kafka 자동 시작)
-  - Outbox Pattern으로 메시지 유실 방지
-- **적용 방법**: Launch Template에서 Spot 요청 설정
-
-**3. Savings Plans (ECS Fargate)**
-- **대상**: ECS Fargate (6 서비스)
-- **약정 기간**: 1년 Compute Savings Plan
-- **할인율**: 40%
-- **유연성**: EC2, Lambda로도 전환 가능 (Compute Savings Plan)
-- **적용 시점**: 무료티어 만료 1개월 전 구매
-
-**4. CloudWatch Logs 보존 단축**
-- **현재**: 30일 보존 (기본)
-- **변경**: 7일 보존 (운영 로그), 90일 보존 (결제 관련)
-- **절감액**: 75% (5GB → 1.25GB)
-- **적용 방법**:
-```bash
-aws logs put-retention-policy \
-  --log-group-name /ecs/ticketing/api-gateway \
-  --retention-in-days 7
-
-aws logs put-retention-policy \
-  --log-group-name /ecs/ticketing/payment-service \
-  --retention-in-days 90
-```
-
-**무료티어 종료 대응 타임라인:**
-
-| 시점 | 조치 사항 | 책임자 | 상태 |
-|------|----------|--------|------|
-| **D-180 (6개월 전)** | CloudWatch Billing Alert 설정 ($50/월 임계값) | DevOps | 필수 |
-| **D-180** | AWS Cost Explorer 활성화, 월별 비용 추적 | DevOps | 필수 |
-| **D-90 (3개월 전)** | RI/Savings Plans 구매 여부 결정 | CTO | 필수 |
-| **D-90** | Spot Instances 테스트 (Kafka 중단 영향 평가) | A개발자 | 권장 |
-| **D-30 (1개월 전)** | RI 구매 (RDS, ElastiCache) | DevOps | 필수 |
-| **D-30** | Savings Plans 구매 (ECS Fargate) | DevOps | 필수 |
-| **D-30** | CloudWatch Logs 보존 정책 변경 | DevOps | 권장 |
-| **D-7 (1주 전)** | Spot Instances 전환 (Kafka) | DevOps | 권장 |
-| **D-Day (무료티어 종료일)** | 청구 금액 모니터링 (Cost Explorer) | DevOps | 필수 |
-| **D+7 (1주 후)** | 실제 청구 금액 검증, 예상치와 비교 | DevOps | 필수 |
-| **D+30 (1개월 후)** | 최적화 효과 검증, 추가 절감 방법 검토 | CTO | 권장 |
-
-**장기 비용 예측 (트래픽 10배 증가 시):**
-
-| 항목 | 현재 스펙 (MVP) | 10배 트래픽 스펙 | 월 비용 |
-|------|----------------|-----------------|--------|
-| **RDS PostgreSQL** | db.t3.micro (1 vCPU, 1GB) | db.r5.large (2 vCPU, 16GB) + Read Replica 1대 | $283.80 |
-| **ElastiCache Redis** | cache.t2.micro (0.5GB) | cache.r5.large (12.3GB) + Replica 1대 | $234.60 |
-| **EC2 Kafka** | t2.micro (1 broker) | m5.large × 3 (3-broker cluster) | $223.20 |
-| **ECS Fargate** | 6 서비스 × 1 vCPU × 0.5GB | 6 서비스 × 2 vCPU × 1GB × 3 인스턴스 | $73.02 |
-| **Application Load Balancer** | Single ALB | Single ALB (데이터 전송 증가) | $21.60 |
-| **합계** | - | - | **$836.22** |
-
-**10배 트래픽 시 비용 절감 전략:**
-1. **Reserved Instances (3년 약정)**: 62% 할인 → $517/월
-2. **Aurora Serverless v2 전환**: RDS 비용 40% 절감 → $170/월
-3. **Lambda 전환 (일부 서비스)**: Fargate 비용 60% 절감 → $29/월
-4. **총 예상 비용 (최적화 후)**: ~$500/월
-
-**비용 알람 설정 (필수):**
-```bash
-# CloudWatch Billing Alarm (월 $50 초과 시)
-aws cloudwatch put-metric-alarm \
-  --alarm-name ticketing-billing-alert-50 \
-  --alarm-description "Alert when monthly bill exceeds $50" \
-  --metric-name EstimatedCharges \
-  --namespace AWS/Billing \
-  --statistic Maximum \
-  --period 21600 \
-  --evaluation-periods 1 \
-  --threshold 50 \
-  --comparison-operator GreaterThanThreshold \
-  --dimensions Name=Currency,Value=USD \
-  --alarm-actions arn:aws:sns:us-east-1:123456789012:billing-alerts
-
-# 월 $100 초과 시 Critical
-aws cloudwatch put-metric-alarm \
-  --alarm-name ticketing-billing-critical-100 \
-  --threshold 100 \
-  --alarm-actions arn:aws:sns:us-east-1:123456789012:billing-critical
-```
-
-**현재 결론 (2026-01-12):**
-- MVP 단계에서는 무료티어 최대 활용 ($12-17/월)
-- 12개월 후 RI/Savings Plans 구매로 $47.99/월 목표
-- 트래픽 10배 증가 시 $500/월 예상 (최적화 적용 시)
-- 장기적으로 Serverless 아키텍처 전환 검토 (비용 효율성)
-
-#### 향후 고가용성 전환 계획 (6개월 내)
-- 3-broker 클러스터 (Multi-AZ)
-- Replication factor 2 (리더 + 팔로워)
-- RTO: 5분 (자동 failover)
-- RPO: 0건 (동기 복제)
-
-4. **수동 스케일링:**
-   - Auto Scaling 미적용 (비용 절감)
-   - 트래픽 예측 필요
+#### 향후 고가용성 전환 계획 (상용화 시)
+- **DB 분리**: Docker PostgreSQL → AWS RDS (Multi-AZ)
+- **Kafka 확장**: Docker Single Broker → AWS MSK or 3-Broker Cluster
+- **Orchestration**: Docker Compose → AWS EKS or ECS
 
 ### 1.2 향후 개선 계획
 
-**Phase 1 (6개월):**
-- Multi-AZ 전환 (RDS, Redis, Kafka)
-- Auto Scaling 적용
-- Read Replica 추가
+**Phase 1 (포트폴리오 완성):**
+- 핵심 기능(대기열, 예매, 결제) 완벽 구현
+- Kafka 메시지 처리 신뢰성 확보 (Idempotency, Ordering)
+- 부하 테스트를 통한 병목 지점 파악 및 튜닝
 
-**Phase 2 (1년):**
-- 서비스별 물리적 DB 분리
-- ElasticSearch 도입 (예매 내역 검색)
-- CDN 최적화 (정적 리소스)
-
-**Phase 3 (2년):**
-- Multi-Region 배포
-- Serverless 전환 검토 (Lambda, Aurora Serverless)
-- AI 기반 부정 예매 탐지
+**Phase 2 (확장성 검증):**
+- 대용량 트래픽 시나리오 테스트
+- Redis Cluster 도입 검토
 
 ### 1.3 기술 검토 항목
 
@@ -246,9 +95,7 @@ aws cloudwatch put-metric-alarm \
 | CQRS 패턴 | 부분 적용 (Redis 캐싱) | 전면 적용 검토 | Medium |
 | Event Sourcing | 미적용 | 이벤트 히스토리 추적 | Low |
 | GraphQL | 미적용 | REST API 대체 검토 | Low |
-| gRPC | 미적용 | 서비스 간 통신 성능 향상 | Medium |
-| Kubernetes | ECS/EC2 | 오케스트레이션 개선 | Low |
-| Service Mesh | 미적용 | Istio, Linkerd 검토 | Low |
+| Kubernetes | Docker Compose | 오케스트레이션 개선 (학습용) | Low |
 
 #### 1.3.1 CQRS 패턴 전환 조건 (정량화)
 
@@ -328,7 +175,7 @@ aws cloudwatch put-metric-alarm \
 | SAGA | 분산 트랜잭션 패턴, 오케스트레이션 또는 코레오그래피 방식 |
 | Outbox Pattern | 이벤트 발행 신뢰성을 보장하는 패턴, DB 트랜잭션과 메시지 발행을 원자적으로 처리 |
 | CI/DI | 본인인증 정보, Connecting Information / Duplication Information |
-| Queue Token | 대기열 통과 인증 토큰, Reservation Token (qr_xxx), Payment Token (qp_xxx) |
+| Queue Token | 대기열 통과 인증 토큰, Reservation Token (qr_xxx) |
 | Sorted Set | Redis 자료구조, Score 기반 정렬된 집합 |
 | Redisson | Redis 기반 Java 클라이언트, 분산 락, 분산 자료구조 지원 |
 | PortOne | 결제 PG (Payment Gateway), 구 아임포트 |

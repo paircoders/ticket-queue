@@ -47,7 +47,7 @@
 | GET | `/users/me` | 프로필 조회 | 필수 | 200/분 (사용자) |
 | PUT | `/users/me` | 프로필 수정 | 필수 | 100/분 (사용자) |
 
-**관련 요구사항:** REQ-AUTH-001 ~ REQ-AUTH-021
+**관련 요구사항:** REQ-AUTH-001 ~ REQ-AUTH-020
 
 #### 1.2.2 공연 관리 API (Event Service)
 
@@ -73,21 +73,20 @@
 | GET | `/queue/status` | 대기열 상태 조회 | 필수 | 60/분 (사용자) |
 | DELETE | `/queue/leave` | 대기열 이탈 | 필수 | 100/분 (사용자) |
 
-**관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-002, REQ-QUEUE-014
+**관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-002, REQ-QUEUE-008
 
-#### 1.2.4 Queue Token 검증 레이어 (REQ-QUEUE-016, REQ-RSV-008)
+#### 1.2.4 Queue Token 검증 레이어 (REQ-QUEUE-010, REQ-RSV-008)
 
 **결정: 2-layer validation (Gateway + Service)**
 
 ##### Layer 1: API Gateway (형식 검증)
 - X-Queue-Token 헤더 존재 여부 확인
-- 형식 검증: `qr_` 또는 `qp_` prefix + UUID 형식
+- 형식 검증: `qr_` prefix + UUID 형식
 - 없거나 형식 오류 시: 400 Bad Request
 - 통과 시: 헤더 그대로 다운스트림 전달 (유효성 미검증)
 
 **적용 경로:**
 - POST /reservations/hold (qr_ 필수)
-- POST /payments (qp_ 필수)
 
 ##### Layer 2: Reservation/Payment Service (유효성 검증 - 필수)
 **방식 A (채택): Redis 직접 조회**
@@ -133,7 +132,7 @@ public class QueueTokenValidator {
 
 | Method | Endpoint | 설명 | 인증 | Rate Limit |
 |--------|----------|------|------|-----------|
-| POST | `/payments` | 결제 요청 | 필수 + Queue Token | 20/분 (사용자) |
+| POST | `/payments` | 결제 요청 | 필수 | 20/분 (사용자) |
 | POST | `/payments/confirm` | 결제 확인 | 필수 | 20/분 (사용자) |
 | GET | `/payments/{id}` | 결제 조회 | 필수 | 200/분 (사용자) |
 | GET | `/payments` | 결제 내역 | 필수 | 200/분 (사용자) |
@@ -153,7 +152,8 @@ public class QueueTokenValidator {
 환경변수 예시:
 ```bash
 # 각 서비스의 .env 또는 ECS Task Definition
-INTERNAL_API_KEY=550e8400-e29b-41d4-a716-446655440000  # 자신의 API Key
+# [보안 경고] 실제 배포 시에는 반드시 새로 생성한 UUID를 사용
+INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-446655440000
 ```
 
 **2. Feign Client - API Key 헤더 추가**
@@ -203,163 +203,50 @@ public class InternalApiKeyInterceptor implements HandlerInterceptor {
 
 ### 1.4 API Rate Limiting 정책
 
+**전략: 대기열 중심의 트래픽 제어 (Queue-Based Throttling)**
+
+복잡한 IP/사용자 기반의 Rate Limiting을 API Gateway에서 직접 구현하는 대신, **대기열 시스템(Queue Service)**이 전체 트래픽의 유입량을 제어하는 핵심 역할을 수행합니다.
+
+**핵심 로직:**
+1. **대기열 토큰 검증**: `Queue Token`이 유효한 경우에만 주요 API(예매, 결제) 접근 허용.
+2. **토큰 발급 제어**: Queue Service에서 서버가 처리 가능한 속도(예: 10 TPS)로만 토큰을 발급(승인)함.
+3. **결과**: 자연스럽게 백엔드 유입 트래픽이 제어됨.
+
 **엔드포인트별 제한:**
 
-| 엔드포인트 | IP 기반 | 사용자 기반 | 비고 |
-|-----------|---------|-----------|------|
-| 읽기 (GET 공개) | 300/분 | - | 공연 목록/상세 조회 |
-| 로그인 | 10/분 | - | 무차별 대입 공격 방지 |
-| 대기열 상태 조회 | 100/분 | 15/분 | 5초 폴링 권장 (REQ-QUEUE-002), 기존 60/분은 2초 폴링 유도로 과도 |
-| 예매/결제 | 50/분 | 20/분 | 어뷰징 방지 |
-| 기타 | 100/분 | 200/분 | 일반 API |
+| 엔드포인트 | 제어 방식 | 비고 |
+|-----------|---------|------|
+| 대기열 진입 | Redis ZADD | 대기열 자체의 처리량은 Redis 성능에 의존 (매우 높음) |
+| 대기열 조회 | 5초 폴링 권장 | 클라이언트 사이드 제어 유도 |
+| 예매/결제 | **Queue Token 필수** | 토큰이 없거나 만료되면 401 Unauthorized |
+| 로그인/일반 | 기본 Throttling | Spring Cloud Gateway 기본 RequestRateLimiter 사용 (선택) |
 
-**구현:** Resilience4j RateLimiter + Redis 기반 분산 Rate Limiter
+**관련 요구사항:** REQ-GW-006, REQ-QUEUE-008
 
-**관련 요구사항:** REQ-GW-005, REQ-GW-006, REQ-QUEUE-014
-
-#### 1.4.1 Rate Limiting 적용 순서 및 체크 로직
-
-Rate Limiting은 다층 방어 전략으로 IP 기반 어뷰징 방지 → 인증 → 사용자별 제한 순서로 적용됩니다.
-
-**적용 순서:**
-
-```
-1. Layer 1: IP 기반 제한 (익명 + 인증 사용자 모두)
-   ↓ (통과 시)
-2. Layer 2: JWT 검증 (인증 필요 엔드포인트만)
-   ↓ (통과 시)
-3. Layer 3: 사용자 기반 제한 (인증된 사용자만)
-```
-
-**Layer 1: IP 기반 Rate Limiting (공개 API + 로그인)**
-- **목적**: 무차별 대입 공격, DDoS 방지
-- **적용 대상**:
-  - 공개 API: GET /events, GET /events/{id} (300/분)
-  - 인증 API: POST /auth/register, POST /auth/login (10/분)
-- **구현**: Redis Token Bucket + Spring Cloud Gateway Filter
-- **429 응답 시**: IP 차단 (블랙리스트), `Retry-After` 헤더 포함
-
-**Layer 2: JWT 검증**
-- 인증 필수 엔드포인트에서 토큰 서명, 만료, 블랙리스트 확인
-- 검증 실패 시: 401 Unauthorized (Layer 3 진입 불가)
-
-**Layer 3: 사용자 기반 Rate Limiting (인증된 사용자)**
-- **목적**: 사용자별 공정한 리소스 사용, 어뷰징 방지
-- **적용 대상**:
-  - 대기열 조회: GET /queue/status (15/분)
-  - 예매/결제: POST /reservations/hold, POST /payments (20/분)
-  - 일반 API: GET /users/me, GET /reservations (200/분)
-- **구현**: Redis `rate:user:{userId}:{endpoint}` (TTL 1분)
-
-**Spring Cloud Gateway Filter 구현 예시:**
+#### 1.4.1 API Gateway 필터 구현
 
 ```java
 @Component
-public class RateLimitGatewayFilterFactory extends AbstractGatewayFilterFactory<RateLimitGatewayFilterFactory.Config> {
-
-    private final RedisTemplate<String, String> redisTemplate;
+public class QueueTokenGatewayFilterFactory extends AbstractGatewayFilterFactory<QueueTokenGatewayFilterFactory.Config> {
 
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
-            String path = exchange.getRequest().getPath().value();
-            String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
-
-            // Layer 1: IP 기반 제한
-            if (!checkIpRateLimit(ip, config.getIpLimit())) {
-                return createRateLimitResponse(exchange, "IP rate limit exceeded");
+            // 헤더 검증
+            String token = exchange.getRequest().getHeaders().getFirst("X-Queue-Token");
+            if (token == null) {
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
             }
-
-            // Layer 2: JWT 검증 (인증 필요 경로만)
-            if (config.isAuthRequired()) {
-                String userId = extractUserIdFromJWT(exchange);
-                if (userId == null) {
-                    return createUnauthorizedResponse(exchange);
-                }
-
-                // Layer 3: 사용자 기반 제한
-                if (!checkUserRateLimit(userId, path, config.getUserLimit())) {
-                    return createRateLimitResponse(exchange, "User rate limit exceeded");
-                }
-            }
-
+            
+            // (선택 사항) 여기서 간단한 포맷 검증 수행
+            // 실제 유효성 검증은 각 마이크로서비스 또는 별도 Auth Filter에서 수행
+            
             return chain.filter(exchange);
         };
     }
-
-    private boolean checkIpRateLimit(String ip, int limit) {
-        String key = "rate:ip:" + ip;
-        return incrementAndCheck(key, limit, 60); // 1분 TTL
-    }
-
-    private boolean checkUserRateLimit(String userId, String path, int limit) {
-        String key = "rate:user:" + userId + ":" + normalizePath(path);
-        return incrementAndCheck(key, limit, 60);
-    }
-
-    private boolean incrementAndCheck(String key, int limit, int ttlSeconds) {
-        Long count = redisTemplate.opsForValue().increment(key);
-        if (count == 1) {
-            redisTemplate.expire(key, ttlSeconds, TimeUnit.SECONDS);
-        }
-        return count <= limit;
-    }
 }
 ```
-
-**Redis Token Bucket 구현 (Lua 스크립트):**
-
-```lua
--- rate_limit.lua
-local key = KEYS[1]
-local limit = tonumber(ARGV[1])
-local ttl = tonumber(ARGV[2])
-
-local current = redis.call('GET', key)
-if current == false then
-    redis.call('SET', key, 1, 'EX', ttl)
-    return 1
-else
-    current = tonumber(current)
-    if current < limit then
-        redis.call('INCR', key)
-        return current + 1
-    else
-        return -1 -- Rate limit exceeded
-    end
-end
-```
-
-**엔드포인트별 Rate Limit 매핑:**
-
-| 엔드포인트 | IP 제한 (Layer 1) | 사용자 제한 (Layer 3) | 비고 |
-|-----------|------------------|---------------------|------|
-| GET /events, /events/{id} | 300/분 | - | 공개 API, 인증 불필요 |
-| POST /auth/register | 10/분 | - | IP 기반만 (무차별 대입 방지) |
-| POST /auth/login | 10/분 | - | IP 기반만 (Brute Force 방지) |
-| GET /queue/status | 100/분 | 15/분 | 5초 폴링 권장, 사용자별 엄격 제한 |
-| POST /queue/enter | 100/분 | 100/분 | 동시 다발 진입 제한 |
-| POST /reservations/hold | 50/분 | 20/분 | 어뷰징 방지 (최대 5회/분 권장) |
-| POST /payments | 50/분 | 20/분 | 결제 시도 제한 |
-| GET /users/me, /reservations | 100/분 | 200/분 | 일반 조회 |
-
-**429 Too Many Requests 응답 형식:**
-
-```json
-{
-  "status": 429,
-  "error": "Too Many Requests",
-  "message": "Rate limit exceeded. Please retry after 30 seconds.",
-  "retryAfter": 30,
-  "limit": 15,
-  "remaining": 0,
-  "resetAt": "2026-01-12T10:30:00Z"
-}
-```
-
-**모니터링:**
-- CloudWatch Metric: `api.rate_limit.exceeded` (엔드포인트별 집계)
-- 알람: 특정 사용자가 10분 내 5회 이상 429 발생 시 어뷰징 의심
 
 ---
 
@@ -428,10 +315,10 @@ end
 ### 2.3 암호화 전략
 
 **비밀번호:** BCrypt (Cost Factor: 10-12)
-**개인정보 (선택):** AES-256-GCM (email, phone, CI)
+**개인정보:** 평문 저장 (포트폴리오 범위)
 **통신:** HTTPS/TLS 1.3
 
-**관련 요구사항:** REQ-AUTH-014, REQ-AUTH-019
+**관련 요구사항:** REQ-AUTH-014
 
 ### 2.4 CORS 정책
 

@@ -16,7 +16,7 @@
 4. Active 표시: `SET queue:active:{userId} {eventId} EX 600`
 5. Queue Token 발급: `qr_xxx` (Reservation Token)
 
-**관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-010, REQ-QUEUE-021
+**관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-006, REQ-QUEUE-011
 
 ### 1.2 배치 승인 로직 (Lua 스크립트)
 
@@ -47,7 +47,7 @@ for i, user_id in ipairs(members) do
   local token_data = {
     userId = user_id,
     eventId = event_id,
-    type = (token_prefix == 'qr_' and 'RESERVATION' or 'PAYMENT'),
+    type = 'RESERVATION',
     issuedAt = redis.call('TIME')[1]
   }
 
@@ -92,18 +92,15 @@ public class QueueBatchApprover {
 
 **관련 요구사항:** REQ-QUEUE-005
 
-### 1.3 Queue Token 이중 모델
+### 1.3 Queue Token 단일 모델
 
 **Reservation Token (qr_xxx):**
-- 좌석 선점 시 검증
+- 대기열 승인 시 발급되는 유일한 토큰
+- 좌석 조회 및 선점(HOLD) 시 검증
 - TTL: 10분
+- **결제 단계:** 별도의 Token 발급/검증 없음 (Reservation ID 기반 검증으로 대체)
 
-**Payment Token (qp_xxx):**
-- 결제 시 검증
-- TTL: 10분
-- Reservation Token 승인 후 발급
-
-**관련 요구사항:** REQ-QUEUE-004, REQ-GW-021
+**관련 요구사항:** REQ-QUEUE-004, REQ-GW-010, REQ-GW-016
 
 ### 1.4 Queue Token 만료 시 사용자 경험 (UX Flow)
 
@@ -212,95 +209,49 @@ public class QueueTokenValidationFilter implements GatewayFilter {
 }
 ```
 
-#### 시나리오 2: Payment Token 만료 (PortOne 결제 중)
+#### 시나리오 2: 결제 중 예매 만료 (HOLD 시간 초과)
 
 **타임라인:**
-- T+0: 좌석 선점 완료, Payment Token (`qp_xyz789`) 발급
-- T+9:30: 사용자가 PortOne 결제 UI 진입
-- T+10:30: PortOne 결제 성공 (카드 승인 완료)
-- T+10:31: Payment Callback 요청 → **Token 검증 실패 (만료)**
+- T+0: 좌석 선점 완료 (HOLD 5분 시작)
+- T+4:50: 사용자가 PortOne 결제 UI 진입 (결제창 띄움)
+- T+5:00: **HOLD 만료 (서버에서 예매 CANCELLED 처리)**
+- T+5:10: 사용자가 카드 결제 완료
 
 **문제점:**
-- 결제는 성공했으나 Payment Token이 만료되어 예매 생성 실패
-- 사용자는 결제 완료 알림을 받았지만 시스템에서는 예매 미확정
-- **환불 또는 수동 복구 필요 (Customer Support 개입)**
+- 결제는 성공했으나, 이미 서버에서는 HOLD 시간이 지나 예매를 취소함.
+- **결과:** 돈은 나갔는데 티켓은 없는 상황 (데이터 불일치)
 
-**해결 방안: PortOne Callback에서 Token 검증 제외**
+**해결 방안: PortOne Callback에서 검증 및 자동 환불**
 
 ```java
 @RestController
 @RequestMapping("/api/payments")
 public class PaymentController {
 
-    /**
-     * PortOne Webhook Callback
-     * - Token 검증 없이 imp_uid, merchant_uid만으로 검증
-     * - 이미 결제 성공 상태이므로 Token TTL과 무관하게 처리
-     */
     @PostMapping("/callback")
     public ResponseEntity<PaymentCallbackResponse> handlePortOneCallback(
         @RequestBody PortOneCallbackRequest request
     ) {
-        String impUid = request.getImpUid();         // PortOne 거래 ID
-        String merchantUid = request.getMerchantUid(); // 예매 ID (우리 시스템)
+        String impUid = request.getImpUid();
+        String merchantUid = request.getMerchantUid(); // reservationId
 
-        // 1. PortOne Confirm API로 결제 금액 검증 (필수)
-        IamportResponse<Payment> portOnePayment = iamportClient.paymentByImpUid(impUid);
-
-        if (!portOnePayment.getResponse().getStatus().equals("paid")) {
-            return ResponseEntity.badRequest().body(
-                PaymentCallbackResponse.fail("Payment not completed")
-            );
-        }
-
-        // 2. merchantUid로 예매 정보 조회 (Token 검증 없음)
-        Reservation reservation = reservationRepository.findByMerchantUid(merchantUid)
+        // 1. 예매 정보 조회
+        Reservation reservation = reservationRepository.findById(merchantUid)
             .orElseThrow(() -> new ReservationNotFoundException(merchantUid));
 
-        // 3. 금액 검증 (실제 결제 금액 vs 예매 금액)
-        if (!portOnePayment.getResponse().getAmount().equals(reservation.getTotalAmount())) {
-            // 금액 불일치 → 환불 처리
+        // 2. 예매 상태 검증 (CANCELLED 상태면 이미 만료된 것)
+        if (reservation.getStatus() == ReservationStatus.CANCELLED) {
+            // 이미 만료된 예매에 대해 결제가 됨 -> 자동 환불 처리
             iamportClient.cancelPaymentByImpUid(impUid,
-                CancelData.builder().reason("Amount mismatch").build());
+                CancelData.builder().reason("Reservation expired").build());
 
-            return ResponseEntity.badRequest().body(
-                PaymentCallbackResponse.fail("Payment amount mismatch")
+            return ResponseEntity.ok(
+                PaymentCallbackResponse.fail("Reservation expired, payment refunded")
             );
         }
 
-        // 4. 예매 확정 (Token TTL과 무관)
-        Payment payment = paymentService.confirmPayment(
-            reservation.getId(),
-            impUid,
-            portOnePayment.getResponse().getAmount()
-        );
-
-        // 5. PaymentSuccess 이벤트 발행 (Kafka)
-        paymentEventPublisher.publishPaymentSuccess(payment);
-
-        return ResponseEntity.ok(PaymentCallbackResponse.success(payment.getId()));
-    }
-
-    /**
-     * 결제 요청 엔드포인트 (Token 검증 포함)
-     * - 이 단계에서는 Payment Token 필수 검증
-     */
-    @PostMapping("/request")
-    public ResponseEntity<PaymentRequestResponse> requestPayment(
-        @RequestHeader("X-Payment-Token") String paymentToken,
-        @RequestBody PaymentRequest request
-    ) {
-        // Token 검증 (API Gateway에서 이미 검증하지만 추가 확인)
-        TokenData tokenData = queueService.validatePaymentToken(paymentToken);
-
-        // 예매 정보 조회 및 결제 준비
-        Payment payment = paymentService.preparePayment(
-            request.getReservationId(),
-            request.getAmount(),
-            tokenData.getUserId()
-        );
-
-        return ResponseEntity.ok(PaymentRequestResponse.from(payment));
+        // 3. 정상 확정 로직
+        // ...
     }
 }
 ```
@@ -443,7 +394,7 @@ return {ok = "TOKEN_EXTENDED"}
 
 **현재 결정:** Token 연장은 구현하지 않음. 10분 TTL로 충분하며, 연장 로직은 악용 가능성(대기열 무한 점유) 및 복잡도 증가 우려.
 
-**관련 요구사항:** REQ-QUEUE-004, REQ-GW-021, REQ-PAY-008
+**관련 요구사항:** REQ-QUEUE-004, REQ-GW-016, REQ-PAY-008
 
 ---
 
@@ -455,7 +406,7 @@ return {ok = "TOKEN_EXTENDED"}
 1. Queue Token 검증: `GET queue:token:qr_xxx`
 2. 좌석 락 획득: `RLock.tryLock("seat:hold:{eventId}:{seatId}", 3초, 300초)`
 3. 예매 정보 저장: `reservations` 테이블 (PENDING)
-4. Payment Token 발급 요청
+4. 결과 반환 (Reservation ID 포함)
 
 **TTL:** 5분 (300초)
 

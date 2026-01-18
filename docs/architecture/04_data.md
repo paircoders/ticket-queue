@@ -19,7 +19,8 @@
     - [1.3.4 좌석 선점 (Reservation Service)](#134-좌석-선점-reservation-service)
     - [1.3.5 토큰 블랙리스트 (User Service)](#135-토큰-블랙리스트-user-service)
     - [1.3.6 캐싱 (Event Service)](#136-캐싱-event-service)
-    - [1.3.7 TTL 전략](#137-ttl-전략)
+    - [1.3.7 API Rate Limiting (Gateway)](#137-api-rate-limiting-gateway)
+    - [1.3.8 TTL 전략](#138-ttl-전략)
 ---
 
 ## 1. 데이터 아키텍처
@@ -159,7 +160,7 @@ erDiagram
 - **di**: 본인인증 DI
 - **role**: USER / ADMIN
 - **status**: ACTIVE / DORMANT (휴면) / DELETED (탈퇴)
-- **관련 요구사항**: REQ-AUTH-001, REQ-AUTH-014, REQ-AUTH-017, REQ-AUTH-018, REQ-AUTH-019
+- **관련 요구사항**: REQ-AUTH-001, REQ-AUTH-014, REQ-AUTH-017, REQ-AUTH-018
 
 **SQL Schema:**
 ```sql
@@ -170,14 +171,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- users 테이블
 CREATE TABLE user_service.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(512) NOT NULL,            -- AES-256-GCM 암호문 (Base64)
-    email_hash VARCHAR(64) NOT NULL,        -- HMAC-SHA256 검색용 해시
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(255),                      -- AES-256-GCM 암호문
-    phone VARCHAR(255),                     -- AES-256-GCM 암호문
-    phone_hash VARCHAR(64),                 -- HMAC-SHA256 검색용 해시
-    ci VARCHAR(512),                        -- AES-256-GCM 암호문
-    ci_hash VARCHAR(64),                    -- HMAC-SHA256 중복체크용 해시
+    email VARCHAR(255) NOT NULL UNIQUE,     -- 평문 저장 (포트폴리오 범위)
+    password_hash VARCHAR(255) NOT NULL,    -- BCrypt 해시
+    name VARCHAR(255),
+    phone VARCHAR(50),
+    ci VARCHAR(512) UNIQUE,                 -- PortOne 본인인증 CI (Unique)
     di VARCHAR(64),                         -- PortOne DI
     role VARCHAR(10) NOT NULL DEFAULT 'USER',
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
@@ -191,8 +189,7 @@ CREATE TABLE user_service.users (
 );
 
 -- 인덱스
-CREATE UNIQUE INDEX idx_users_email_hash ON user_service.users(email_hash) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX idx_users_ci_hash ON user_service.users(ci_hash) WHERE ci_hash IS NOT NULL;
+-- 이메일, CI는 Unique 제약조건으로 자동 인덱스 생성됨
 CREATE INDEX idx_users_status_created ON user_service.users(status, created_at);
 CREATE INDEX idx_users_last_login ON user_service.users(last_login_at) WHERE status = 'ACTIVE';
 
@@ -212,21 +209,13 @@ FOR EACH ROW EXECUTE FUNCTION user_service.update_timestamp();
 -- 테이블 코멘트
 COMMENT ON TABLE user_service.users IS '회원 정보. Soft Delete 방식 사용 (deleted_at).';
 COMMENT ON COLUMN user_service.users.ci IS 'PortOne 본인인증 CI. 1인 1계정 강제용 (Unique).';
-COMMENT ON COLUMN user_service.users.email IS '이메일. AES-256 암호화 선택 가능 (pgcrypto 사용).';
+COMMENT ON COLUMN user_service.users.email IS '이메일. 포트폴리오용으로 평문 저장.';
 ```
 
-**암호화 및 검색 전략 (Blind Index):**
-- **기본 원칙**: 복호화가 필요한 데이터는 암호화하고, 검색이 필요한 데이터는 별도의 해시 컬럼(Blind Index)을 사용
-- **보관용 (암호화)**:
-  - **대상**: email, name, phone, ci
-  - **방법**: AES-256-GCM (Application Level - JPA `AttributeConverter`)
-  - **특징**: 매 암호화마다 랜덤 IV를 사용하여 동일 평문도 다른 암호문으로 저장 (보안 극대화)
-- **검색용 (Blind Index)**:
-  - **대상**: email_hash, phone_hash, ci_hash
-  - **방법**: HMAC-SHA256 (Application Level)
-  - **특징**: 고정된 키를 섞어 해싱하여 동일 평문은 항상 동일한 해시값 생성 (DB 인덱스 활용 가능)
-- **키 관리**: AWS Secrets Manager 또는 KMS (암호화 키와 Blind Index용 HMAC 키 분리 관리)
-- **성능 영향**: 암호화 연산 부하가 애플리케이션으로 분산되어 해시 컬럼 인덱스로 인해 검색 성능은 평문과 동일
+**데이터 보안 전략 (포트폴리오 범위):**
+- **비밀번호**: BCrypt 단방향 해시 필수 적용.
+- **개인정보**: 실제 상용 서비스에서는 AES-256 등의 컬럼 암호화나 RDS TDE가 필요하지만, 본 프로젝트에서는 아키텍처 검증에 집중하기 위해 **평문 저장**을 원칙으로 합니다.
+- **접근 제어**: DB 접근은 내부망(Docker Network)으로 제한됩니다.
 
 **`auth_tokens` 테이블:**
 - **refresh_token**: Refresh Token (Unique, 7일 TTL)
@@ -1019,15 +1008,19 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (e
 | Key Pattern | 데이터 타입 | 용도 | TTL | 서비스 |
 |-------------|------------|------|-----|--------|
 | `queue:{scheduleId}` | Sorted Set | 대기열 (score: timestamp) | 없음 | Queue |
-| `queue:token:{token}` | String | Queue Token (qr_xxx, qp_xxx) | 10분 | Queue |
+| `queue:token:{token}` | String | Queue Token (qr_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 사용자 활성 대기열 (중복 방지) | 10분 | Queue |
+| `queue:token:counter` | String (Integer) | 토큰 발급 일련번호 생성기 | 없음 | Queue |
+| `rate:ip:{ip}` | String (Integer) | IP 기반 Rate Limiting (Token Bucket) | 1분 | Gateway |
+| `rate:user:{userId}:{endpoint}` | String (Integer) | 사용자 기반 Rate Limiting | 1분 | Gateway |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
 | `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
 | `token:blacklist:{token}` | String | Access Token 블랙리스트 | 1시간 | User |
 | `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
 | `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
 | `cache:schedule:{scheduleId}` | Hash | 회차 상세정보 캐시 | 5분 | Event |
-| `cache:seats:{scheduleId}` | Hash | 좌석 정보 캐시 | 5분 | Event |
+| `cache:seats:{scheduleId}` | Hash | 좌석 재고 통계 캐시 | 5분 | Event |
+| `cache:layout:{hallId}` | String (JSON) | 좌석 배치도 (불변 데이터) | 24시간 | Event |
 
 #### 1.3.3 대기열 (Queue Service)
 
@@ -1087,7 +1080,7 @@ EXISTS queue:active:user-abc
   2. 해당 회차의 Redis 대기열 삭제 (`DEL queue:{scheduleId}`)
 - **목적**: Redis 메모리 절약, 고아 데이터 제거
 
-**관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-003, REQ-QUEUE-004, REQ-QUEUE-021
+**관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-003, REQ-QUEUE-004, REQ-QUEUE-011
 
 #### 1.3.4 좌석 선점 (Reservation Service)
 
@@ -1186,7 +1179,7 @@ EXPIRE cache:event:event-123 300
 HGETALL cache:schedule:schedule-001
 ```
 
-**3. 좌석 정보 캐시**
+**3. 좌석 재고 통계 캐시**
 
 **Key:** `cache:seats:{scheduleId}`
 **타입:** Hash (grade별 그룹핑)
@@ -1197,6 +1190,16 @@ HSET cache:seats:schedule-001 VIP '{"available":50,"price":150000}' S '{"availab
 EXPIRE cache:seats:schedule-001 300
 ```
 
+**4. 좌석 배치도 캐시 (Layout)**
+
+**Key:** `cache:layout:{hallId}`
+**타입:** String (JSON)
+**TTL:** 24시간 (공연장 구조는 거의 변경되지 않음)
+
+```redis
+SET cache:layout:hall-123 '{"rows": [{"row": "A", "seats": [...]}, ...]}' EX 86400
+```
+
 **캐시 무효화 전략:**
 - 공연/좌석 정보 변경 시 Kafka 이벤트 발행
 - Event Service Consumer가 해당 캐시 삭제 (DEL)
@@ -1204,7 +1207,33 @@ EXPIRE cache:seats:schedule-001 300
 
 **관련 요구사항:** REQ-EVT-017, REQ-EVT-020
 
-#### 1.3.7 TTL 전략
+#### 1.3.7 API Rate Limiting (Gateway)
+
+**1. IP 기반 Rate Limiting**
+
+**Key:** `rate:ip:{ip}`
+**Value:** 요청 횟수 (Integer)
+**TTL:** 1분 (Window)
+
+```redis
+# 1분 동안 요청 수 증가
+INCR rate:ip:192.168.1.1
+EXPIRE rate:ip:192.168.1.1 60
+```
+
+**2. 사용자 기반 Rate Limiting**
+
+**Key:** `rate:user:{userId}:{endpoint}`
+**Value:** 요청 횟수 (Integer)
+**TTL:** 1분 (Window)
+
+```redis
+# 특정 엔드포인트에 대한 사용자 요청 제한
+INCR rate:user:user-abc:/queue/status
+EXPIRE rate:user:user-abc:/queue/status 60
+```
+
+#### 1.3.8 TTL 전략
 
 | 데이터 | TTL | 근거 | 관련 요구사항 |
 |--------|-----|------|--------------|
@@ -1212,7 +1241,9 @@ EXPIRE cache:seats:schedule-001 300
 | 좌석 선점(HOLD) | 5분 | 선점 후 결제까지 여유 시간 | REQ-RSV-007 |
 | HOLD 좌석 SET | 10분 | 선점 연장 시 갱신, 배치 작업 보완 | REQ-RSV-007 |
 | Access Token 블랙리스트 | 1시간 | Access Token 만료 시간과 동일 | REQ-AUTH-010 |
+| Rate Limiting (IP/User) | 1분 | 분당 요청 제한 (Sliding Window/Fixed Window) | REQ-GW-006 |
 | 공연 목록/상세 캐시 | 5분 | 적절한 신선도, 오픈 시 1분으로 단축 | REQ-EVT-031 |
-| 좌석 정보 캐시 | 5분 | 실시간성 요구, 변경 빈도 고려 | REQ-EVT-017 |
+| 좌석 재고 통계 캐시 | 5분 | 실시간성 요구, 변경 빈도 고려 | REQ-EVT-017 |
+| 좌석 배치도 캐시 | 24시간 | 변경 빈도가 매우 낮은 정적 데이터 (대용량) | REQ-EVT-017 |
 
 ---

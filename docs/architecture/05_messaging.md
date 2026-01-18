@@ -38,49 +38,35 @@ services:
 - Replication Factor: 1
 - 개발 편의를 위한 자동 토픽 생성 비활성화 (명시적 생성 권장)
 
-#### 1.1.2 AWS 운영 환경
+#### 1.1.2 AWS 운영 환경 (포트폴리오 최적화)
 
-**옵션 분석:**
+**전략:** 
+복잡한 EC2 수동 설치나 고비용의 MSK 대신, **Docker Compose**를 사용하여 운영 환경에서도 컨테이너 기반으로 Kafka를 실행합니다. 이는 배포 일관성을 보장하고 운영 복잡도를 획기적으로 낮춥니다.
 
-| 옵션 | 장점 | 단점 | 월 비용 |
-|------|------|------|---------|
-| Amazon MSK | 완전 관리형, 고가용성, 자동 패치 | 고비용 (최소 $200+) | $200+ |
-| EC2 자체 Kafka | 비용 효율적, 완전 제어 | 운영 부담, 모니터링 직접 구축 | $15-50 |
-| Amazon SNS/SQS | 완전 관리형, 무료티어 | 이벤트 스트리밍 기능 부족 | $0-10 |
-
-**선택: EC2 자체 Kafka 클러스터**
-
-**초기 구성 (비용 최소화):**
-- 인스턴스: `t3.small` 1대 (단일 브로커)
-- EBS: gp3 100GB
-- 가용 영역: ap-northeast-2a (Single-AZ)
-- Replication Factor: 1 (단일 브로커이므로)
-- **월 비용**: $15-20
-
-**성장 단계 구성 (고가용성):**
-- 인스턴스: `t3.small` 3대 (3 브로커 클러스터)
-- EBS: gp3 100GB per broker
-- 가용 영역: ap-northeast-2a, 2b, 2c (Multi-AZ)
-- Replication Factor: 2-3
-- **월 비용**: $45-60
-
-**Kafka 설치 및 설정:**
-```bash
-# EC2 인스턴스에 Kafka 설치
-wget https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
-tar -xzf kafka_2.13-3.6.0.tgz
-cd kafka_2.13-3.6.0
-
-# server.properties 설정
-broker.id=1
-listeners=PLAINTEXT://0.0.0.0:9092
-advertised.listeners=PLAINTEXT://ec2-xx-xx-xx-xx.compute.amazonaws.com:9092
-log.dirs=/data/kafka-logs
-zookeeper.connect=localhost:2181
-num.partitions=3
-default.replication.factor=1  # 초기 단일 브로커
-log.retention.hours=72  # 3일 보관
+**Docker Compose 구성 (운영용):**
+```yaml
+  # Kafka (Single Broker for MVP)
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # 외부(Host) 및 내부(Docker Network) 접근 허용
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - ./kafka-data:/var/lib/kafka/data
+    restart: always
 ```
+
+**운영 포인트:**
+- **데이터 영속성:** Host Volume 마운트로 컨테이너 재시작 시에도 데이터 보존.
+- **모니터링:** Kafka UI 컨테이너를 함께 띄워 시각적으로 관리.
+- **비용:** EC2 인스턴스 리소스 공유 (별도 비용 없음).
 
 #### 1.1.3 Partition 전략
 
@@ -674,5 +660,3 @@ public void handlePaymentSuccess(PaymentSuccessEvent event) {
 **트레이드오프:**
 - 장점: Exactly-once 보장
 - 단점: 성능 10-30% 저하, 설정 복잡도 증가
-
-```

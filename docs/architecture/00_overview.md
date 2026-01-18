@@ -79,16 +79,15 @@
    - Transactional Outbox 패턴으로 이벤트 발행 신뢰성 보장
    - Redisson 분산 락으로 좌석 선점 동시성 제어
 
-6. **비용 효율성 (Cost Efficiency)**
-   - AWS 무료티어 최대 활용
-   - 단일 PostgreSQL 인스턴스에 스키마 분리 (논리적 DB per Service)
-   - LocalStack으로 로컬 개발 비용 제로
-   - CloudWatch 무료 한도 내 모니터링
+6. **비용 효율성 & 포트폴리오 최적화 (Cost Efficiency)**
+   - **인프라 간소화**: 복잡한 VPC/Subnet 대신 Public Subnet + Security Group으로 보안 관리
+   - **Docker Compose 통합**: 로컬과 운영 환경을 Docker Compose로 통일하여 배포/운영 복잡도 제거
+   - **EC2 단일 인스턴스**: 모든 서비스(App, DB, Kafka, Redis)를 단일 EC2 내 컨테이너로 실행 (비용 최소화)
 
 7. **개발 생산성 (Developer Productivity)**
-   - Docker Compose로 로컬 환경 통합 관리
-   - GitHub Actions로 CI/CD 자동화
-   - 명확한 서비스 경계로 개발 충돌 최소화
+   - **인프라보다 로직 집중**: Kafka, 동시성 제어 등 핵심 백엔드 기술 구현에 집중
+   - **단순한 배포**: `docker-compose up` 명령 하나로 배포 완료
+   - **명확한 서비스 경계**: MSA 구조는 유지하되 운영 오버헤드 제거
 
 ### 1.5 기술 스택 개요
 
@@ -141,7 +140,7 @@
 - **소셜 로그인**: 카카오, 네이버, 구글 OAuth2 지원 (선택)
 - **프로필 관리**: 조회, 수정, 비밀번호 변경, 회원 탈퇴
 
-**관련 요구사항**: REQ-AUTH-001 ~ REQ-AUTH-021 (21개)
+**관련 요구사항**: REQ-AUTH-001 ~ REQ-AUTH-021 (20개)
 
 #### 2.2.2 공연 관리 (Event Service)
 - **공연 CRUD**: 생성, 수정, 삭제 (관리자)
@@ -150,16 +149,16 @@
 - **공연장/홀 관리**: 공연장 및 홀 정보 CRUD
 - **좌석 상태 관리**: Kafka 이벤트 수신하여 좌석 상태 업데이트
 
-**관련 요구사항**: REQ-EVT-001 ~ REQ-EVT-031 (24개)
+**관련 요구사항**: REQ-EVT-001 ~ REQ-EVT-024 (24개)
 
 #### 2.2.3 대기열 (Queue Service)
 - **대기열 진입**: Redis Sorted Set 기반, 공연별 최대 50,000명
 - **대기열 상태 조회**: REST 폴링(5초 권장), 현재 순서 및 예상 대기 시간
 - **배치 승인**: 1초마다 10명씩 승인 (Lua 스크립트 원자성 보장)
-- **Queue Token 발급**: Reservation Token (qr_xxx), Payment Token (qp_xxx)
+- **Queue Token 발급**: Reservation Token (qr_xxx) 단일 모델
 - **대기열 만료**: Token TTL 10분, 자동 제거
 
-**관련 요구사항**: REQ-QUEUE-001 ~ REQ-QUEUE-021 (10개)
+**관련 요구사항**: REQ-QUEUE-001 ~ REQ-QUEUE-011 (11개)
 
 #### 2.2.4 예매 (Reservation Service)
 - **좌석 선점**: Redisson 분산 락, Redis 5분 TTL
@@ -168,7 +167,7 @@
 - **예매 취소**: 사용자 취소 (공연 당일 불가), 보상 트랜잭션 (결제 실패 시)
 - **나의 예매 내역**: 사용자별 예매 목록 조회
 
-**관련 요구사항**: REQ-RSV-001 ~ REQ-RSV-013 (12개)
+**관련 요구사항**: REQ-RSV-001 ~ REQ-RSV-012 (12개)
 
 #### 2.2.5 결제 (Payment Service)
 - **결제 프로세스**: PortOne 연동, 신용카드 결제
@@ -186,7 +185,7 @@
 - **Circuit Breaker**: 다운스트림 서비스 장애 격리
 - **CORS, 보안 헤더**: 프론트엔드 통신 지원
 
-**관련 요구사항**: REQ-GW-001 ~ REQ-GW-026 (26개)
+**관련 요구사항**: REQ-GW-001 ~ REQ-GW-018 (18개)
 
 ### 2.3 비기능 요구사항 요약
 
@@ -222,40 +221,18 @@
 ### 2.4 시스템 제약사항 및 가정사항
 
 #### 2.4.1 제약사항
-1. **비용 제약**: AWS 무료티어 최대 활용, 월 예산 최소화
-   - RDS: db.t3.micro (무료티어 750시간/월)
-   - ElastiCache: cache.t2.micro (무료티어)
-   - EC2: t2.micro (무료티어 750시간/월)
-   - CloudWatch: 무료티어 한도 (로그 5GB, 메트릭 10개, 알람 10개)
-
-2. **개발 리소스**: A개발자 (Gateway/Event/Queue), B개발자 (User/Reservation/Payment)
-
-3. **외부 서비스 의존성**:
-   - PortOne 테스트 모드 (결제)
-   - Google reCAPTCHA v2 (봇 차단)
-   - OAuth2 Provider (카카오, 네이버, 구글)
-
-4. **데이터베이스**: 단일 PostgreSQL 인스턴스, 스키마 분리 (비용 절감)
-
-5. **Kafka**: EC2 자체 구축 (MSK 고비용), 초기 단일 브로커
+1. **리소스 제약**: 개발자 2명 (A개발자, B개발자)
+2. **비용 제약**: 포트폴리오 프로젝트로서 월 유지비용 최소화 (EC2 1대 목표)
+3. **인프라 전략**: 
+   - **복잡성 제거**: AWS VPC, NAT Gateway, EKS 등 운영 리소스가 많이 드는 인프라 제외
+   - **Docker 중심**: 모든 컴포넌트(App, MW, DB)를 Docker Container로 실행
 
 #### 2.4.2 가정사항
 1. **트래픽 패턴**:
-   - 평상시: 저트래픽
-   - 티켓 오픈 시: 순간 50,000명 동시 접속 (공연당)
-   - 대기열 처리: 36,000명/시간 (10명/초)
+   - 기술적 검증을 위한 가상의 대용량 트래픽 상황 가정 (부하 테스트로 증명)
+   - 실제 운영 트래픽이 아닌, 아키텍처의 한계점을 테스트하는 것이 목표
 
-2. **공연 규모**:
-   - 동시 진행 공연: 최대 10개
-   - 공연당 좌석: 평균 3,000석
-   - 공연당 대기열: 최대 50,000명
-
-3. **사용자 행동**:
-   - 대기열 상태 폴링: 5초 간격
-   - 좌석 선점 후 결제: 5분 이내
-   - 1회 예매: 최대 4장
-
-4. **배포 환경**:
-   - 로컬 개발: LocalStack + Docker Compose
-   - 운영 환경: AWS (단일 리전, 초기 Single-AZ)
+2. **배포 환경**:
+   - 로컬/운영 동일하게 **Docker Compose** 사용
+   - AWS EC2 (Ubuntu) 환경
    - 프론트엔드: Vercel

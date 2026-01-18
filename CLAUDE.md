@@ -84,7 +84,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Token 데이터: Redis String `queue:token:{token}` (JSON: userId, scheduleId, type, issuedAt)
 - **중복 대기 방지**: 사용자당 동시 대기 1개 회차만 허용 (Redis `queue:active:{userId}`, TTL 10분)
 - **대기열 용량 제한**: 회차당 최대 50,000명 (초과 시 503 Service Unavailable)
-- **REQ-QUEUE-001 ~ 015, 021**
+- **REQ-QUEUE-001 ~ 011**
 
 ### 2. 좌석 선점 및 예매 (Reservation Service)
 - **Redisson 분산 락**: `seat:hold:{scheduleId}:{seatId}` (TTL 5분)
@@ -97,7 +97,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - SOLD → RDB: Event Service (ReservationConfirmed 이벤트 수신 시)
   - HOLD 해제: Reservation Service (분산 락 해제) + Event Service (Redis SET 정리)
 - **1회 최대 4장 제한**: 좌석 선점 시 개수 검증
-- **REQ-RSV-001 ~ 013**
+- **REQ-RSV-001 ~ 012**
 
 ### 3. SAGA 패턴 (Payment Service)
 - **Orchestration 방식**: Payment Service가 SAGA 진행 상황 관리
@@ -196,8 +196,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 성능 목표 (비기능 요구사항)
 
-- **대기열 진입**: P95 < 100ms (REQ-QUEUE-015)
-- **대기열 상태 조회**: P95 < 50ms (REQ-QUEUE-015)
+- **대기열 진입**: P95 < 100ms (REQ-QUEUE-009)
+- **대기열 상태 조회**: P95 < 50ms (REQ-QUEUE-009)
 - **공연 목록 조회**: P95 < 200ms (REQ-EVT-004)
 - **공연 상세 조회**: P95 < 100ms (REQ-EVT-005)
 - **좌석 정보 조회**: P95 < 300ms (REQ-EVT-006)
@@ -205,18 +205,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## API Gateway 정책
 
-### Rate Limiting (REQ-GW-006)
-- 대기열 조회: 60회/분 per user
-- 예매/결제: 20회/분 per user
-- 로그인: 10회/분 per user
-- 기타: 200회/분 per user
+### API Throttling (REQ-GW-005)
+- **대기열 토큰**: 주요 API 접근 시 `X-Queue-Token` 필수 검증
+- 일반 API: Spring Cloud Gateway 기본 RequestRateLimiter 사용 (선택)
 
-### Timeout (REQ-GW-008, REQ-GW-009)
+### Timeout (REQ-GW-007, REQ-GW-008)
 - Payment 라우트: 60초
 - Queue 라우트: 10초
 - 기타: 30초 (기본)
 
-### Circuit Breaker (REQ-GW-007)
+### Circuit Breaker (REQ-GW-006)
 - 실패율 임계값 초과 시 Circuit Open
 - Payment 서비스: 대기 시간 60초
 
@@ -232,17 +230,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 암호화
 - **비밀번호**: BCrypt 해싱 (REQ-AUTH-014)
-- **개인정보 암호화 (선택)**: AES-256-GCM (Application Level)
-  - 대상: 이메일, 이름, 전화번호, CI
-  - 매 암호화마다 랜덤 IV 사용 (동일 평문도 다른 암호문)
-- **Blind Index (검색용 해시)**:
-  - `email_hash`, `phone_hash`, `ci_hash` 컬럼 사용
-  - HMAC-SHA256 해싱 (고정 키, 동일 평문 = 동일 해시)
-  - DB 인덱스 활용하여 검색 성능 평문과 동일
-  - **1인 1계정 강제**: `ci_hash` Unique Constraint
-- **키 관리**: AWS Secrets Manager 또는 KMS (암호화 키와 HMAC 키 분리 관리)
+- **개인정보**: 평문 저장 (포트폴리오 범위 내 아키텍처 검증 집중)
+  - 실제 상용 환경에서는 TDE 또는 컬럼 암호화 필요
+- **1인 1계정 강제**: `ci` 컬럼 Unique Constraint
 
-## 개발 가이드라인
+### 개발 가이드라인
 
 ### 코드 스타일
 - Java 표준 컨벤션 (Google Style Guide 권장)
@@ -530,7 +522,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 5. **Queue Token 만료 UX**: PortOne Callback은 Token 검증 제외 (merchantUid + 금액 검증)
 6. **DLQ 재시도 전략**: 지수 백오프 3회, 재시도 불가능 예외는 즉시 DLQ
 7. **보상 토픽 제외**: `payment.events`의 PaymentFailed가 보상 트리거 (YAGNI 원칙)
-8. **Blind Index 암호화**: AES-256-GCM (보관용) + HMAC-SHA256 (검색용 해시)
+8. **개인정보 평문 저장**: 암호화 복잡도 제거, 아키텍처/로직 검증 집중 (포트폴리오 최적화)
 
 ---
 

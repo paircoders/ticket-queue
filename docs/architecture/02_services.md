@@ -79,7 +79,7 @@ graph TB
 **데이터 저장소:**
 - 없음 (Stateless)
 
-**관련 요구사항:** REQ-GW-001 ~ REQ-GW-026 (26개)
+**관련 요구사항:** REQ-GW-001 ~ REQ-GW-018 (18개)
 
 ---
 
@@ -116,7 +116,7 @@ graph TB
 - PostgreSQL 스키마: `user_service`
 - Redis: 토큰 블랙리스트 (`token:blacklist:{token}`)
 
-**관련 요구사항:** REQ-AUTH-001 ~ REQ-AUTH-021 (21개)
+**관련 요구사항:** REQ-AUTH-001 ~ REQ-AUTH-021 (20개)
 
 ---
 
@@ -185,7 +185,7 @@ graph TB
 - 공연 상세 조회: P95 < 100ms (REQ-EVT-005)
 - 좌석 정보 조회: P95 < 300ms (REQ-EVT-006)
 
-**관련 요구사항:** REQ-EVT-001 ~ REQ-EVT-031 (24개)
+**관련 요구사항:** REQ-EVT-001 ~ REQ-EVT-024 (24개)
 
 ---
 
@@ -195,7 +195,7 @@ graph TB
 - 대기열 진입 (Redis Sorted Set, ZADD NX)
 - 대기열 상태 조회 (REST 폴링, 5초 권장)
 - 배치 승인 (1초마다 10명, Lua 스크립트)
-- Queue Token 발급 (Reservation Token, Payment Token)
+- Queue Token 발급 (Reservation Token)
 - 대기열 용량 제한 (회차당 50,000명)
 - 사용자당 동시 대기 1개 회차 제한
 - Token 만료 처리 (TTL 10분)
@@ -229,11 +229,11 @@ return members
 - Redis String: Token, 중복 방지
 
 **성능 목표:**
-- 진입: P95 < 100ms (REQ-QUEUE-015)
-- 조회: P95 < 50ms (REQ-QUEUE-015)
+- 진입: P95 < 100ms (REQ-QUEUE-009)
+- 조회: P95 < 50ms (REQ-QUEUE-009)
 - 처리량: 36,000명/시간 (10명/초)
 
-**관련 요구사항:** REQ-QUEUE-001 ~ REQ-QUEUE-021 (10개)
+**관련 요구사항:** REQ-QUEUE-001 ~ REQ-QUEUE-011 (11개)
 
 ---
 
@@ -277,7 +277,7 @@ return members
 - Payment Service: PaymentSuccess 이벤트 유실 시 예매 PENDING 상태 고착
 - 두 서비스 모두 이벤트 발행 실패 시 데이터 불일치 발생 (P0 위험)
 
-**관련 요구사항:** REQ-RSV-001 ~ REQ-RSV-013 (12개)
+**관련 요구사항:** REQ-RSV-001 ~ REQ-RSV-012 (12개)
 
 ---
 
@@ -291,7 +291,6 @@ return members
 - 멱등성 보장 (paymentKey)
 - SAGA 오케스트레이션 (결제 성공/실패 분기)
 - 보상 트랜잭션 (결제 실패 시 예매 취소 이벤트 발행)
-- Queue Token 검증 (Payment Token)
 - Circuit Breaker (PortOne API 장애 대응)
 
 **주요 API:**
