@@ -991,8 +991,8 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (e
 **로컬 개발:**
 - Docker Redis 7.x 단일 인스턴스
 - 포트: 6379
-- Persistence: AOF(Append Only File) + RDB(Redis Database)  
-    → 명령 로그와 스냅샷을 결합하여 데이터 안정성 및 빠른 복구 보장
+- Persistence: AOF(Append Only File)
+    → 명령 로그로 데이터 안정성 복구 보장
 
 **AWS 운영:**
 - ElastiCache Redis 7.x
@@ -1204,6 +1204,11 @@ SET cache:layout:hall-123 '{"rows": [{"row": "A", "seats": [...]}, ...]}' EX 864
 - 공연/좌석 정보 변경 시 Kafka 이벤트 발행
 - Event Service Consumer가 해당 캐시 삭제 (DEL)
 - 다음 조회 시 DB에서 재구축 (Cache-Aside 패턴)
+
+> **선택 사항**: 캐시 무효화 이벤트 타입 상세 정의
+> - 현재: 구체적 이벤트 타입 미정의 (Admin 직접 수정 시나리오)
+> - 확장 시: `event.events` 토픽에 `EventUpdated`, `ScheduleUpdated`, `SeatUpdated` 등 이벤트 타입 정의 필요
+> - 상세 스키마는 `05_messaging.md` 확장 시 추가
 
 **관련 요구사항:** REQ-EVT-017, REQ-EVT-020
 
