@@ -114,7 +114,7 @@ graph TB
 
 **데이터 저장소:**
 - PostgreSQL 스키마: `user_service`
-- Redis: 토큰 블랙리스트 (`token:blacklist:{token}`)
+- Redis: 토큰 블랙리스트 (`token:blacklist:{jti}`)
 
 **관련 요구사항:** REQ-AUTH-001 ~ REQ-AUTH-021 (20개)
 

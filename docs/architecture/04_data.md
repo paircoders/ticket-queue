@@ -1010,12 +1010,11 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (e
 | `queue:{scheduleId}` | Sorted Set | 대기열 (score: timestamp) | 없음 | Queue |
 | `queue:token:{token}` | String | Queue Token (qr_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 사용자 활성 대기열 (중복 방지) | 10분 | Queue |
-| `queue:token:counter` | String (Integer) | 토큰 발급 일련번호 생성기 | 없음 | Queue |
 | `rate:ip:{ip}` | String (Integer) | IP 기반 Rate Limiting (Token Bucket) | 1분 | Gateway |
 | `rate:user:{userId}:{endpoint}` | String (Integer) | 사용자 기반 Rate Limiting | 1분 | Gateway |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
 | `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
-| `token:blacklist:{token}` | String | Access Token 블랙리스트 | 1시간 | User |
+| `token:blacklist:{jti}` | String | Access Token 블랙리스트 (jti 사용) | 1시간 | User |
 | `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
 | `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
 | `cache:schedule:{scheduleId}` | Hash | 회차 상세정보 캐시 | 5분 | Event |
@@ -1138,16 +1137,16 @@ DEL seat:hold:schedule-001:seat-456
 
 #### 1.3.5 토큰 블랙리스트 (User Service)
 
-**Key:** `token:blacklist:{token}`
+**Key:** `token:blacklist:{jti}`
 **Value:** `1` (존재 여부만 확인)
 **TTL:** Access Token 만료 시간 (1시간)
 
 ```redis
-# 로그아웃 시 블랙리스트 등록
-SET token:blacklist:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... 1 EX 3600
+# 로그아웃 시 블랙리스트 등록 (jti 사용)
+SET token:blacklist:550e8400-e29b-41d4-a716-446655440000 1 EX 3600
 
 # 토큰 검증 시 블랙리스트 확인
-EXISTS token:blacklist:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+EXISTS token:blacklist:550e8400-e29b-41d4-a716-446655440000
 ```
 
 **관련 요구사항:** REQ-AUTH-008, REQ-AUTH-010

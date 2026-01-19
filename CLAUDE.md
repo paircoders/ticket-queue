@@ -151,9 +151,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `queue:token:{token}` | String (JSON) | Queue Token (qr_xxx, qp_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 중복 대기 방지 (scheduleId 저장) | 10분 | Queue |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (Redisson) | 5분 | Reservation |
-| `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 없음 | Reservation |
-| `token:blacklist:{token}` | String | Access Token 블랙리스트 | 1시간 | User |
-| `cache:event:list:{page}:{size}:{filters}` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
+| `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
+| `token:blacklist:{jti}` | String | Access Token 블랙리스트 | 1시간 | User |
+| `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
 | `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
 | `cache:schedule:{scheduleId}` | Hash | 회차 상세정보 캐시 | 5분 | Event |
 | `cache:seats:{scheduleId}` | Hash | 좌석 정보 캐시 (등급별) | 5분 | Event |
