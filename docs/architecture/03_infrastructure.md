@@ -5,9 +5,9 @@
 ### 1.1 전체 시스템 아키텍처 다이어그램 (포트폴리오 최적화)
 
 **핵심 전략:**
-- **인프라 간소화:** 복잡한 VPC/Subnet 관리 대신 **Docker Compose**로 모든 서비스를 통합 배포합니다.
-- **운영 비용 최소화:** EC2 1대에 모든 컴포넌트(Kafka, Redis, DB, Apps)를 컨테이너로 실행합니다.
-- **포트폴리오 집중:** 인프라 구성보다는 **Kafka/Redis 활용 능력**과 **애플리케이션 아키텍처**를 보여주는 데 집중합니다.
+- **인프라 효율화:** AWS Free Tier Managed Service(RDS, ElastiCache)를 적극 활용하여 관리 포인트를 줄이고 안정성을 확보합니다.
+- **비용 최적화:** EC2 1대에 MSA 서비스와 Kafka를 Docker Compose로 통합 배포하여 컴퓨팅 비용을 최소화합니다.
+- **보안 강화:** Secrets Manager를 통해 운영 환경의 민감 정보를 안전하게 관리합니다.
 
 ```mermaid
 graph TB
@@ -19,23 +19,26 @@ graph TB
         NextJS[Next.js 15+<br/>Vercel 배포]
     end
 
-    subgraph "AWS EC2 (Docker Compose)"
-        subgraph "Public Network"
-            Nginx[Nginx / API Gateway<br/>Reverse Proxy]
-        end
+    subgraph "AWS Managed Services (Free Tier)"
+        RDS[(RDS PostgreSQL)]
+        Redis[(ElastiCache Redis)]
+        S3[S3 Bucket<br/>Image Storage]
+        Secrets[Secrets Manager]
+    end
 
-        subgraph "Docker Network (Internal)"
+    subgraph "AWS EC2 (Docker Compose)"
+        subgraph "ticketing-net (Internal Docker Bridge)"
+            Nginx[Nginx<br/>Reverse Proxy]
+            SCG[API Gateway<br/>Spring Cloud Gateway]
+            
             User_Svc[User Service]
             Event_Svc[Event Service]
             Queue_Svc[Queue Service]
             Reservation_Svc[Reservation Service]
             Payment_Svc[Payment Service]
 
-            Kafka[Kafka Cluster<br/>Single/Multi Node]
+            Kafka[Kafka Cluster<br/>Single Node]
             Zookeeper[Zookeeper]
-            
-            RDS[(PostgreSQL 18<br/>Container or RDS)]
-            Redis[(Redis 7.x<br/>Container or ElastiCache)]
         end
     end
 
@@ -47,11 +50,12 @@ graph TB
 
     User -->|HTTPS| NextJS
     NextJS -->|API Request| Nginx
-    Nginx --> User_Svc
-    Nginx --> Event_Svc
-    Nginx --> Queue_Svc
-    Nginx --> Reservation_Svc
-    Nginx --> Payment_Svc
+    Nginx --> SCG
+    SCG --> User_Svc
+    SCG --> Event_Svc
+    SCG --> Queue_Svc
+    SCG --> Reservation_Svc
+    SCG --> Payment_Svc
 
     Reservation_Svc --> Kafka
     Payment_Svc --> Kafka
@@ -59,12 +63,24 @@ graph TB
 
     User_Svc -.-> reCAPTCHA
     Payment_Svc -.-> PortOne
+
+    User_Svc --> RDS
+    Event_Svc --> RDS
+    Queue_Svc --> Redis
+    Reservation_Svc --> Redis
+    Reservation_Svc --> RDS
+    Payment_Svc --> RDS
+    
+    Event_Svc --> S3
 ```
 
 ### 1.2 로컬 및 운영 환경 통합 (Docker Compose)
 
 #### 1.2.1 개요
-로컬 개발 환경과 운영(AWS EC2) 환경을 **Docker Compose** 하나로 통일하여 관리합니다. 이는 2인 규모 팀에서 복잡한 배포 파이프라인을 구축하는 시간을 절약하고, 개발에 집중할 수 있게 합니다.
+로컬 개발 환경과 운영(AWS EC2) 환경을 **Docker Compose**를 기반으로 구성합니다.
+
+*   **로컬 개발(Local):** **LocalStack**을 활용하여 S3, Secrets Manager 등 AWS 클라우드 서비스를 모사하고, DB와 Redis는 Docker 컨테이너로 실행합니다.
+*   **운영 환경(Production):** `docker-compose.yml`에서는 애플리케이션 서비스만 구동하며, DB/Redis/S3 등은 **AWS Managed Service (RDS, ElastiCache, S3)**를 바라보도록 환경변수를 설정합니다.
 
 #### 1.2.2 Docker Compose 구성 (`docker-compose.yml`)
 
@@ -72,55 +88,40 @@ graph TB
 version: '3.8'
 
 services:
-  # --- Infrastructure ---
+  # --- Infrastructure (Local Only) ---
+  # 운영 배포 시에는 주석 처리하거나 profiles를 사용하여 제외
   
+  # AWS Service Mocking (S3, Secrets Manager)
+  localstack:
+    image: localstack/localstack:3.0
+    profiles: ["local"]
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,secretsmanager
+      - DEBUG=1
+    volumes:
+      - "./.localstack:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
   postgres:
     image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ticketing
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - ticketing-net
+    profiles: ["local"]
+    # ... 설정 생략 ...
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - ticketing-net
+    profiles: ["local"]
+    # ... 설정 생략 ...
 
-  # Kafka Setup (Simplified for Portfolio)
+  # Kafka Setup (Common)
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    networks:
-      - ticketing-net
+    # ...
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    networks:
-      - ticketing-net
+    # ...
 
   # --- Microservices ---
 
@@ -130,26 +131,16 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ticketing
-      SPRING_REDIS_HOST: redis
+      # 운영 환경에서는 AWS RDS/ElastiCache Endpoint 주입
+      SPRING_DATASOURCE_URL: ${RDS_ENDPOINT}
+      SPRING_REDIS_HOST: ${REDIS_ENDPOINT}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
-      - postgres
-      - redis
       - kafka
     networks:
       - ticketing-net
 
   # User, Event, Queue, Reservation, Payment Services...
-  # (유사한 설정으로 추가)
-
-networks:
-  ticketing-net:
-    driver: bridge
-
-volumes:
-  postgres-data:
-  redis-data:
 ```
 
 ### 1.3 AWS 배포 전략 (EC2 + Docker)
@@ -162,30 +153,42 @@ volumes:
 3.  **Deploy Script 실행**:
     ```bash
     # deploy.sh
+    # AWS Secrets Manager에서 환경변수(.env) 로드
+    aws secretsmanager get-secret-value ... > .env
+    
     docker-compose pull
     docker-compose up -d
     docker image prune -f
     ```
 
-#### 1.3.2 네트워크 구성 (단순화)
-- **VPC**: Default VPC 사용 (또는 단일 Custom VPC).
-- **Subnet**: **All Public Subnet**.
-  - NAT Gateway 비용($30+/월) 절감.
-  - 외부 통신(PortOne, OAuth) 구성 복잡도 제거.
+#### 1.3.2 구성 상세
+- **ALB (Application Load Balancer) 미사용**:
+    - 비용 절감 및 구조 단순화를 위해 ALB 없이 **EC2 내 Nginx**가 Reverse Proxy 역할을 수행하며, 내부의 **Spring Cloud Gateway**로 트래픽을 전달합니다.
+- **S3 (Simple Storage Service)**:
+    - 공연 포스터, 좌석 배치도 등 정적 이미지는 EC2 스토리지가 아닌 S3 버킷에 저장하여 확장성을 확보합니다.
+- **Secrets Manager**:
+    - DB 접속 정보, API Key 등 민감 정보는 코드나 Docker Image에 포함하지 않고 Secrets Manager를 통해 런타임에 주입합니다.
+
+#### 1.3.3 네트워크 구성
+- **VPC**: Default VPC 사용.
+- **Subnet**: **All Public Subnet** (NAT Gateway 비용 절감).
 - **Security Group**:
-  - Inbound: 80/443 (Web), 22 (SSH - 내 IP만).
-  - Outbound: All Open.
-  - 내부 DB/Redis 포트는 외부 노출 차단 (Docker Network 내부 통신).
+    - Inbound: 80/443 (Web), 22 (SSH - 내 IP만).
+    - Outbound: All Open.
+    - RDS/ElastiCache SG: EC2 SG에서의 접근만 허용.
 
 ### 1.4 비용 최적화 (MVP 기준)
 
 | 항목 | 스펙 | 월 예상 비용 | 비고 |
 |------|------|-------------|------|
-| **EC2** | t3.medium / large | $30 - $60 | 모든 컨테이너 실행용 (Spot Instance 활용 시 절감 가능) |
-| **RDS** | (Optional) db.t3.micro | $15 | 데이터 안정성을 위해 DB만 분리 가능 |
-| **Route 53** | 도메인 | $0.5 | |
-| **NAT Gateway** | **제거** | **$0** | Public Subnet 사용으로 비용 절감 |
+| **EC2** | t3.medium / large | $30 - $60 | App + Kafka 실행 (Spot Instance 활용 시 절감 가능) |
+| **RDS** | db.t3.micro | Free Tier | PostgreSQL (12개월 무료) |
+| **ElastiCache** | cache.t2.micro | Free Tier | Redis (12개월 무료) |
+| **S3** | Standard | Free Tier | 5GB 스토리지, 20,000 GET 요청 무료 |
+| **Secrets Manager** | - | $0.4 / Secret | 시크릿 개수당 과금 (저비용) |
 | **Kafka** | **Docker 내장** | **$0** | EC2 리소스 공유 |
+| **NAT Gateway** | **제거** | **$0** | Public Subnet 사용으로 비용 절감 |
+| **ALB** | **제거** | **$0** | Nginx 대체 |
 
 ---
 
