@@ -78,10 +78,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Key: `queue:{scheduleId}` (공연별이 아닌 회차별 대기열)
 - **배치 승인**: 1초마다 10명씩 Lua 스크립트로 원자적 처리 (36,000명/시간)
   - Lua 스크립트로 ZRANGE + ZREM + Token 발급을 원자적으로 처리
-- **이중 Token 모델**:
-  - `qr_xxx`: Reservation Token (좌석 조회/선점용, TTL 10분)
-  - `qp_xxx`: Payment Token (결제용, TTL 10분)
-  - Token 데이터: Redis String `queue:token:{token}` (JSON: userId, scheduleId, type, issuedAt)
+- **단일 Queue Token 모델**:
+  - `queue_token`: 대기열 통과 후 좌석 조회/선점용 (TTL 10분)
+  - Token 데이터: Redis String `queue:token:{token}` (JSON: userId, scheduleId, issuedAt)
+  - **결제 권한**: 별도 토큰 없이 `Reservation(PENDING + hold_expires_at)` 기반 검증
+    - 결제 시 검증: reservationId 존재 + userId 일치 + status=PENDING + hold_expires_at 미경과
 - **중복 대기 방지**: 사용자당 동시 대기 1개 회차만 허용 (Redis `queue:active:{userId}`, TTL 10분)
 - **대기열 용량 제한**: 회차당 최대 50,000명 (초과 시 503 Service Unavailable)
 - **REQ-QUEUE-001 ~ 011**
@@ -148,7 +149,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Key Pattern | 타입 | 용도 | TTL | 서비스 |
 |-------------|------|------|-----|--------|
 | `queue:{scheduleId}` | Sorted Set | 대기열 (회차별) | 없음 | Queue |
-| `queue:token:{token}` | String (JSON) | Queue Token (qr_xxx, qp_xxx) | 10분 | Queue |
+| `queue:token:{token}` | String (JSON) | Queue Token (대기열 통과 후 발급) | 10분 | Queue |
 | `queue:active:{userId}` | String | 중복 대기 방지 (scheduleId 저장) | 10분 | Queue |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (Redisson) | 5분 | Reservation |
 | `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
@@ -259,8 +260,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **Redis KEYS 명령 금지**: Production 환경에서 KEYS 명령 사용 금지 (O(N) 복잡도, 전체 DB 스캔)
    - 대신 SET, HASH 등 O(1) 자료구조 사용 (예: `hold_seats:{scheduleId}`)
 7. **Queue Token 만료 시 UX**:
-   - Reservation Token 만료: 401 에러 + 대기열 페이지 리디렉션
-   - Payment Token 만료 (결제 중): PortOne Callback에서는 Token 검증 제외 (merchantUid + 금액 검증으로 대체)
+   - Queue Token 만료: 401 에러 + 대기열 페이지 리디렉션
+   - **결제 권한은 Reservation 기반**: 좌석 선점(PENDING) 후에는 Queue Token 불필요
+   - 결제 시 검증: `hold_expires_at` 미경과 여부 확인 (Token과 무관)
    - Frontend Timer 표시로 사용자에게 남은 시간 시각화 권장
 8. **DLQ 처리 전략**:
    - 재시도 가능한 예외: 지수 백오프로 최대 3회 재시도 (TimeoutException, 네트워크 오류 등)
@@ -519,7 +521,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 2. **Redis KEYS 명령 금지**: `hold_seats:{scheduleId}` SET으로 대체
 3. **Outbox Pattern 필수**: Reservation, Payment Service (P0 정합성 이슈)
 4. **Consumer 멱등성**: `common.processed_events` 테이블 + Unique Constraint (원자적 중복 방지)
-5. **Queue Token 만료 UX**: PortOne Callback은 Token 검증 제외 (merchantUid + 금액 검증)
+5. **단일 Queue Token + Reservation 기반 결제 권한**: qp_token 제거, 결제 권한은 Reservation(PENDING + hold_expires_at) 검증
 6. **DLQ 재시도 전략**: 지수 백오프 3회, 재시도 불가능 예외는 즉시 DLQ
 7. **보상 토픽 제외**: `payment.events`의 PaymentFailed가 보상 트리거 (YAGNI 원칙)
 8. **개인정보 평문 저장**: 암호화 복잡도 제거, 아키텍처/로직 검증 집중 (포트폴리오 최적화)
