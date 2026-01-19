@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. **`docs/architecture/04_data.md`** - ERD, Redis 데이터 모델, 분산 락 전략
 4. **`docs/architecture/05_messaging.md`** - Kafka 토픽 설계, 이벤트 스키마, 멱등성 보장
 5. **`docs/architecture/06_api_security.md`** - API Gateway 라우팅, JWT 검증, Rate Limiting
-6. **`docs/architecture/07_domain_logic.md`** - 대기열, 예매, 결제 시스템 상세 설계
+6. **`docs/architecture/07_operations.md`** - 모니터링, 성능 최적화, 테스트 전략
 
 ## 마이크로서비스 구조
 

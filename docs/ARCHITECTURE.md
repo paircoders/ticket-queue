@@ -61,18 +61,8 @@
     *   API Gateway 라우팅
     *   주요 API 엔드포인트
     *   보안 아키텍처 (인증/인가, 암호화)
-*   [07. 도메인 로직 상세 설계](./architecture/07_domain_logic.md)
-    *   대기열 시스템 설계
-    *   좌석 예매 시스템 설계
-    *   결제 시스템 설계
-*   [08. 운영 및 유지보수](./architecture/08_operations.md)
+*   [07. 운영 및 유지보수](./architecture/07_operations.md)
     *   모니터링 및 로깅
     *   성능 최적화 전략
     *   테스트 전략
     *   운영 계획 (SLA, 장애 대응)
-
-### 5. 기타
-*   [09. 부록 및 기타](./architecture/09_appendices.md)
-    *   기술 부채 및 개선 사항
-    *   용어 정의 (Glossary)
-    *   아키텍처 결정 기록 (ADR)

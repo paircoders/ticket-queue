@@ -48,7 +48,7 @@ docker-compose logs -f payment-service
 **TTL:** 공연 목록/상세 5분, 오픈 시 1분으로 동적 조정
 **Cache Stampede 방지:** Lua 스크립트 락
 
-**관련 요구사항:** REQ-EVT-017, REQ-EVT-027, REQ-EVT-031
+**관련 요구사항:** REQ-EVT-017, REQ-EVT-021, REQ-EVT-024
 
 ### 2.2 DB 쿼리 최적화
 
