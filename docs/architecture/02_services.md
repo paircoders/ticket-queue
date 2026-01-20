@@ -95,7 +95,7 @@ graph TB
 - 토큰 블랙리스트 관리 (Redis)
 
 **주요 API:**
-- `POST /auth/register` - 회원가입
+- `POST /auth/signup` - 회원가입
 - `POST /auth/login` - 로그인
 - `POST /auth/logout` - 로그아웃
 - `POST /auth/refresh` - 토큰 갱신

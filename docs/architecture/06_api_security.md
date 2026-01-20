@@ -17,7 +17,7 @@
 | `/payments/**` | Payment Service | 8085 | 결제 처리 |
 
 **공개 엔드포인트 (인증 불필요):**
-- `POST /auth/register`
+- `POST /auth/signup`
 - `POST /auth/login`
 - `GET /events`, `GET /events/{id}`
 - `GET /venues`
@@ -40,7 +40,7 @@
 
 | Method | Endpoint | 설명 | 인증 | Rate Limit |
 |--------|----------|------|------|-----------|
-| POST | `/auth/register` | 회원가입 | 불필요 | 10/분 (IP) |
+| POST | `/auth/signup` | 회원가입 | 불필요 | 10/분 (IP) |
 | POST | `/auth/login` | 로그인 | 불필요 | 10/분 (IP) |
 | POST | `/auth/logout` | 로그아웃 | 필수 | 200/분 (사용자) |
 | POST | `/auth/refresh` | 토큰 갱신 | Refresh Token | 200/분 (사용자) |
