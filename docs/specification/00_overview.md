@@ -15,9 +15,9 @@ Ticket Queue 프로젝트의 API 명세서 개요
 ## 2. 공통 규약 (Conventions)
 
 ### 2.1 날짜 및 시간 형식
-모든 날짜와 시간은 **yyyy-MM-dd HH:mm:ss** 형식을 사용
+모든 날짜와 시간은 **yyyy-MM-ddTHH:mm:ss** 형식을 사용 (ISO 8601)
 ```json
-"2026-01-20 10:00:00"
+"2026-01-20T10:00:00"
 ```
 
 ### 2.2 공통 에러 응답 (Error Response)
@@ -27,7 +27,7 @@ Ticket Queue 프로젝트의 API 명세서 개요
 {
   "code": "USER_NOT_FOUND",             // 의미 기반 에러 코드 
   "message": "존재하지 않는 사용자입니다.", // 사용자에게 팝업으로 보여줄 메시지
-  "timestamp": "2026-01-20 10:00:00",   // 에러 발생 응답 일시
+  "timestamp": "2026-01-20T10:00:00",   // 에러 발생 응답 일시
   "traceId": "0f12d345-6789-abcd-ef01-23456789abcd" // 분산 추적용 ID
 }
 ```
@@ -100,3 +100,18 @@ X-Queue-Token: {Queue_Token}
 | POST | `/payments/confirm` | 결제 승인 (최종 확정) | O | Queue |
 | GET | `/payments/{id}` | 결제 상세 조회 | O | |
 | GET | `/payments` | 내 결제 내역 조회 | O | |
+
+## 4. HTTP 상태 코드 가이드
+```
+200 OK              - 성공 (조회, 수정)
+201 Created         - 생성 성공 (Location 헤더 포함 권장)
+204 No Content      - 성공했으나 반환할 내용 없음 (삭제)
+400 Bad Request     - 잘못된 요청 (validation 실패)
+401 Unauthorized    - 인증 실패
+403 Forbidden       - 권한 없음
+404 Not Found       - 리소스 없음
+409 Conflict        - 중복 등 비즈니스 로직 충돌
+422 Unprocessable   - 문법은 맞지만 처리 불가
+429 Too Many Req    - Rate limit 초과
+500 Internal Error  - 서버 오류
+503 Service Unavail - 서비스 일시 불가

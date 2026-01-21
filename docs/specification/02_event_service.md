@@ -20,10 +20,10 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   "schedules": [
     {
       "playSequence": 1,
-      "eventStartAt": "2026-06-01 19:00:00",
-      "eventEndAt": "2026-06-01 22:00:00",
-      "saleStartAt": "2026-05-01 20:00:00",
-      "saleEndAt": "2026-05-31 23:59:59"
+      "eventStartAt": "2026-06-01T19:00:00",
+      "eventEndAt": "2026-06-01T22:00:00",
+      "saleStartAt": "2026-05-01T20:00:00",
+      "saleEndAt": "2026-05-31T23:59:59"
     }
   ]
 }
@@ -36,14 +36,14 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 **Response (200 OK)**
 ```json
 {
-  "content": [
+  "list": [
     {
       "id": "event_uuid",
       "title": "2026 월드 투어 서울",
       "artist": "인기 가수",
       "venueName": "잠실 주경기장",
-      "startDate": "2026-06-01 19:00:00",
-      "endDate": "2026-06-02 19:00:00",
+      "startDate": "2026-06-01T19:00:00",
+      "endDate": "2026-06-02T19:00:00",
       "status": "OPEN"
     }
   ],
@@ -70,8 +70,8 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
     {
       "id": "schedule_uuid",
       "playSequence": 1,
-      "eventStartAt": "2026-06-01 19:00:00",
-      "saleStartAt": "2026-05-01 20:00:00",
+      "eventStartAt": "2026-06-01T19:00:00",
+      "saleStartAt": "2026-05-01T20:00:00",
       "status": "UPCOMING"
     }
   ]

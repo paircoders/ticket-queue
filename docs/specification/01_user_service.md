@@ -111,7 +111,7 @@ Refresh Token을 사용하여 새로운 Access Token 발급 (RTR 적용)
   "name": "홍길동",
   "phone": "010-1234-5678",
   "role": "USER",
-  "createdAt": "2026-01-01 00:00:00"
+  "createdAt": "2026-01-01T00:00:00"
 }
 ```
 

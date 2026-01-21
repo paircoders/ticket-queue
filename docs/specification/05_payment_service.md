@@ -58,7 +58,7 @@ PortOne SDK 결제 완료 후, 서버에 최종 승인 요청
 {
   "paymentId": "payment_uuid",
   "status": "SUCCESS",
-  "paidAt": "2026-06-01 20:03:00"
+  "paidAt": "2026-06-01T20:03:00"
 }
 ```
 
@@ -90,14 +90,14 @@ PortOne SDK 결제 완료 후, 서버에 최종 승인 요청
 **Response (200 OK)**
 ```json
 {
-  "content": [
+  "list": [
     {
       "paymentId": "payment_uuid",
       "reservationId": "reservation_uuid",
       "amount": 300000,
       "status": "SUCCESS",
       "method": "CARD",
-      "paidAt": "2026-06-01 20:03:00"
+      "paidAt": "2026-06-01T20:03:00"
     }
   ],
   "page": 0,

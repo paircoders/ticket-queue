@@ -47,7 +47,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
   "reservationId": "reservation_uuid",
   "status": "PENDING",
   "totalAmount": 300000,
-  "holdExpiresAt": "2026-06-01 20:05:00"
+  "holdExpiresAt": "2026-06-01T20:05:00"
 }
 ```
 
@@ -70,7 +70,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
   "reservationId": "reservation_uuid",
   "status": "PENDING",
   "newTotalAmount": 300000,
-  "holdExpiresAt": "2026-06-01 20:05:00"
+  "holdExpiresAt": "2026-06-01T20:05:00"
 }
 ```
 
@@ -96,11 +96,11 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
 **Response (200 OK)**
 ```json
 {
-  "content": [
+  "list": [
     {
       "reservationId": "reservation_uuid",
       "eventTitle": "2026 월드 투어",
-      "scheduleDate": "2026-06-01 19:00:00",
+      "scheduleDate": "2026-06-01T19:00:00",
       "status": "CONFIRMED",
       "seats": [
         { "seatNumber": "A-1", "grade": "VIP" }
@@ -123,7 +123,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
   "artist": "인기 가수",
   "venueName": "잠실 주경기장",
   "hallName": "메인 홀",
-  "scheduleDate": "2026-06-01 19:00:00",
+  "scheduleDate": "2026-06-01T19:00:00",
   "status": "CONFIRMED",
   "seats": [
     { "seatId": "seat_1", "seatNumber": "A-1", "grade": "VIP", "price": 150000 }
@@ -132,7 +132,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
   "paymentId": "payment_uuid",
   "ticketNumber": "TKT-12345-67890",
   "qrData": "https://ticket-queue.com/tickets/verify/qr_data_string",
-  "createdAt": "2026-05-01 20:00:00"
+  "createdAt": "2026-05-01T20:00:00"
 }
 ```
 

@@ -16,13 +16,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 모든 아키텍처 및 기능 결정은 `docs/` 디렉토리를 **Source of Truth**로 삼습니다. 코드 작성 전 반드시 다음 문서들을 참조하세요:
 
-### 필수 읽기 순서
-1. **`docs/REQUIREMENTS.md`** - 121개의 상세 요구사항 (기능/비기능)
+### 필수 읽기 순서 (아키텍처)
+1. **`docs/REQUIREMENTS.md`** - 110개의 상세 요구사항 (기능 74개/비기능 36개)
 2. **`docs/architecture/02_services.md`** - 6개 마이크로서비스의 경계, 책임, API 엔드포인트
 3. **`docs/architecture/04_data.md`** - ERD, Redis 데이터 모델, 분산 락 전략
 4. **`docs/architecture/05_messaging.md`** - Kafka 토픽 설계, 이벤트 스키마, 멱등성 보장
 5. **`docs/architecture/06_api_security.md`** - API Gateway 라우팅, JWT 검증, Rate Limiting
 6. **`docs/architecture/07_operations.md`** - 모니터링, 성능 최적화, 테스트 전략
+
+### API 명세서 (specification)
+서비스별 상세 API 명세는 `docs/specification/` 디렉토리에서 확인:
+- **`00_overview.md`** - 공통 규약 (날짜 형식, 에러 응답, 인증 헤더)
+- **`01_user_service.md`** - 회원/인증 API (Auth, Users)
+- **`02_event_service.md`** - 공연/공연장 API (Events, Venues, Internal)
+- **`03_queue_service.md`** - 대기열 API (Queue)
+- **`04_reservation_service.md`** - 예매/좌석 API (Reservations)
+- **`05_payment_service.md`** - 결제 API (Payments)
+
+### 공통 규약
+- **날짜/시간 형식**: `yyyy-MM-ddTHH:mm:ss` (예: `2026-01-20T10:00:00`)
+- **인증 헤더**: `Authorization: Bearer {Access_Token}`
+- **대기열 토큰 헤더**: `X-Queue-Token: {Queue_Token}` (예매/결제 API 필수)
+- **에러 응답 형식**:
+  ```json
+  {
+    "code": "ERROR_CODE",
+    "message": "사용자에게 표시할 메시지",
+    "timestamp": "2026-01-20T10:00:00",
+    "traceId": "분산 추적용 ID"
+  }
+  ```
 
 ## 마이크로서비스 구조
 
@@ -194,6 +217,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `reservation-payment-consumer` | `payment.events` | Reservation Service |
 | `event-payment-consumer` | `payment.events` | Event Service |
 | `event-reservation-consumer` | `reservation.events` | Event Service |
+
+## 주요 API 엔드포인트 요약
+
+| 서비스 | Method | Endpoint | 설명 | Auth | Queue Token |
+|--------|--------|----------|------|:----:|:-----------:|
+| User | POST | `/auth/signup` | 회원가입 | - | - |
+| User | POST | `/auth/login` | 로그인 | - | - |
+| User | POST | `/auth/logout` | 로그아웃 | O | - |
+| User | POST | `/auth/refresh` | 토큰 갱신 | - | - |
+| User | GET | `/users/me` | 내 프로필 조회 | O | - |
+| Event | GET | `/events` | 공연 목록 조회 | - | - |
+| Event | GET | `/events/{id}` | 공연 상세 조회 | - | - |
+| Event | GET | `/events/schedules/{id}/seats` | 좌석 정보 조회 | - | - |
+| Queue | POST | `/queue/enter` | 대기열 진입 | O | - |
+| Queue | GET | `/queue/status` | 대기열 상태 조회 | O | - |
+| Queue | DELETE | `/queue/leave` | 대기열 이탈 | O | - |
+| Reservation | GET | `/reservations/seats/{id}` | 실시간 좌석 상태 | O | O |
+| Reservation | POST | `/reservations/hold` | 좌석 선점 | O | O |
+| Reservation | GET | `/reservations` | 내 예매 내역 | O | - |
+| Payment | POST | `/payments` | 결제 요청 | O | O |
+| Payment | POST | `/payments/confirm` | 결제 승인 | O | O |
+
+**내부 API** (서비스 간 통신용, `X-Service-Api-Key` 필수):
+- `GET /internal/seats/status/{scheduleId}` - SOLD 좌석 조회 (Event → Reservation)
 
 ## 성능 목표 (비기능 요구사항)
 
@@ -493,12 +540,13 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 
 ## 현재 상태 및 다음 단계
 
-**현재**: 설계 및 문서화 완료 (Draft 1.0.0)
-- 121개 요구사항 정의 완료 (필수 94개, 선택 27개)
+**현재**: 설계 및 문서화 완료 (Draft 1.1.0)
+- 110개 요구사항 정의 완료 (필수 74개, 선택 36개)
 - 최근 업데이트:
-  - 데이터 아키텍처: User/Event 스키마 상세 설계 완료
+  - **API 명세서 작성 완료**: 6개 서비스별 상세 API 명세 (`docs/specification/`)
+  - 데이터 아키텍처: User/Event/Reservation/Payment 스키마 상세 설계 완료
   - 메시징 아키텍처: DLQ 예외 분류 및 재시도 전략 구체화
-  - 도메인 로직: Queue Token 만료 UX 플로우 상세 설계
+  - 공통 규약: 날짜/시간 형식, 에러 응답 형식 표준화
 
 **다음 단계**:
 1. 각 서비스의 Spring Boot 프로젝트 생성 및 기본 구조 설정
