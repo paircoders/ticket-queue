@@ -30,9 +30,24 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 ```
 
 **Response (201 Created)**
-...
+```json
+{
+  "id": "event_uuid",
+  "title": "2026 월드 투어 서울",
+  "artist": "인기 가수",
+  "status": "DRAFT",
+  "createdAt": "2026-01-20T10:00:00"
+}
+```
+
 ### 1.2 공연 목록 조회
-...
+- **URL:** `GET /events`
+- **Auth:** None
+- **Query Parameters:**
+  - `page` (int, default: 0): 페이지 번호
+  - `size` (int, default: 20): 페이지 크기
+  - `status` (string, optional): 공연 상태 필터 (OPEN, CLOSED, UPCOMING)
+  - `city` (string, optional): 도시 필터
 **Response (200 OK)**
 ```json
 {
@@ -80,7 +95,7 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 
 ### 1.4 회차별 좌석 정보 조회
 - **URL:** `GET /events/schedules/{scheduleId}/seats`
-- **Auth:** Bearer Token (Optional but recommended)
+- **Auth:** Bearer Token
 
 **Response (200 OK)**
 ```json
@@ -113,6 +128,16 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 {
   "title": "수정된 공연 제목",
   "description": "수정된 설명"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "id": "event_uuid",
+  "title": "수정된 공연 제목",
+  "description": "수정된 설명",
+  "updatedAt": "2026-01-20T11:00:00"
 }
 ```
 
@@ -159,6 +184,17 @@ Reservation Service가 호출합니다.
 }
 ```
 
+**Response (201 Created)**
+```json
+{
+  "id": "venue_uuid",
+  "name": "잠실 주경기장",
+  "address": "서울특별시 송파구 올림픽로 25",
+  "city": "SEOUL",
+  "createdAt": "2026-01-20T10:00:00"
+}
+```
+
 ### 3.2 홀 생성
 - **URL:** `POST /venues/{venueId}/halls`
 - **Headers:** `Authorization: Bearer {adminToken}`
@@ -176,18 +212,79 @@ Reservation Service가 호출합니다.
 }
 ```
 
+**Response (201 Created)**
+```json
+{
+  "id": "hall_uuid",
+  "venueId": "venue_uuid",
+  "name": "메인 홀",
+  "capacity": 50000,
+  "createdAt": "2026-01-20T10:00:00"
+}
+```
+
 ### 3.3 공연장 수정
 - **URL:** `PUT /venues/{venueId}`
 - **Headers:** `Authorization: Bearer {adminToken}`
+
+**Request Body**
+```json
+{
+  "name": "수정된 공연장명",
+  "address": "수정된 주소"
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "id": "venue_uuid",
+  "name": "수정된 공연장명",
+  "address": "수정된 주소",
+  "updatedAt": "2026-01-20T11:00:00"
+}
+```
 
 ### 3.4 공연장 삭제
 - **URL:** `DELETE /venues/{venueId}`
 - **Headers:** `Authorization: Bearer {adminToken}`
 
+**Response (200 OK)**
+```json
+{
+  "message": "Venue deleted successfully"
+}
+```
+
 ### 3.5 홀 수정
 - **URL:** `PUT /venues/{venueId}/halls/{hallId}`
 - **Headers:** `Authorization: Bearer {adminToken}`
 
+**Request Body**
+```json
+{
+  "name": "수정된 홀명",
+  "capacity": 60000
+}
+```
+
+**Response (200 OK)**
+```json
+{
+  "id": "hall_uuid",
+  "name": "수정된 홀명",
+  "capacity": 60000,
+  "updatedAt": "2026-01-20T11:00:00"
+}
+```
+
 ### 3.6 홀 삭제
 - **URL:** `DELETE /venues/{venueId}/halls/{hallId}`
 - **Headers:** `Authorization: Bearer {adminToken}`
+
+**Response (200 OK)**
+```json
+{
+  "message": "Hall deleted successfully"
+}
+```
