@@ -90,27 +90,6 @@
 
 ##### Layer 2: Reservation/Payment Service (유효성 검증 - 필수)
 **방식 A (채택): Redis 직접 조회**
-```java
-@Component
-public class QueueTokenValidator {
-    public void validate(String token, String userId, String eventId) {
-        String key = "queue:token:" + token;
-        String value = redisTemplate.opsForValue().get(key);
-
-        if (value == null) {
-            throw new InvalidQueueTokenException("Token expired or invalid");
-        }
-
-        QueueToken queueToken = objectMapper.readValue(value, QueueToken.class);
-        if (!queueToken.getUserId().equals(userId)) {
-            throw new UnauthorizedQueueTokenException("Token user mismatch");
-        }
-        if (!queueToken.getEventId().equals(eventId)) {
-            throw new InvalidQueueTokenException("Token event mismatch");
-        }
-    }
-}
-```
 
 **채택 이유:**
 - 성능: 추가 RPC 호출 불필요 (Redis 접근은 기존 인프라)
@@ -157,45 +136,8 @@ INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-44665544000
 ```
 
 **2. Feign Client - API Key 헤더 추가**
-```java
-@Configuration
-public class FeignClientConfig {
-    @Value("${internal.api-key}")
-    private String apiKey;
-
-    @Bean
-    public RequestInterceptor apiKeyInterceptor() {
-        return requestTemplate -> {
-            requestTemplate.header("X-Service-Api-Key", apiKey);
-        };
-    }
-}
-```
 
 **3. 서버: API Key 검증 Interceptor**
-```java
-@Component
-public class InternalApiKeyInterceptor implements HandlerInterceptor {
-
-    @Value("${internal.api-key}")
-    private String expectedApiKey;
-
-    @Override
-    public boolean preHandle(HttpServletRequest request,
-                            HttpServletResponse response,
-                            Object handler) {
-        if (request.getRequestURI().startsWith("/internal/")) {
-            String apiKey = request.getHeader("X-Service-Api-Key");
-
-            if (apiKey == null || !apiKey.equals(expectedApiKey)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return false;
-            }
-        }
-        return true;
-    }
-}
-```
 
 **4. API Key Rotation (연 1회 권장)**
 - 신규 Key 생성 → 모든 서비스 환경변수 업데이트 → 재배포
@@ -225,29 +167,6 @@ public class InternalApiKeyInterceptor implements HandlerInterceptor {
 
 #### 1.4.1 API Gateway 필터 구현
 
-```java
-@Component
-public class QueueTokenGatewayFilterFactory extends AbstractGatewayFilterFactory<QueueTokenGatewayFilterFactory.Config> {
-
-    @Override
-    public GatewayFilter apply(Config config) {
-        return (exchange, chain) -> {
-            // 헤더 검증
-            String token = exchange.getRequest().getHeaders().getFirst("X-Queue-Token");
-            if (token == null) {
-                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                return exchange.getResponse().setComplete();
-            }
-            
-            // (선택 사항) 여기서 간단한 포맷 검증 수행
-            // 실제 유효성 검증은 각 마이크로서비스 또는 별도 Auth Filter에서 수행
-            
-            return chain.filter(exchange);
-        };
-    }
-}
-```
-
 ---
 
 ## 2. 보안 아키텍처
@@ -262,7 +181,7 @@ public class QueueTokenGatewayFilterFactory extends AbstractGatewayFilterFactory
 **Refresh Token:**
 - 유효기간: 7일
 - DB 저장 (auth_tokens 테이블, token_family 기반 RTR)
-- **Refresh Token Rotation (RTR): 필수 구현** ✅
+- **Refresh Token Rotation (RTR): 필수 구현**
   - 매 토큰 갱신 시 신규 Refresh Token 발급
   - 기존 토큰은 즉시 폐기 (revoked=true)
   - Token Family로 탈취 감지 (동일 Family 재사용 시 전체 무효화)

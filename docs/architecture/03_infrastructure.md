@@ -2,7 +2,7 @@
 
 ## 1. 인프라 아키텍처
 
-### 1.1 전체 시스템 아키텍처 다이어그램 (포트폴리오 최적화)
+### 1.1 전체 시스템 아키텍처 다이어그램
 
 **핵심 전략:**
 - **인프라 효율화:** AWS Free Tier Managed Service(RDS, ElastiCache)를 적극 활용하여 관리 포인트를 줄이고 안정성을 확보합니다.
@@ -82,67 +82,6 @@ graph TB
 *   **로컬 개발(Local):** **LocalStack**을 활용하여 S3, Secrets Manager 등 AWS 클라우드 서비스를 모사하고, DB와 Redis는 Docker 컨테이너로 실행합니다.
 *   **운영 환경(Production):** `docker-compose.yml`에서는 애플리케이션 서비스만 구동하며, DB/Redis/S3 등은 **AWS Managed Service (RDS, ElastiCache, S3)**를 바라보도록 환경변수를 설정합니다.
 
-#### 1.2.2 Docker Compose 구성 (`docker-compose.yml`)
-
-```yaml
-version: '3.8'
-
-services:
-  # --- Infrastructure (Local Only) ---
-  # 운영 배포 시에는 주석 처리하거나 profiles를 사용하여 제외
-  
-  # AWS Service Mocking (S3, Secrets Manager)
-  localstack:
-    image: localstack/localstack:3.0
-    profiles: ["local"]
-    ports:
-      - "4566:4566"
-    environment:
-      - SERVICES=s3,secretsmanager
-      - DEBUG=1
-    volumes:
-      - "./.localstack:/var/lib/localstack"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-
-  postgres:
-    image: postgres:18-alpine
-    profiles: ["local"]
-    # ... 설정 생략 ...
-
-  redis:
-    image: redis:7-alpine
-    profiles: ["local"]
-    # ... 설정 생략 ...
-
-  # Kafka Setup (Common)
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    # ...
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    # ...
-
-  # --- Microservices ---
-
-  gateway-service:
-    image: ${ECR_REGISTRY}/gateway-service:latest
-    ports:
-      - "8080:8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      # 운영 환경에서는 AWS RDS/ElastiCache Endpoint 주입
-      SPRING_DATASOURCE_URL: ${RDS_ENDPOINT}
-      SPRING_REDIS_HOST: ${REDIS_ENDPOINT}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    depends_on:
-      - kafka
-    networks:
-      - ticketing-net
-
-  # User, Event, Queue, Reservation, Payment Services...
-```
-
 ### 1.3 AWS 배포 전략 (EC2 + Docker)
 
 #### 1.3.1 배포 프로세스 (단순화)
@@ -191,23 +130,3 @@ services:
 | **ALB** | **제거** | **$0** | Nginx 대체 |
 
 ---
-
-## 2. 모니터링 (포트폴리오용)
-
-AWS CloudWatch 비용을 아끼고, 시각적인 포트폴리오 효과를 위해 **오픈소스 모니터링 스택**을 Docker Compose에 포함합니다.
-
-1.  **Kafka UI**: `provectus/kafka-ui` 이미지 사용. Kafka 토픽, 메시지 흐름을 면접관에게 시각적으로 시연 가능.
-2.  **Prometheus & Grafana**: (선택) 기본적인 JVM 메트릭 및 시스템 리소스 모니터링.
-
-### 2.1 Kafka UI 구성 예시
-```yaml
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    ports:
-      - "8090:8080"
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-    networks:
-      - ticketing-net
-```

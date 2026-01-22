@@ -94,14 +94,6 @@ graph TB
 - 프로필 관리 (조회, 수정, 비밀번호 변경, 회원 탈퇴)
 - 토큰 블랙리스트 관리 (Redis)
 
-**주요 API:**
-- `POST /auth/signup` - 회원가입
-- `POST /auth/login` - 로그인
-- `POST /auth/logout` - 로그아웃
-- `POST /auth/refresh` - 토큰 갱신
-- `GET /users/me` - 프로필 조회
-- `PUT /users/me` - 프로필 수정
-
 **데이터 모델:**
 - `users`: 회원 정보 (이메일, 비밀번호 해시, CI, 가입일 등)
 - `auth_tokens`: Refresh Token 저장
@@ -132,15 +124,6 @@ graph TB
 - 좌석 초기화 (공연 회차 생성 시)
 - Kafka 이벤트 구독하여 좌석 상태 업데이트 (SOLD)
 - Redis 캐싱으로 조회 성능 최적화
-
-**주요 API:**
-- `POST /events` - 공연 생성 (관리자)
-- `GET /events` - 공연 목록 조회
-- `GET /events/{id}` - 공연 상세 조회
-- `GET /events/{id}/schedules` - 공연 회차 목록 조회
-- `GET /events/schedules/{scheduleId}/seats` - 회차별 좌석 정보 조회
-- `POST /venues` - 공연장 생성 (관리자)
-- `POST /venues/{venueId}/halls` - 홀 생성 (관리자)
 
 **내부 API (서비스 간 통신 전용):**
 - `GET /internal/seats/status/{scheduleId}` - SOLD 좌석 ID 목록 조회 (Reservation Service용)
@@ -180,11 +163,6 @@ graph TB
   - `cache:schedule:{scheduleId}` - 회차 상세 (TTL: 5분)
   - `cache:seats:{scheduleId}` - 좌석 정보 (TTL: 5분)
 
-**성능 목표:**
-- 공연 목록 조회: P95 < 200ms (REQ-EVT-004)
-- 공연 상세 조회: P95 < 100ms (REQ-EVT-005)
-- 좌석 정보 조회: P95 < 300ms (REQ-EVT-006)
-
 **관련 요구사항:** REQ-EVT-001 ~ REQ-EVT-024 (24개)
 
 ---
@@ -200,18 +178,15 @@ graph TB
 - 사용자당 동시 대기 1개 회차 제한
 - Token 만료 처리 (TTL 10분)
 
-**주요 API:**
-- `POST /queue/enter` - 대기열 진입
-- `GET /queue/status` - 대기열 상태 조회 (Rate Limit: 60회/분)
-- `DELETE /queue/leave` - 대기열 이탈 (선택)
-- `GET /queue/admin/stats` - 대기열 통계 (관리자, 선택)
-
 **데이터 모델 (Redis):**
 - `queue:{scheduleId}`: Sorted Set (score: timestamp, member: userId)
 - `queue:token:{token}`: String (userId, scheduleId, type) - TTL 10분
 - `queue:active:{userId}`: String (scheduleId) - 중복 대기 방지
 
 **Lua 스크립트 (배치 승인):**
+<details>
+<summary>lua script</summary>
+
 ```lua
 -- 1초마다 10명 승인
 local scheduleId = KEYS[1]
@@ -223,15 +198,11 @@ if #members > 0 then
 end
 return members
 ```
+</details>
 
 **데이터 저장소:**
 - Redis Sorted Set: 대기열
 - Redis String: Token, 중복 방지
-
-**성능 목표:**
-- 진입: P95 < 100ms (REQ-QUEUE-009)
-- 조회: P95 < 50ms (REQ-QUEUE-009)
-- 처리량: 36,000명/시간 (10명/초)
 
 **관련 요구사항:** REQ-QUEUE-001 ~ REQ-QUEUE-011 (11개)
 
@@ -248,14 +219,6 @@ return members
 - 예매 내역 조회
 - 1회 예매 최대 4장 제한
 - Queue Token 검증 (Reservation Token)
-
-**주요 API:**
-- `GET /reservations/seats/{scheduleId}` - 좌석 상태 조회
-- `POST /reservations/hold` - 좌석 선점
-- `PUT /reservations/hold/{reservationId}` - 좌석 변경
-- `DELETE /reservations/hold/{reservationId}` - 선점 해제
-- `GET /reservations` - 나의 예매 내역
-- `DELETE /reservations/{id}` - 예매 취소
 
 **데이터 모델:**
 - `reservations`: 예매 정보 (userId, scheduleId, seatIds, status, createdAt)
@@ -293,12 +256,6 @@ return members
 - 보상 트랜잭션 (결제 실패 시 예매 취소 이벤트 발행)
 - Circuit Breaker (PortOne API 장애 대응)
 
-**주요 API:**
-- `POST /payments` - 결제 요청
-- `POST /payments/confirm` - 결제 확인
-- `GET /payments/{id}` - 결제 조회
-- `GET /payments` - 결제 내역 조회 (선택)
-
 **데이터 모델:**
 - `payments`: 결제 정보 (reservationId, amount, paymentKey, status, portone_transaction_id)
   - status: PENDING / SUCCESS / FAILED / REFUNDED
@@ -315,7 +272,7 @@ return members
 
 **데이터 저장소:**
 - PostgreSQL 스키마: `payment_service`
-- Outbox: `common.outbox_events` (필수) ✅
+- Outbox: `common.outbox_events`
 
 **Outbox Pattern 필수 적용 근거:**
 - Reservation Service: ReservationCancelled 이벤트 유실 시 좌석 HOLD 미해제
@@ -366,29 +323,6 @@ graph LR
 ```
 
 #### 1.3.4 Feign Client 설정
-
-**Reservation Service의 Event Service Client:**
-
-```java
-@FeignClient(name = "event-service", url = "${event.service.url:http://event-service:8082}")
-public interface EventServiceClient {
-
-    @GetMapping("/internal/seats/status/{scheduleId}")
-    SoldSeatsResponse getSoldSeats(@PathVariable String scheduleId);
-
-    @GetMapping("/events/schedules/{scheduleId}/seats")
-    List<Seat> getEventSeats(@PathVariable String scheduleId);
-}
-```
-
-**DTO 정의:**
-
-```java
-public class SoldSeatsResponse {
-    private String scheduleId;
-    private List<String> soldSeatIds;
-}
-```
 
 **Timeout 설정:**
 - Connection Timeout: 2초

@@ -53,6 +53,9 @@
 #### 1.1.2 스키마별 DB 사용자 및 권한
 
 **사용자 생성 및 권한 부여:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- User Service 전용 사용자
 CREATE USER user_svc_user WITH PASSWORD 'user_strong_password_here';
@@ -86,6 +89,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA payment_service GRANT ALL ON TABLES TO paymen
 GRANT USAGE ON SCHEMA common TO user_svc_user, event_svc_user, reservation_svc_user, payment_svc_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA common TO user_svc_user, event_svc_user, reservation_svc_user, payment_svc_user;
 ```
+</details>
 
 **Spring Boot application.yml HikariCP 설정:**
 - 6개 서비스 × 5 connections = 30개 (RDS t2.micro 무료티어 제한 고려)
@@ -163,6 +167,9 @@ erDiagram
 - **관련 요구사항**: REQ-AUTH-001, REQ-AUTH-014, REQ-AUTH-017, REQ-AUTH-018
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- 스키마 및 확장 생성
 CREATE SCHEMA IF NOT EXISTS user_service;
@@ -211,8 +218,9 @@ COMMENT ON TABLE user_service.users IS '회원 정보. Soft Delete 방식 사용
 COMMENT ON COLUMN user_service.users.ci IS 'PortOne 본인인증 CI. 1인 1계정 강제용 (Unique).';
 COMMENT ON COLUMN user_service.users.email IS '이메일. 포트폴리오용으로 평문 저장.';
 ```
+</details>
 
-**데이터 보안 전략 (포트폴리오 범위):**
+**데이터 보안 전략:**
 - **비밀번호**: BCrypt 단방향 해시 필수 적용.
 - **개인정보**: 실제 상용 서비스에서는 AES-256 등의 컬럼 암호화나 RDS TDE가 필요하지만, 본 프로젝트에서는 아키텍처 검증에 집중하기 위해 **평문 저장**을 원칙으로 합니다.
 - **접근 제어**: DB 접근은 내부망(Docker Network)으로 제한됩니다.
@@ -230,6 +238,9 @@ COMMENT ON COLUMN user_service.users.email IS '이메일. 포트폴리오용으�
 - **관련 요구사항**: REQ-AUTH-009 (토큰 갱신), REQ-AUTH-012 (RTR)
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- auth_tokens 테이블
 CREATE TABLE user_service.auth_tokens (
@@ -259,6 +270,7 @@ CREATE INDEX idx_auth_tokens_expires ON user_service.auth_tokens(expires_at) WHE
 COMMENT ON TABLE user_service.auth_tokens IS 'Refresh Token 관리. RTR (Refresh Token Rotation) 지원.';
 COMMENT ON COLUMN user_service.auth_tokens.token_family IS 'RTR 추적용 UUID. 동일 세션 토큰 그룹핑.';
 ```
+</details>
 
 **`login_history` 테이블 (선택):**
 - 로그인 이력 추적
@@ -266,6 +278,9 @@ COMMENT ON COLUMN user_service.auth_tokens.token_family IS 'RTR 추적용 UUID. 
 - **관련 요구사항**: REQ-AUTH-020
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- login_history 테이블
 CREATE TABLE user_service.login_history (
@@ -292,6 +307,7 @@ COMMENT ON TABLE user_service.login_history IS '로그인 이력. 의심 접속 
 -- 파티셔닝 고려 (대용량 데이터 시)
 COMMENT ON TABLE user_service.login_history IS '파티셔닝 고려: 월별 파티셔닝 (created_at 기준). 예: login_history_2026_01';
 ```
+</details>
 
 #### 1.2.2 Event Service 스키마 ERD
 
@@ -371,6 +387,9 @@ erDiagram
 - **관련 요구사항**: REQ-EVT-010
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS event_service;
@@ -406,6 +425,7 @@ FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 -- 테이블 코멘트
 COMMENT ON TABLE event_service.venues IS '공연장 정보. 위치 기반 검색 지원.';
 ```
+</details>
 
 **`halls` 테이블:**
 - 공연장 내 홀 정보
@@ -434,6 +454,9 @@ COMMENT ON TABLE event_service.venues IS '공연장 정보. 위치 기반 검색
 - 좌석 예외 처리 어려움 (기둥, 시야 제한석 등)
 
 1. **좌석 배치 정규화 (별도 테이블)**
+<details>
+<summary>SQL</summary>
+
 ```sql
 CREATE TABLE event_service.seat_layouts (
     id UUID PRIMARY KEY,
@@ -448,6 +471,7 @@ CREATE TABLE event_service.seat_layouts (
     UNIQUE (hall_id, row_label, seat_number)
 );
 ```
+</details>
 
 2. **또는 더 유연한 JSONB 스키마**
 ```json
@@ -465,6 +489,9 @@ CREATE TABLE event_service.seat_layouts (
 ```
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- halls 테이블
 CREATE TABLE event_service.halls (
@@ -493,6 +520,7 @@ FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 COMMENT ON TABLE event_service.halls IS '공연장 홀 정보. JSONB 좌석 템플릿 사용.';
 COMMENT ON COLUMN event_service.halls.seat_template IS '좌석 배치 템플릿: {"rows": ["A","B"], "seatsPerRow": 20, "gradeMapping": {"A": "VIP"}}';
 ```
+</details>
 
 **`events` 테이블:**
 - 공연 메타 정보 (일정 제외)
@@ -500,6 +528,9 @@ COMMENT ON COLUMN event_service.halls.seat_template IS '좌석 배치 템플릿:
 - **관련 요구사항**: REQ-EVT-001, REQ-EVT-007
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- events 테이블
 CREATE TABLE event_service.events (
@@ -534,6 +565,7 @@ FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 COMMENT ON TABLE event_service.events IS '공연 메타 정보. status는 공연 전체의 생명주기(노출 여부 등)를 관리.';
 COMMENT ON COLUMN event_service.events.status IS 'PREPARING: 준비중(미노출), OPEN: 공개됨, ENDED: 전체 종료, CANCELLED: 전체 취소';
 ```
+</details>
 
 **`event_schedules` 테이블:**
 - 공연 회차 및 일정 정보
@@ -542,6 +574,9 @@ COMMENT ON COLUMN event_service.events.status IS 'PREPARING: 준비중(미노출
 - **관련 요구사항**: REQ-EVT-001, REQ-EVT-007
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- event_schedules 테이블
 CREATE TABLE event_service.event_schedules (
@@ -576,6 +611,7 @@ FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 COMMENT ON TABLE event_service.event_schedules IS '공연 회차 및 판매 일정 정보. status는 회차별 티켓 판매 상태 관리.';
 COMMENT ON COLUMN event_service.event_schedules.status IS 'UPCOMING: 판매 전, ONGOING: 판매 중, ENDED: 종료, CANCELLED: 취소';
 ```
+</details>
 
 **`seats` 테이블:**
 - 회차별 좌석 정보
@@ -585,6 +621,9 @@ COMMENT ON COLUMN event_service.event_schedules.status IS 'UPCOMING: 판매 전,
 - **관련 요구사항**: REQ-EVT-008, REQ-EVT-019
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- seats 테이블
 CREATE TABLE event_service.seats (
@@ -616,6 +655,7 @@ FOR EACH ROW EXECUTE FUNCTION event_service.update_timestamp();
 COMMENT ON TABLE event_service.seats IS '회차별 좌석 재고. HOLD 상태는 Redis로 관리 (seat:hold:{scheduleId}:{seatId}).';
 COMMENT ON TABLE event_service.seats IS '파티셔닝 고려: event_schedule_id 기준 파티셔닝 검토.';
 ```
+</details>
 
 #### 1.2.3 Reservation Service 스키마 ERD
 
@@ -664,6 +704,9 @@ erDiagram
 - **관련 요구사항**: REQ-RSV-001, REQ-RSV-004, REQ-RSV-006
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS reservation_service;
@@ -708,6 +751,7 @@ FOR EACH ROW EXECUTE FUNCTION reservation_service.update_timestamp();
 COMMENT ON TABLE reservation_service.reservations IS '예매 정보. event_schedule_id는 회차 ID.';
 COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 만료 시간 (현재 + 5분). 배치 작업으로 자동 취소.';
 ```
+</details>
 
 **만료 예매 자동 취소 배치:**
 - Spring schedular 사용
@@ -727,6 +771,9 @@ COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 �
 - **관련 요구사항**: REQ-RSV-005
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- reservation_seats 테이블
 CREATE TABLE reservation_service.reservation_seats (
@@ -747,6 +794,7 @@ CREATE INDEX idx_reservation_seats_seat ON reservation_service.reservation_seats
 -- 테이블 코멘트
 COMMENT ON TABLE reservation_service.reservation_seats IS '예매 좌석 스냅샷. 공연 정보 변경 시에도 예매 정보 유지.';
 ```
+</details>
 
 #### 1.2.4 Payment Service 스키마 ERD
 
@@ -790,6 +838,9 @@ erDiagram
 - **관련 요구사항**: REQ-PAY-001, REQ-PAY-003, REQ-PAY-004, REQ-PAY-006
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS payment_service;
@@ -841,6 +892,7 @@ COMMENT ON TABLE payment_service.payments IS '결제 정보. payment_key로 멱�
 COMMENT ON COLUMN payment_service.payments.payment_key IS '클라이언트 생성 멱등성 키. 중복 결제 방지.';
 COMMENT ON COLUMN payment_service.payments.portone_response IS 'PortOne API 응답 전체 (JSONB). 디버깅 및 감사용.';
 ```
+</details>
 
 **PortOne 응답 저장 전략:**
 - **보관 기간**: 7년 (금융 거래 기록 보관 의무)
@@ -910,6 +962,9 @@ erDiagram
 - **관련 요구사항**: REQ-RSV-012, REQ-PAY-013
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- 스키마 생성
 CREATE SCHEMA IF NOT EXISTS common;
@@ -939,6 +994,7 @@ CREATE INDEX idx_outbox_aggregate ON common.outbox_events(aggregate_type, aggreg
 COMMENT ON TABLE common.outbox_events IS 'Transactional Outbox 패턴. 이벤트 발행 신뢰성 보장.';
 COMMENT ON COLUMN common.outbox_events.payload IS '이벤트 데이터 (JSONB). 예: {"reservationId": "uuid", "userId": "uuid"}';
 ```
+</details>
 
 **Outbox 정리 배치 작업:**
 - **실행 주기**: 매일 02:00 UTC
@@ -955,6 +1011,9 @@ COMMENT ON COLUMN common.outbox_events.payload IS '이벤트 데이터 (JSONB). 
 - **관련 요구사항**: REQ-PAY-004, REQ-PAY-010
 
 **SQL Schema:**
+<details>
+<summary>SQL</summary>
+
 ```sql
 -- processed_events 테이블
 CREATE TABLE common.processed_events (
@@ -974,6 +1033,7 @@ CREATE INDEX idx_processed_events_processed_at ON common.processed_events(proces
 -- 테이블 코멘트
 COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (event_id, consumer_service) 중복 시 Constraint Violation.';
 ```
+</details>
 
 **정리 배치 작업:**
 - **실행 주기**: 매일 02:00 UTC
@@ -1089,6 +1149,9 @@ EXISTS queue:active:user-abc
 **Value:** `userId`
 **TTL:** 5분
 
+<details>
+<summary>java code</summary>
+
 ```java
 // Redisson 분산 락
 RLock lock = redissonClient.getLock("seat:hold:schedule-001:seat-456");
@@ -1112,6 +1175,8 @@ if (acquired) {
 // HOLD 상태 조회 (KEYS 대신 SET 사용)
 Set<String> holdSeatIds = redisTemplate.opsForSet().members("hold_seats:schedule-001");
 ```
+</details>
+
 
 **수동 락 관리 (대안):**
 ```redis
@@ -1203,11 +1268,6 @@ SET cache:layout:hall-123 '{"rows": [{"row": "A", "seats": [...]}, ...]}' EX 864
 - 공연/좌석 정보 변경 시 Kafka 이벤트 발행
 - Event Service Consumer가 해당 캐시 삭제 (DEL)
 - 다음 조회 시 DB에서 재구축 (Cache-Aside 패턴)
-
-> **선택 사항**: 캐시 무효화 이벤트 타입 상세 정의
-> - 현재: 구체적 이벤트 타입 미정의 (Admin 직접 수정 시나리오)
-> - 확장 시: `event.events` 토픽에 `EventUpdated`, `ScheduleUpdated`, `SeatUpdated` 등 이벤트 타입 정의 필요
-> - 상세 스키마는 `05_messaging.md` 확장 시 추가
 
 **관련 요구사항:** REQ-EVT-017, REQ-EVT-020
 

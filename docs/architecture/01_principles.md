@@ -185,8 +185,3 @@ resilience4j.circuitbreaker:
 - **Event Service**: Redis 캐싱으로 조회 성능 최적화 (CQRS 유사)
   - 쓰기: RDB (PostgreSQL)
   - 읽기: Redis Cache + RDB Fallback
-
-#### 1.8.2 향후 검토 사항
-- **대기열 조회**: Redis Sorted Set (이미 CQRS 패턴과 유사)
-- **예매 내역 조회**: 트래픽 증가 시 Read Replica 또는 ElasticSearch 검토
-- **현재 판단**: 초기 단계에서는 Redis 캐싱으로 충분, 트래픽 증가 시 CQRS 전면 적용 검토
