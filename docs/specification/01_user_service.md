@@ -6,7 +6,7 @@ User Service는 회원 관리, 인증 및 프로필 관리를 담당
 ## 1. 인증 (Auth)
 
 ### 1.1 회원가입
-신규 회원을 등록. reCAPTCHA 토큰과 본인인증(CI/DI) 결과가 포함되어야 함
+신규 회원 등록 (reCAPTCHA 토큰과 본인인증(CI/DI) 결과가 포함되어야 함)
 
 - **URL:** `POST /auth/signup`
 - **Auth:** None
@@ -56,7 +56,7 @@ User Service는 회원 관리, 인증 및 프로필 관리를 담당
 ```json
 {
   "accessToken": "eyJh... (JWT)",
-  "refreshToken": "eyJh... (JWT or Opaque)",
+  "refreshToken": "eyJh... (JWT)",
   "expiresIn": 3600,
   "tokenType": "Bearer"
 }
@@ -68,12 +68,7 @@ User Service는 회원 관리, 인증 및 프로필 관리를 담당
 - **URL:** `POST /auth/logout`
 - **Headers:** `Authorization: Bearer {accessToken}`
 
-**Response (200 OK)**
-```json
-{
-  "message": "Successfully logged out"
-}
-```
+**Response (204 No Content)**
 
 ### 1.4 토큰 갱신
 Refresh Token을 사용하여 새로운 Access Token 발급 (RTR 적용)
@@ -93,7 +88,8 @@ Refresh Token을 사용하여 새로운 Access Token 발급 (RTR 적용)
 {
   "accessToken": "new_access_token",
   "refreshToken": "new_refresh_token",
-  "expiresIn": 3600
+  "expiresIn": 3600,
+  "tokenType": "Bearer"
 }
 ```
 
@@ -116,7 +112,7 @@ Refresh Token을 사용하여 새로운 Access Token 발급 (RTR 적용)
 ```
 
 ### 2.2 프로필 수정
-- **URL:** `PUT /users/me`
+- **URL:** `PATCH /users/me`
 - **Headers:** `Authorization: Bearer {accessToken}`
 
 **Request Body**
@@ -148,13 +144,10 @@ Refresh Token을 사용하여 새로운 Access Token 발급 (RTR 적용)
 }
 ```
 
+**Response (204 No Content)**
+
 ### 2.4 회원 탈퇴
 - **URL:** `DELETE /users/me`
 - **Headers:** `Authorization: Bearer {accessToken}`
 
-**Response (200 OK)**
-```json
-{
-  "message": "User deactivated successfully"
-}
-```
+**Response (204 No Content)**
