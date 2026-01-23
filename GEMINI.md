@@ -19,10 +19,10 @@
 *   **Payment Service:** 결제 처리(PortOne 연동), SAGA 패턴을 통한 분산 트랜잭션 관리.
 
 ### 인프라 및 기술 스택
-*   **Frontend:** Next.js 15+ (Vercel), React.
-*   **Backend:** Java 21+, Spring Boot 3.x, Spring Cloud.
+*   **Frontend:** Next.js 16+ (Vercel), React.
+*   **Backend:** Java 25, Spring Boot 4.0.2, Spring Cloud.
 *   **Database:** PostgreSQL 18 (단일 인스턴스, 서비스별 스키마 분리), Redis 7.x (캐시, 대기열, 락).
-*   **Messaging:** Apache Kafka 3.x (이벤트 기반 아키텍처).
+*   **Messaging:** Apache Kafka 4.x (이벤트 기반 아키텍처).
 *   **Cloud/DevOps:** AWS (Free Tier 최적화: RDS t3.micro, EC2 t2.micro), LocalStack (로컬 개발), Docker Compose.
 
 ## 3. 주요 설계 결정 및 제약사항

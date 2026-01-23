@@ -61,7 +61,7 @@
 | POST | `/venues` | 공연장 생성 | 관리자 | - |
 | GET | `/internal/seats/status/{eventId}` | SOLD 좌석 ID 조회 (내부 전용) | 불필요 (내부) | - |
 
-**참고:** `/internal/**` 경로는 API Gateway를 거치지 않고 서비스 간 직접 호출됩니다.
+**참고:** `/internal/**` 경로는 API Gateway를 거치지 않고 서비스 간 직접 호출
 
 **관련 요구사항:** REQ-EVT-001 ~ REQ-EVT-006
 

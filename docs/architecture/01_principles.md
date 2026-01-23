@@ -179,9 +179,8 @@ resilience4j.circuitbreaker:
 
 **관련 요구사항**: REQ-GW-001 ~ REQ-GW-018 (18개)
 
-### 1.8 CQRS 패턴 적용 여부 검토
+### 1.8 CQRS 패턴 적용
 
-#### 1.8.1 현재 설계
 - **Event Service**: Redis 캐싱으로 조회 성능 최적화 (CQRS 유사)
   - 쓰기: RDB (PostgreSQL)
   - 읽기: Redis Cache + RDB Fallback

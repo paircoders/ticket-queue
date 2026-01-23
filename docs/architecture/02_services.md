@@ -72,12 +72,9 @@ graph TB
 - `/payments/**` → Payment Service
 
 **기술 스택:**
-- Spring Cloud Gateway 4.x
+- Spring Cloud Gateway 4.1.1
 - Resilience4j (Circuit Breaker, Rate Limiter)
 - Spring Security (JWT 검증)
-
-**데이터 저장소:**
-- 없음 (Stateless)
 
 **관련 요구사항:** REQ-GW-001 ~ REQ-GW-018 (18개)
 

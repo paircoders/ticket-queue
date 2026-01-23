@@ -222,8 +222,8 @@ COMMENT ON COLUMN user_service.users.email IS '이메일. 포트폴리오용으�
 
 **데이터 보안 전략:**
 - **비밀번호**: BCrypt 단방향 해시 필수 적용.
-- **개인정보**: 실제 상용 서비스에서는 AES-256 등의 컬럼 암호화나 RDS TDE가 필요하지만, 본 프로젝트에서는 아키텍처 검증에 집중하기 위해 **평문 저장**을 원칙으로 합니다.
-- **접근 제어**: DB 접근은 내부망(Docker Network)으로 제한됩니다.
+- **개인정보**: 실제 상용 서비스에서는 AES-256 등의 컬럼 암호화나 RDS TDE가 필요하지만, 본 프로젝트에서는 아키텍처 검증에 집중하기 위해 **평문 저장**을 원칙
+- **접근 제어**: DB 접근은 내부망(Docker Network)으로 제한
 
 **`auth_tokens` 테이블:**
 - **refresh_token**: Refresh Token (Unique, 7일 TTL)

@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph "Frontend"
-        NextJS[Next.js 15+<br/>Vercel 배포]
+        NextJS[Next.js 16+<br/>Vercel 배포]
     end
 
     subgraph "AWS Managed Services (Free Tier)"
@@ -37,8 +37,7 @@ graph TB
             Reservation_Svc[Reservation Service]
             Payment_Svc[Payment Service]
 
-            Kafka[Kafka Cluster<br/>Single Node]
-            Zookeeper[Zookeeper]
+            Kafka[Kafka 4.x<br/>KRaft Mode]
         end
     end
 
@@ -77,15 +76,15 @@ graph TB
 ### 1.2 로컬 및 운영 환경 통합 (Docker Compose)
 
 #### 1.2.1 개요
-로컬 개발 환경과 운영(AWS EC2) 환경을 **Docker Compose**를 기반으로 구성합니다.
+로컬 개발 환경과 운영(AWS EC2) 환경을 **Docker Compose**를 기반으로 구성
 
-*   **로컬 개발(Local):** **LocalStack**을 활용하여 S3, Secrets Manager 등 AWS 클라우드 서비스를 모사하고, DB와 Redis는 Docker 컨테이너로 실행합니다.
-*   **운영 환경(Production):** `docker-compose.yml`에서는 애플리케이션 서비스만 구동하며, DB/Redis/S3 등은 **AWS Managed Service (RDS, ElastiCache, S3)**를 바라보도록 환경변수를 설정합니다.
+*   **로컬 개발(Local):** **LocalStack**을 활용하여 S3, Secrets Manager 등 AWS 클라우드 서비스를 모사하고, DB와 Redis는 Docker 컨테이너로 실행
+*   **운영 환경(Production):** `docker-compose.yml`에서는 애플리케이션 서비스만 구동하며, DB/Redis/S3 등은 **AWS Managed Service (RDS, ElastiCache, S3)**를 바라보도록 환경변수를 설정
 
 ### 1.3 AWS 배포 전략 (EC2 + Docker)
 
 #### 1.3.1 배포 프로세스 (단순화)
-복잡한 Blue/Green이나 ECS 오케스트레이션 대신, 검증된 이미지를 EC2에서 실행하는 방식입니다.
+복잡한 Blue/Green이나 ECS 오케스트레이션 대신, 검증된 이미지를 EC2에서 실행하는 방식
 
 1.  **Github Actions**: 코드 빌드 및 Docker Image 생성 -> AWS ECR Push.
 2.  **EC2 접속**: SSH를 통해 EC2 인스턴스에 접속 (또는 Systems Manager).
@@ -102,9 +101,9 @@ graph TB
 
 #### 1.3.2 구성 상세
 - **ALB (Application Load Balancer) 미사용**:
-    - 비용 절감 및 구조 단순화를 위해 ALB 없이 **EC2 내 Nginx**가 Reverse Proxy 역할을 수행하며, 내부의 **Spring Cloud Gateway**로 트래픽을 전달합니다.
+    - 비용 절감 및 구조 단순화를 위해 ALB 없이 **EC2 내 Nginx**가 Reverse Proxy 역할을 수행하며, 내부의 **Spring Cloud Gateway**로 트래픽을 전달
 - **S3 (Simple Storage Service)**:
-    - 공연 포스터, 좌석 배치도 등 정적 이미지는 EC2 스토리지가 아닌 S3 버킷에 저장하여 확장성을 확보합니다.
+    - 공연 포스터, 좌석 배치도 등 정적 이미지는 EC2 스토리지가 아닌 S3 버킷에 저장하여 확장성을 확보
 - **Secrets Manager**:
     - DB 접속 정보, API Key 등 민감 정보는 코드나 Docker Image에 포함하지 않고 Secrets Manager를 통해 런타임에 주입합니다.
 
@@ -125,7 +124,7 @@ graph TB
 | **ElastiCache** | cache.t2.micro | Free Tier | Redis (12개월 무료) |
 | **S3** | Standard | Free Tier | 5GB 스토리지, 20,000 GET 요청 무료 |
 | **Secrets Manager** | - | $0.4 / Secret | 시크릿 개수당 과금 (저비용) |
-| **Kafka** | **Docker 내장** | **$0** | EC2 리소스 공유 |
+| **Kafka 4.x** | **Docker 내장 (KRaft)** | **$0** | EC2 리소스 공유, Zookeeper 불필요 |
 | **NAT Gateway** | **제거** | **$0** | Public Subnet 사용으로 비용 절감 |
 | **ALB** | **제거** | **$0** | Nginx 대체 |
 
