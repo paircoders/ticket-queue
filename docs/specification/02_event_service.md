@@ -48,6 +48,7 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   - `size` (int, default: 20): 페이지 크기
   - `status` (string, optional): 공연 상태 필터 (OPEN, CLOSED, UPCOMING)
   - `city` (string, optional): 도시 필터
+
 **Response (200 OK)**
 ```json
 {
@@ -83,11 +84,40 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   "halls": { "id": "hall_uuid", "name": "메인 홀" },
   "schedules": [
     {
-      "id": "schedule_uuid",
-      "playSequence": 1,
-      "eventStartAt": "2026-06-01T19:00:00",
-      "saleStartAt": "2026-05-01T20:00:00",
-      "status": "UPCOMING"
+      "date": "2026-06-01",
+      "isSoldOut": false,
+      "times": [
+        {
+          "id": "schedule_uuid",
+          "sequence": 1,
+          "time": "19:00:00",
+          "saleStartAt": "2026-05-01T20:00:00",
+          "saleEndAt": "2026-05-31T23:59:59",
+          "status": "UPCOMING"
+        },
+        {
+          "id": "schedule_uuid",
+          "sequence": 2,
+          "time": "21:00:00",
+          "saleStartAt": "2026-05-01T20:00:00",
+          "saleEndAt": "2026-05-31T23:59:59",
+          "status": "UPCOMING"
+        }
+      ]
+    },
+    {
+      "date": "2026-06-02",
+      "isSoldOut": false,
+      "times": [
+        {
+          "id": "schedule_uuid",
+          "sequence": 3,
+          "time": "17:00:00",
+          "saleStartAt": "2026-05-02T20:00:00",
+          "saleEndAt": "2026-06-01T23:59:59",
+          "status": "UPCOMING"
+        }
+      ]
     }
   ]
 }

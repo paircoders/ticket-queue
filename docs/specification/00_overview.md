@@ -63,7 +63,7 @@ X-Queue-Token: {Queue_Token}
 |:---:|---|---|:---:|
 | GET | `/events` | 공연 목록 조회 | X |
 | GET | `/events/{id}` | 공연 상세 조회 | X |
-| GET | `/events/schedules/{id}/seats` | 좌석 정보 조회 | X |
+| GET | `/events/schedules/{scheduleId}/seats` | 좌석 정보 조회 | X |
 | POST | `/events` | 공연 생성 (Admin) | O |
 | PUT | `/events/{id}` | 공연 수정 (Admin) | O |
 | DELETE | `/events/{id}` | 공연 삭제 (Admin) | O |
@@ -85,10 +85,10 @@ X-Queue-Token: {Queue_Token}
 ### 3.4 Reservation Service
 | Method | Endpoint | 설명 | Auth | Header |
 |:---:|---|---|:---:|:---:|
-| GET | `/reservations/seats/{id}` | 실시간 좌석 상태 조회 | O | Queue |
+| GET | `/reservations/seats/{scheduleId}` | 실시간 좌석 상태 조회 | O | Queue |
 | POST | `/reservations/hold` | 좌석 선점 (임시 예매) | O | Queue |
-| PUT | `/reservations/hold/{id}` | 선점 좌석 변경 | O | Queue |
-| DELETE | `/reservations/hold/{id}` | 선점 해제 | O | |
+| PUT | `/reservations/hold/{reservationId}` | 선점 좌석 변경 | O | Queue |
+| DELETE | `/reservations/hold/{reservationId}` | 선점 해제 | O | |
 | GET | `/reservations` | 내 예매 내역 조회 | O | |
 | GET | `/reservations/{id}` | 예매 상세 조회 | O | |
 | DELETE | `/reservations/{id}` | 예매 취소 | O | |

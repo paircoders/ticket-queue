@@ -17,11 +17,14 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
 ```json
 {
   "scheduleId": "schedule_uuid",
-  "seats": [
-    { "seatId": "seat_1", "status": "AVAILABLE" },
-    { "seatId": "seat_2", "status": "SOLD" },
-    { "seatId": "seat_3", "status": "HOLD" }
-  ]
+  "seats": {
+    "total": 100,
+    "available": 80,
+    "sold": 10,
+    "hold": 10
+  },
+  "sold": ["seat_1", "seat_2", ...],
+  "hold": ["seat_10","seat_11", ...]
 }
 ```
 
@@ -55,7 +58,9 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
 ...
 ### 1.3 선점 좌석 변경
 - **URL:** `PUT /reservations/hold/{reservationId}`
-- **Headers:** `Authorization`, `X-Queue-Token`
+- **Headers:**
+  - `Authorization: Bearer {accessToken}`
+  - `X-Queue-Token: {queueToken}`
 
 **Request Body**
 ```json
@@ -80,12 +85,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
 - **URL:** `DELETE /reservations/hold/{reservationId}`
 - **Headers:** `Authorization: Bearer {accessToken}`
 
-**Response (200 OK)**
-```json
-{
-  "message": "Hold released successfully"
-}
-```
+**Response (204 No Content)**
 
 ## 2. 예매 내역 (My Reservations)
 
@@ -99,7 +99,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
   "list": [
     {
       "reservationId": "reservation_uuid",
-      "eventTitle": "2026 월드 투어",
+      "eventTitle": "2026 월드 투어 서울",
       "scheduleDate": "2026-06-01T19:00:00",
       "status": "CONFIRMED",
       "seats": [
@@ -119,7 +119,8 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
 ```json
 {
   "reservationId": "reservation_uuid",
-  "eventTitle": "2026 월드 투어",
+  "eventId": "event_uuid",
+  "eventTitle": "2026 월드 투어 서울",
   "artist": "인기 가수",
   "venueName": "잠실 주경기장",
   "hallName": "메인 홀",
@@ -130,7 +131,7 @@ Redis HOLD 상태와 Event Service의 SOLD 상태를 병합하여 반환
   ],
   "totalAmount": 150000,
   "paymentId": "payment_uuid",
-  "ticketNumber": "TKT-12345-67890",
+  "ticketNumber": "T20260501-X9A2B1C",
   "qrData": "https://ticket-queue.com/tickets/verify/qr_data_string",
   "createdAt": "2026-05-01T20:00:00"
 }

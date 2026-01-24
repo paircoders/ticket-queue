@@ -26,9 +26,9 @@ Payment Service는 PortOne을 통한 결제 처리를 담당함
 ```json
 {
   "paymentId": "payment_uuid",
-  "merchantUid": "payment_uuid",
   "amount": 300000,
-  "storeId": "store-id-from-portone",
+  "storeId": "store-id-from-portone",       // 결제 연동 시 발급되는 store id
+  "channelKey": "channel-key-from-portone", // 결제 연동 시 발급되는 channel key
   "paymentKey": "generated-idempotency-key"
 }
 ```
@@ -45,10 +45,10 @@ PortOne SDK 결제 완료 후, 서버에 최종 승인 요청
 **Request Body**
 ```json
 {
-  "paymentKey": "generated-idempotency-key",
   "reservationId": "reservation_uuid",
-  "impUid": "imp_1234567890",
-  "merchantUid": "payment_uuid",
+  "paymentId": "payment_uuid",
+  "paymentKey": "generated-idempotency-key",
+  "transactionId": "tx_1234567890", // 프론트에서 PortOne 결제 완료후 전달 받음
   "amount": 300000
 }
 ```
@@ -66,24 +66,7 @@ PortOne SDK 결제 완료 후, 서버에 최종 승인 요청
 - `400 Bad Request`: 결제 금액 불일치 (위변조 시도)
 - `409 Conflict`: 이미 처리된 결제 (멱등성)
 
-### 1.3 결제 상세 조회
-- **URL:** `GET /payments/{id}`
-- **Headers:** `Authorization: Bearer {accessToken}`
-
-**Response (200 OK)**
-```json
-{
-  "paymentId": "payment_uuid",
-  "reservationId": "reservation_uuid",
-  "amount": 300000,
-  "status": "SUCCESS",
-  "method": "CARD",
-  "cardName": "SHINHAN",
-  "cardNumber": "1234-****-****-5678"
-}
-```
-
-### 1.4 내 결제 내역 조회
+### 1.3 내 결제 내역 조회
 - **URL:** `GET /payments`
 - **Headers:** `Authorization: Bearer {accessToken}`
 
@@ -105,3 +88,22 @@ PortOne SDK 결제 완료 후, 서버에 최종 승인 요청
   "totalElements": 5
 }
 ```
+
+### 1.4 결제 상세 조회
+- **URL:** `GET /payments/{id}`
+- **Headers:** `Authorization: Bearer {accessToken}`
+
+**Response (200 OK)**
+```json
+{
+  "paymentId": "payment_uuid",
+  "reservationId": "reservation_uuid",
+  "amount": 300000,
+  "status": "SUCCESS",
+  "method": "CARD",
+  "cardName": "SHINHAN",
+  "cardNumber": "1234-****-****-5678"
+}
+```
+
+

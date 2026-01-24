@@ -669,6 +669,7 @@ erDiagram
         uuid id PK
         uuid user_id "User Service 참조 (ID만)"
         uuid event_schedule_id "Event Service 참조 (ID만)"
+        varchar ticket_number UK "티켓 번호"
         varchar status "PENDING/CONFIRMED/CANCELLED"
         decimal total_amount
         timestamp hold_expires_at "선점 만료 시간 (5분)"
@@ -695,6 +696,9 @@ erDiagram
 **`reservations` 테이블:**
 - 예매 정보
 - **event_schedule_id**: 회차 ID (FK 없음, MSA 원칙)
+- **ticket_number**: 티켓 번호 (예매 확정 시 생성)
+  - 포맷: `T` + `YYYYMMDD` + `-` + `난수 7자리` (예: `T20260601-X9A2B1C`)
+  - 유일성 보장: Unique Index 적용
 - **status**:
   - PENDING: 좌석 선점 완료, 결제 대기
   - CONFIRMED: 결제 완료, 예매 확정
@@ -725,6 +729,7 @@ CREATE TABLE reservation_service.reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,  -- FK 없음 (MSA 원칙)
     event_schedule_id UUID NOT NULL,  -- FK 없음 (회차 ID)
+    ticket_number VARCHAR(50) UNIQUE,  -- 티켓 번호
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     total_amount DECIMAL(10, 0) NOT NULL,
     hold_expires_at TIMESTAMP NOT NULL,
@@ -736,6 +741,7 @@ CREATE TABLE reservation_service.reservations (
 );
 
 -- 인덱스
+CREATE UNIQUE INDEX idx_reservations_ticket_number ON reservation_service.reservations(ticket_number);
 CREATE INDEX idx_reservations_user_status ON reservation_service.reservations(user_id, status);
 CREATE INDEX idx_reservations_schedule_created ON reservation_service.reservations(event_schedule_id, created_at DESC);
 CREATE INDEX idx_reservations_hold_expires ON reservation_service.reservations(hold_expires_at)
@@ -749,6 +755,7 @@ FOR EACH ROW EXECUTE FUNCTION reservation_service.update_timestamp();
 
 -- 테이블 코멘트
 COMMENT ON TABLE reservation_service.reservations IS '예매 정보. event_schedule_id는 회차 ID.';
+COMMENT ON COLUMN reservation_service.reservations.ticket_number IS '티켓 번호 (예매 확정 시 생성).';
 COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 만료 시간 (현재 + 5분). 배치 작업으로 자동 취소.';
 ```
 </details>
