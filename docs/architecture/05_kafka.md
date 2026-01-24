@@ -227,19 +227,6 @@
 | `cancelledAt` | Timestamp | 취소 시각 |
 | `reason` | String | 취소 사유 (`USER_REQUEST`, `PAYMENT_FAILED`, `HOLD_TIMEOUT`) |
 
-### 3.3 스키마 버전 관리 전략
-
-| 변경 유형 | 호환성 | 버전 변경 | 대응 방법 |
-|----------|--------|----------|----------|
-| 필드 추가 (optional) | 하위 호환 | 유지 | Consumer가 미지 필드 무시 |
-| 필드 삭제 | **비호환** | v1 → v2 | Consumer 버전별 분기 처리 |
-| 필드 타입 변경 | **비호환** | v1 → v2 | Consumer 버전별 분기 처리 |
-| 필드명 변경 | **비호환** | v1 → v2 | Consumer 버전별 분기 처리 |
-
-**버전 전환 절차:**
-1. 새 버전 Consumer 배포 (v1, v2 동시 지원)
-2. Producer를 새 버전으로 전환
-3. 구 버전 이벤트 소진 후 구 버전 Consumer 코드 제거
 
 ---
 
