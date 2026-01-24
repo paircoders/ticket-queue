@@ -44,6 +44,12 @@ Authorization: Bearer {Access_Token}
 X-Queue-Token: {Queue_Token}
 ```
 
+### 2.5 추적 헤더 (Tracing Header)
+모든 요청과 응답에는 로그 추적 및 분산 트랜잭션 관리를 위한 고유 ID가 포함됨
+- **Header Name:** `X-Trace-Id`
+- **Description:** API Gateway에서 모든 요청에 대해 고유한 UUID를 발급하며, 응답 헤더 및 에러 응답의 `traceId` 필드와 동일한 값을 가짐
+- **Usage:** 고객 문의 대응 또는 시스템 장애 추적 시 활용
+
 ## 3. API 요약 (Summary)
 
 ### 3.1 User Service

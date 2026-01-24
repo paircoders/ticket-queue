@@ -78,7 +78,7 @@
 1. Reservation Service: 좌석 선점 및 예매 생성 (PENDING)
 2. User → Payment Service: 결제 요청 (결제하기 버튼 클릭)
 3. Payment Service → PortOne: 결제 승인
-4. Payment Service → Kafka: payment.success 발행
+4. Payment Service → Kafka: PaymentSuccess 발행 (payment.events)
 5. Reservation Service (Consumer): 예매 확정 (CONFIRMED)
 6. Event Service (Consumer): 좌석 상태 업데이트 (SOLD)
 ```
@@ -88,7 +88,7 @@
 1. User → Payment Service: 결제 요청
 2. Payment Service → PortOne: 결제 승인 시도
 3. PortOne → Payment Service: 결제 실패
-4. Payment Service → Kafka: payment.failed 발행
+4. Payment Service → Kafka: PaymentFailed 발행 (payment.events)
 5. Reservation Service (Consumer): 예매 취소 (CANCELLED)
 6. Event Service (Consumer): 좌석 선점 해제 (AVAILABLE)
 ```
@@ -99,13 +99,13 @@
 - **Orchestrator**: Payment Service가 SAGA 진행 관리
 - **성공 시나리오**:
   1. 결제 요청 → PortOne 결제 성공
-  2. Kafka 이벤트 발행 (`payment.success`)
+  2. Kafka 이벤트 발행 (`PaymentSuccess`)
   3. Reservation Service: 예매 확정
   4. Event Service: 좌석 상태 업데이트
 
 - **실패 시나리오 (보상 트랜잭션)**:
   1. 결제 요청 → PortOne 결제 실패
-  2. Kafka 이벤트 발행 (`payment.failed`)
+  2. Kafka 이벤트 발행 (`PaymentFailed`)
   3. Reservation Service: 예매 취소
   4. Event Service: 좌석 선점 해제
 
@@ -127,13 +127,15 @@
    ```sql
    CREATE TABLE outbox_events (
      id UUID PRIMARY KEY,
-     aggregate_type VARCHAR(255),  -- 'Reservation', 'Payment' 등
+     aggregate_type VARCHAR(50),    -- 'Reservation', 'Payment'
      aggregate_id UUID,
-     event_type VARCHAR(255),       -- 'ReservationConfirmed', 'PaymentSuccess' 등
+     event_type VARCHAR(100),       -- 'PaymentSuccess', 'ReservationCancelled' 등
      payload JSONB,
      created_at TIMESTAMP,
      published BOOLEAN DEFAULT FALSE,
-     published_at TIMESTAMP
+     published_at TIMESTAMP,
+     retry_count INT DEFAULT 0,
+     last_error TEXT
    );
    ```
 

@@ -43,8 +43,6 @@
 |--------|------|--------|----------|----------|----------|
 | `reservation.events` | 예매 취소 → 좌석 복구 | 3 | 3일 | Reservation | Event |
 | `payment.events` | 결제 성공/실패 → 예매 확정/취소, 좌석 SOLD | 3 | 3일 | Payment | Reservation, Event |
-| `dlq.reservation` | reservation.events 처리 실패 메시지 | 1 | 7일 | ErrorHandler | Admin (수동) |
-| `dlq.payment` | payment.events 처리 실패 메시지 | 1 | 7일 | ErrorHandler | Admin (수동) |
 
 > **Note:** Replication Factor는 초기 단일 브로커 환경에서 1로 설정. 운영 환경 전환 시 3으로 증가 예정.
 
@@ -115,8 +113,8 @@
 | `aggregateType` | Aggregate 타입 | 도메인 구분 |
 | `version` | 스키마 버전 | 하위 호환성 처리 |
 | `timestamp` | 이벤트 발생 시각 | 순서 추적, 디버깅 |
-| `metadata.correlationId` | 요청 추적 ID | 분산 추적 |
-| `metadata.causationId` | 원인 이벤트 ID | 이벤트 체인 추적 |
+| `metadata.correlationId` | 요청 추적 ID (Gateway에서 발급한 traceId) | 분산 추적 |
+| `metadata.causationId` | 원인 이벤트 ID (최초인 경우 null) | 이벤트 체인 추적 |
 | `metadata.userId` | 사용자 ID | 파티션 키 (순서 보장) |
 
 ### 3.2 이벤트별 Payload
@@ -139,6 +137,7 @@
     "userId": "user-uuid-789"
   },
   "payload": {
+    "paymentId": "payment-uuid-123",
     "paymentKey": "payment-key-abc",
     "reservationId": "reservation-uuid-321",
     "amount": 200000,
@@ -151,11 +150,12 @@
 
 | Payload 필드 | 타입 | 설명 |
 |--------------|------|------|
-| `paymentKey` | String | PortOne 결제 키 |
+| `paymentId` | UUID | 결제 ID (aggregateId와 동일) |
+| `paymentKey` | String | 결제 고유 키 (멱등성 키) |
 | `reservationId` | UUID | 연관 예매 ID |
 | `amount` | Integer | 결제 금액 (원) |
 | `paidAt` | Timestamp | 결제 완료 시각 |
-| `portoneTransactionId` | String | PortOne 거래 ID |
+| `portoneTransactionId` | String | PortOne 거래 ID (API: transactionId) |
 
 #### 3.2.2 PaymentFailed
 <details>
@@ -175,6 +175,7 @@
     "userId": "user-uuid-012"
   },
   "payload": {
+    "paymentId": "payment-uuid-456",
     "paymentKey": "payment-key-def",
     "reservationId": "reservation-uuid-654",
     "amount": 150000,
@@ -187,7 +188,8 @@
 
 | Payload 필드 | 타입 | 설명 |
 |--------------|------|------|
-| `paymentKey` | String | PortOne 결제 키 |
+| `paymentId` | UUID | 결제 ID (aggregateId와 동일) |
+| `paymentKey` | String | 결제 고유 키 (멱등성 키) |
 | `reservationId` | UUID | 연관 예매 ID |
 | `amount` | Integer | 시도된 결제 금액 (원) |
 | `failureReason` | String | 실패 사유 코드 |

@@ -932,6 +932,7 @@ erDiagram
         boolean published
         timestamp published_at
         int retry_count
+        text last_error
     }
     
     processed_events {
@@ -949,22 +950,21 @@ erDiagram
 - Transactional Outbox 패턴 구현
 - 비즈니스 로직과 동일 트랜잭션 내 INSERT
 - Poller가 주기적으로 읽어 Kafka 발행 (여유가 있을 경우 Debezium(CDC)으로 개발)
-- **aggregate_type**: 이벤트 발행 주체 (Reservation, Payment, Event)
+- **aggregate_type**: 이벤트 발행 주체 (Reservation, Payment)
 - **aggregate_id**: 이벤트 발행 대상 ID
-- **event_type**: 이벤트 타입 (ReservationConfirmed, PaymentSuccess, PaymentFailed 등)
+- **event_type**: 이벤트 타입 (PaymentSuccess, PaymentFailed, ReservationCancelled)
 - **payload (JSONB)**: 이벤트 데이터
   ```json
   {
+    "paymentId": "uuid",
     "reservationId": "uuid",
-    "userId": "uuid",
-    "eventScheduleId": "uuid",
-    "seatIds": ["uuid1", "uuid2"],
-    "totalAmount": 100000,
-    "confirmedAt": "2026-01-11T10:00:00Z"
+    "amount": 100000,
+    "paidAt": "2026-01-11T10:00:00Z"
   }
   ```
 - **published**: Kafka 발행 여부
 - **retry_count**: 발행 실패 시 재시도 횟수
+- **last_error**: 마지막 발행 실패 에러 메시지
 - **인덱스**: `idx_outbox_published_created (published, created_at)` - Poller 성능 최적화
 - **관련 요구사항**: REQ-RSV-012, REQ-PAY-013
 
@@ -979,7 +979,7 @@ CREATE SCHEMA IF NOT EXISTS common;
 -- outbox_events 테이블
 CREATE TABLE common.outbox_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    aggregate_type VARCHAR(50) NOT NULL,  -- Reservation, Payment, Event
+    aggregate_type VARCHAR(50) NOT NULL,  -- Reservation, Payment
     aggregate_id UUID NOT NULL,
     event_type VARCHAR(100) NOT NULL,
     payload JSONB NOT NULL,
