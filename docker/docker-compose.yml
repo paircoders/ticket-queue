@@ -1,0 +1,119 @@
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:18.1-alpine3.23
+    container_name: ticket-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - TZ=Asia/Seoul
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # 데이터 영속성 (docker 내부 저장소)
+      - ./db_init:/docker-entrypoint-initdb.d # 초기 스키마 생성 스크립트
+    networks:
+      - ticket-network
+
+  # Valkey (Redis 대체)
+  valkey:
+    image: valkey/valkey:8.1.5-alpine3.23
+    container_name: ticket-valkey
+    ports:
+      - "6379:6379"
+    command: valkey-server --requirepass ${VALKEY_PASSWORD}
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - valkey_data:/data
+    networks:
+      - ticket-network
+
+  # Kafka (KRaft Mode - No ZooKeeper)
+  kafka:
+    image: apache/kafka:4.1.1
+    container_name: ticket-kafka
+    ports:
+      - "9092:9092" # IntelliJ 접근용 포트
+    environment:
+      - TZ=Asia/Seoul
+      # KRaft 설정 (Controller + Broker 역할 동시 수행)
+      - KAFKA_NODE_ID=1 # 클러스터 내 브로커 고유 식별자 (ID)
+      - KAFKA_PROCESS_ROLES=broker,controller # 역할: 브로커(데이터 처리)와 컨트롤러(관리자) 동시 수행
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093 # 관리자 투표권자 목록 (ID@호스트:포트) -> 자기 자신(1번) 지정
+
+      # 리스너 설정
+      # EXTERNAL: 로컬 PC(IntelliJ) 요청 처리 (9092)
+      # INTERNAL: Docker 내부(Kafka UI, MSA 서비스들) 요청 처리 (29092)
+      # CONTROLLER: 관리자용 통신 처리 (9093)
+      - KAFKA_LISTENERS=EXTERNAL://:9092,INTERNAL://:29092,CONTROLLER://:9093
+
+      # 광고용 주소(Advertised Listeners)
+      # 외부 -> localhost:9092
+      # 내부 -> kafka:29092
+      - KAFKA_ADVERTISED_LISTENERS=EXTERNAL://localhost:9092,INTERNAL://ticket-kafka:29092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+
+      # 보안 프로토콜 매핑 (로컬 개발용이라 암호화 없이 PLAINTEXT 사용)
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT
+
+      # 데이터 복제본(Replication) 설정 (단일 노드 환경 최적화)
+      # 기본값이 3이라서 1로 낮추지 않으면 복제할 서버가 없어 에러 발생함
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 # 오프셋(읽은 위치) 저장 토픽의 복제본 수
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 # 트랜잭션 상태 로그의 복제본 수
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 # 최소한 살아있어야 하는 복제본 수 (ISR)
+
+      # 데이터 저장 위치
+      - KAFKA_LOG_DIRS=/var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - ticket-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: ticket-kafka-ui
+    ports:
+      - "8989:8080"
+    environment:
+      - TZ=Asia/Seoul
+      - DYNAMIC_CONFIG_ENABLED=true
+      - KAFKA_CLUSTERS_0_NAME=Local-Kafka
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=ticket-kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - ticket-network
+
+  # LocalStack (S3 + Secrets Manager)
+  localstack:
+    image: localstack/localstack:4.12.0
+    container_name: ticket-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,secretsmanager # 경량화를 위해 필요한 서비스만 명시
+      - AWS_DEFAULT_REGION=ap-northeast-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - DEBUG=0 # 로그 줄이기 (필요시 1로 변경)
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - TZ=Asia/Seoul
+    volumes:
+      - ./localstack_init:/etc/localstack/init/ready.d # 초기화 스크립트 마운트
+      - /var/run/docker.sock:/var/run/docker.sock
+      - localstack_data:/var/lib/localstack
+    networks:
+      - ticket-network
+
+volumes:
+  postgres_data:
+  valkey_data:
+  kafka_data:
+  localstack_data:
+
+networks:
+  ticket-network:
+    driver: bridge
