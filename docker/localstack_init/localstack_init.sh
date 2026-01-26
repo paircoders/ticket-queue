@@ -1,30 +1,63 @@
 #!/bin/bash
+set -e
 
 echo "=========== LocalStack Init Start ==========="
 
-# 1. S3 버킷 생성 (콘서트 포스터 이미지 저장용)
+# 1. S3 버킷 생성
 echo "[S3] Creating 'event-images' bucket..."
 awslocal s3 mb s3://event-images
 
-# S3 버킷 리스트 확인
-echo "[S3] List buckets:"
-awslocal s3 ls
+# ---------------------------------------------------------
+# 2. Secrets Manager 등록 함수 정의
+#    create_secret "서비스명" "시크릿파일명" "추가설명"
+create_secret() {
+    local SERVICE_NAME=$1
+    local SECRET_FILE=$2
+    local DESCRIPTION=$3
+    
+    # 시크릿 이름 규칙: ticket-{서비스명}/secure-config
+    local SECRET_NAME="${SERVICE_NAME}-svc/secure-config"
+    
+    # Docker Secret 파일에서 실제 비밀번호 읽기
+    local DB_PASSWORD=$(cat "/run/secrets/${SECRET_FILE}")
+    
+    # JSON 생성 (valkey인 경우 키값을 다르게 할 수도 있음, 여기선 db_password로 통일하거나 분기 처리)
+    local SECRET_VALUE="{\"db_password\":\"${DB_PASSWORD}\"}"
+    
+    echo "[SecretsManager] Creating secret: $SECRET_NAME"
+    awslocal secretsmanager create-secret \
+        --name "$SECRET_NAME" \
+        --description "$DESCRIPTION" \
+        --secret-string "$SECRET_VALUE"
+}
 
 # ---------------------------------------------------------
+# 3. 각 서비스별 시크릿 등록 실행
 
-# 2. Secrets Manager 시크릿 생성 (DB 접속 정보, 결제 키 등)
+# (1) User Service
+create_secret "user" "postgres_user_pw" "MSA User DB Secret"
 
-SECRET_NAME="ticket-queue/secure-config"
-SECRET_VALUE='{"db_password":"ticket@1234"}'
+# (2) Event Service
+create_secret "event" "postgres_event_pw" "MSA Event DB Secret"
 
-echo "[SecretsManager] Creating secret: $SECRET_NAME"
+# (3) Queue Service
+create_secret "queue" "postgres_queue_pw" "MSA Queue DB Secret"
+
+# (4) Reservation Service
+create_secret "reservation" "postgres_reservation_pw" "MSA Reservation DB Secret"
+
+# (5) Payment Service
+create_secret "payment" "postgres_payment_pw" "MSA Payment DB Secret"
+
+# (6) Valkey (Redis) - 필요하다면 등록
+VALKEY_PW=$(cat /run/secrets/valkey_pw)
 awslocal secretsmanager create-secret \
-    --name $SECRET_NAME \
-    --description "MSA Ticket Queue Local Secrets" \
-    --secret-string "$SECRET_VALUE"
+    --name "valkey/secure-config" \
+    --description "MSA Valkey Password" \
+    --secret-string "{\"valkey_password\":\"$VALKEY_PW\"}"
 
-# 생성된 시크릿 확인
-echo "[SecretsManager] Describe secret:"
-awslocal secretsmanager describe-secret --secret-id $SECRET_NAME
+
+echo "[SecretsManager] All secrets created successfully."
+awslocal secretsmanager list-secrets
 
 echo "=========== LocalStack Init Complete ==========="
