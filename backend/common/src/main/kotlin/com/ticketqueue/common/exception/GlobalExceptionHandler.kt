@@ -1,6 +1,5 @@
 package com.ticketqueue.common.exception
 
-import com.ticketqueue.common.dto.ApiResponse
 import com.ticketqueue.common.dto.ErrorResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -17,7 +16,7 @@ class GlobalExceptionHandler {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(BusinessException::class)
-    fun handleBusinessException(ex: BusinessException): ResponseEntity<ApiResponse<Nothing>> {
+    fun handleBusinessException(ex: BusinessException): ResponseEntity<ErrorResponse> {
         val traceId = UUID.randomUUID().toString()
         log.warn("Business exception occurred: [traceId=$traceId] ${ex.errorCode.code} - ${ex.message}")
 
@@ -30,11 +29,11 @@ class GlobalExceptionHandler {
 
         return ResponseEntity
             .status(ex.errorCode.status)
-            .body(ApiResponse.error(errorResponse))
+            .body(errorResponse)
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
-    fun handleValidationException(ex: MethodArgumentNotValidException): ResponseEntity<ApiResponse<Nothing>> {
+    fun handleValidationException(ex: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
         val traceId = UUID.randomUUID().toString()
         val message = ex.bindingResult.fieldErrors
             .joinToString(", ") { "${it.field}: ${it.defaultMessage}" }
@@ -50,11 +49,11 @@ class GlobalExceptionHandler {
 
         return ResponseEntity
             .status(ErrorCode.INVALID_INPUT.status)
-            .body(ApiResponse.error(errorResponse))
+            .body(errorResponse)
     }
 
     @ExceptionHandler(Exception::class)
-    fun handleException(ex: Exception): ResponseEntity<ApiResponse<Nothing>> {
+    fun handleException(ex: Exception): ResponseEntity<ErrorResponse> {
         val traceId = UUID.randomUUID().toString()
         log.error("Unexpected exception occurred: [traceId=$traceId]", ex)
 
@@ -67,6 +66,6 @@ class GlobalExceptionHandler {
 
         return ResponseEntity
             .status(ErrorCode.INTERNAL_SERVER_ERROR.status)
-            .body(ApiResponse.error(errorResponse))
+            .body(errorResponse)
     }
 }
