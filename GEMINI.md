@@ -38,18 +38,14 @@
 
 *   **`docs/REQUIREMENTS.md`**: 상세 기능 및 비기능 요구사항 (121개 항목).
 *   **`docs/ARCHITECTURE.md`**: 아키텍처 원칙 및 설계 개요.
-*   **`docs/architecture/`**:
-    *   `00_overview.md`: 시스템 개요, 비즈니스 목적, 상세 기술 스택.
-    *   `02_services.md`: 서비스 경계, 책임 및 의존성.
-    *   `04_data.md`: ERD, 데이터베이스 구조 및 캐싱 전략.
-    *   `05_messaging.md`: Kafka 토픽 설계 및 이벤트 스키마.
-    *   `06_api_security.md`: API Gateway 라우팅 및 보안 명세.
+*   **`docs/architecture/`**: 상세 아키텍처 설계 (Overview, Principles, Services, Infrastructure, Data, Kafka, Security, Operations).
+*   **`docs/specification/`**: 각 서비스별 상세 API 및 도메인 명세 (User, Event, Queue, Reservation, Payment).
 
 ## 5. 시작하기
 현재 프로젝트는 **설계 단계**에 있으므로, 구현 전에 아키텍처를 이해하는 것이 중요합니다.
 
 1.  `docs/REQUIREMENTS.md`를 **정독**하여 상세 기능 명세를 파악합니다.
 2.  `docs/architecture/00_overview.md`를 통해 전체 시스템의 기술적 범위와 제약을 이해합니다.
-3.  `docs/architecture/02_services.md`와 `04_data.md`를 통해 서비스 간 상호작용과 데이터 흐름을 확인합니다.
+3.  `docs/specification/00_overview.md` 및 각 서비스 명세를 통해 상세 구현 요구사항을 확인합니다.
 
 *향후 계획: Docker Compose 기반의 로컬 인프라 구축 및 백엔드 서비스 스캐폴딩이 진행될 예정입니다.*
