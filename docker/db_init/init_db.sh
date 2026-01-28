@@ -14,10 +14,24 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- User Service
     CREATE USER user_svc_user WITH PASSWORD '$USER_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS user_service AUTHORIZATION user_svc_user;
+    CREATE OR REPLACE FUNCTION user_service.update_timestamp() RETURNS TRIGGER AS \$\$
+    BEGIN
+        NEW.updated_at = now();
+        RETURN NEW;
+    END;
+    \$\$ LANGUAGE plpgsql;
+    ALTER FUNCTION user_service.update_timestamp() OWNER TO user_svc_user;
 
     -- Event Service
     CREATE USER event_svc_user WITH PASSWORD '$EVENT_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS event_service AUTHORIZATION event_svc_user;
+    CREATE OR REPLACE FUNCTION event_service.update_timestamp() RETURNS TRIGGER AS \$\$
+    BEGIN
+        NEW.updated_at = now();
+        RETURN NEW;
+    END;
+    \$\$ LANGUAGE plpgsql;
+    ALTER FUNCTION event_service.update_timestamp() OWNER TO event_svc_user;
 
     -- Queue Service
     CREATE USER queue_svc_user WITH PASSWORD '$QUEUE_SVC_PW';
@@ -26,10 +40,24 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- Reservation Service
     CREATE USER reservation_svc_user WITH PASSWORD '$RESERVATION_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS reservation_service AUTHORIZATION reservation_svc_user;
+    CREATE OR REPLACE FUNCTION reservation_service.update_timestamp() RETURNS TRIGGER AS \$\$
+    BEGIN
+        NEW.updated_at = now();
+        RETURN NEW;
+    END;
+    \$\$ LANGUAGE plpgsql;
+    ALTER FUNCTION reservation_service.update_timestamp() OWNER TO reservation_svc_user;
 
     -- Payment Service
     CREATE USER payment_svc_user WITH PASSWORD '$PAYMENT_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS payment_service AUTHORIZATION payment_svc_user;
+    CREATE OR REPLACE FUNCTION payment_service.update_timestamp() RETURNS TRIGGER AS \$\$
+    BEGIN
+        NEW.updated_at = now();
+        RETURN NEW;
+    END;
+    \$\$ LANGUAGE plpgsql;
+    ALTER FUNCTION payment_service.update_timestamp() OWNER TO payment_svc_user;
 
     -- Common
     CREATE SCHEMA IF NOT EXISTS common;
