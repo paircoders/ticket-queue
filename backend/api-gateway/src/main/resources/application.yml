@@ -1,0 +1,108 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/auth/**, /users/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                fallbackUri: forward:/fallback/user
+
+        - id: event-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/events/**, /venues/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: eventServiceCircuitBreaker
+                fallbackUri: forward:/fallback/event
+
+        - id: queue-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/queue/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: queueServiceCircuitBreaker
+                fallbackUri: forward:/fallback/queue
+
+        - id: reservation-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/reservations/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: reservationServiceCircuitBreaker
+                fallbackUri: forward:/fallback/reservation
+
+        - id: payment-service
+          uri: http://localhost:8085
+          predicates:
+            - Path=/payments/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: paymentServiceCircuitBreaker
+                fallbackUri: forward:/fallback/payment
+
+      # Block internal API access
+      default-filters:
+        - name: RewritePath
+          args:
+            regexp: /internal/.*
+            replacement: /404
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+    instances:
+      userServiceCircuitBreaker:
+        baseConfig: default
+      eventServiceCircuitBreaker:
+        baseConfig: default
+      queueServiceCircuitBreaker:
+        baseConfig: default
+        waitDurationInOpenState: 10s
+      reservationServiceCircuitBreaker:
+        baseConfig: default
+      paymentServiceCircuitBreaker:
+        baseConfig: default
+        waitDurationInOpenState: 60s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway, circuitbreakers
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    io.github.resilience4j: DEBUG

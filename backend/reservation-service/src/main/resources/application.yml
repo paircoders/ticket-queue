@@ -1,0 +1,86 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: reservation-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ticketing
+    username: reservation_svc_user
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: reservation_service
+        format_sql: true
+    show-sql: true
+    open-in-view: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: reservation-payment-consumer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.ticketqueue.*
+    listener:
+      ack-mode: MANUAL_IMMEDIATE
+
+redisson:
+  single-server-config:
+    address: redis://localhost:6379
+  lock:
+    wait-time: 15000  # 15 seconds
+    lease-time: 300000  # 5 minutes
+
+reservation:
+  hold:
+    ttl: 300  # 5 minutes in seconds
+  max-seats: 4
+
+feign:
+  client:
+    config:
+      default:
+        connect-timeout: 5000
+        read-timeout: 5000
+      event-service:
+        url: http://localhost:8082
+
+internal:
+  api:
+    key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.ticketqueue.reservation: DEBUG
+    org.hibernate.SQL: DEBUG
