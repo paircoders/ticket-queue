@@ -10,7 +10,7 @@ PAYMENT_SVC_PW=$(cat /run/secrets/postgres_payment_pw)
 echo "Creating service users and schemas from secrets..."
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    
+
     -- User Service
     CREATE USER user_svc_user WITH PASSWORD '$USER_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS user_service AUTHORIZATION user_svc_user;
@@ -30,6 +30,10 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- Payment Service
     CREATE USER payment_svc_user WITH PASSWORD '$PAYMENT_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS payment_service AUTHORIZATION payment_svc_user;
+
+    -- Common
+    CREATE SCHEMA IF NOT EXISTS common;
+    GRANT ALL ON SCHEMA common TO user_svc_user, event_svc_user, queue_svc_user, reservation_svc_user, payment_svc_user;
 
 EOSQL
 
