@@ -149,3 +149,5 @@ secrets:
       file: ./secrets/postgres_payment_pw.txt
     valkey_pw:
       file: ./secrets/valkey_pw.txt
+    internal_api_key:
+      file: ./secrets/internal_api_key.txt
