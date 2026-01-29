@@ -29,10 +29,12 @@ dependencies {
     api(libs.spring.boot.starter.validation)
     compileOnly(libs.spring.boot.starter.security)
     compileOnly(libs.spring.cloud.starter.openfeign)
+    compileOnly(libs.spring.kafka)
 
     // Database
     runtimeOnly(libs.postgresql)
 
     // Test
     testImplementation(libs.bundles.test.base)
+    testImplementation(libs.spring.kafka)
 }
