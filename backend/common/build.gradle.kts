@@ -11,6 +11,12 @@ plugins {
 tasks.bootJar { enabled = false }
 tasks.jar { enabled = true }
 
+dependencyManagement {
+    imports {
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:${libs.versions.springCloud.get()}")
+    }
+}
+
 dependencies {
     // Kotlin
     api(libs.bundles.kotlin)
@@ -22,6 +28,7 @@ dependencies {
     api(libs.spring.boot.starter.data.jpa)
     api(libs.spring.boot.starter.validation)
     compileOnly(libs.spring.boot.starter.security)
+    compileOnly(libs.spring.cloud.starter.openfeign)
 
     // Database
     runtimeOnly(libs.postgresql)

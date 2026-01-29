@@ -39,6 +39,9 @@ enum class ErrorCode(
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_AMOUNT_MISMATCH", "결제 금액이 일치하지 않습니다."),
     REFUND_FAILED(HttpStatus.BAD_REQUEST, "REFUND_FAILED", "환불에 실패했습니다."),
 
+    // Internal API
+    INTERNAL_API_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "INTERNAL_API_UNAUTHORIZED", "내부 API 인증에 실패했습니다."),
+
     // Event
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND", "존재하지 않는 공연입니다."),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "존재하지 않는 공연 회차입니다."),
