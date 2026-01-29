@@ -21,6 +21,7 @@ dependencies {
     api(libs.spring.boot.starter.web)
     api(libs.spring.boot.starter.data.jpa)
     api(libs.spring.boot.starter.validation)
+    compileOnly(libs.spring.boot.starter.security)
 
     // Database
     runtimeOnly(libs.postgresql)
