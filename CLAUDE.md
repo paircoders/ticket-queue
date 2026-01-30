@@ -79,7 +79,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 기술 스택
 
 ### Backend
-- Java, Spring Boot 4.0.2, Spring Cloud Gateway
+- Java, spring boot 4.0.2 3.5.10, Spring Cloud Gateway
 - PostgreSQL 18 (단일 인스턴스, 스키마 분리)
 - Redis 7.x (캐시, 대기열, 분산 락)
 - Apache Kafka 4.x KRaft 모드 (이벤트 스트리밍, Zookeeper 불필요)

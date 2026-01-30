@@ -69,7 +69,7 @@
 | **Frontend** | Next.js 16+ | React 기반 SSR/CSR |
 |  | Vercel | 프론트엔드 배포 플랫폼 |
 | **API Gateway** | Spring Cloud Gateway | 통합 진입점, 라우팅, 인증 |
-| **Backend** | Spring Boot 4.0.2 | 마이크로서비스 프레임워크 |
+| **Backend** | spring boot 4.0.2 3.5.10 | 마이크로서비스 프레임워크 |
 |  | Java 25+ | 백엔드 언어 |
 | **Database** | PostgreSQL 18 | RDB (단일 인스턴스, 스키마 분리) |
 |  | Redis 7.x | 캐시, 대기열, 분산 락 |
