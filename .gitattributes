@@ -1,0 +1,96 @@
+############################
+# 1. 기본 정책
+############################
+
+# 모든 텍스트 파일은 LF로 통일
+* text=auto eol=lf
+
+
+############################
+# 2. 소스 코드
+############################
+
+# Java / Kotlin
+*.java           text eol=lf
+*.kt             text eol=lf
+*.kts            text eol=lf
+
+# Spring / Gradle
+*.gradle         text eol=lf
+*.gradle.kts     text eol=lf
+gradlew          text eol=lf
+
+# JavaScript / TypeScript
+*.js             text eol=lf
+*.ts             text eol=lf
+*.jsx            text eol=lf
+*.tsx            text eol=lf
+
+
+############################
+# 3. 설정 파일
+############################
+
+# YAML / JSON / Properties
+*.yml            text eol=lf
+*.yaml           text eol=lf
+*.json           text eol=lf
+*.properties     text eol=lf
+
+# Env / Config
+.env             text eol=lf
+*.env            text eol=lf
+
+
+############################
+# 4. Shell / Script
+############################
+
+# Shell (Linux/Mac)
+*.sh             text eol=lf
+
+# SQL
+*.sql            text eol=lf
+
+
+############################
+# 5. 문서
+############################
+
+# Markdown / Text
+*.md             text eol=lf
+*.txt            text eol=lf
+
+
+############################
+# 6. Docker / Infra
+############################
+
+Dockerfile       text eol=lf
+*.dockerfile     text eol=lf
+docker-compose.yml text eol=lf
+
+
+############################
+# 7. Binary files (절대 변환 금지)
+############################
+
+# Images
+*.png            binary
+*.jpg            binary
+*.jpeg           binary
+*.gif            binary
+*.webp           binary
+*.svg            binary
+
+# Archives
+*.zip            binary
+*.tar            binary
+*.gz             binary
+*.jar            binary
+*.war            binary
+
+# Executables
+*.exe            binary
+*.dll            binary
+*.so             binary

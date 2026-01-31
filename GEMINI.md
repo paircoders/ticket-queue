@@ -20,7 +20,7 @@
 
 ### 인프라 및 기술 스택
 *   **Frontend:** Next.js 16+ (Vercel), React.
-*   **Backend:** Java 25, Spring Boot 4.0.2, Spring Cloud.
+*   **Backend:** Java 25, spring boot 4.0.2 3.5.10, Spring Cloud.
 *   **Database:** PostgreSQL 18 (단일 인스턴스, 서비스별 스키마 분리), Redis 7.x (캐시, 대기열, 락).
 *   **Messaging:** Apache Kafka 4.x (이벤트 기반 아키텍처).
 *   **Cloud/DevOps:** AWS (Free Tier 최적화: RDS t3.micro, EC2 t2.micro), LocalStack (로컬 개발), Docker Compose.
