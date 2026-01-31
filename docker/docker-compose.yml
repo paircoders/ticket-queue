@@ -81,6 +81,20 @@ services:
     networks:
       - ticket-network
 
+  # Kafka 토픽 자동 생성 (Init Container)
+  kafka-init:
+    image: apache/kafka:4.1.1
+    container_name: ticket-kafka-init
+    depends_on:
+      - kafka
+    volumes:
+      - ./kafka_init:/opt/kafka_init
+    entrypoint: ["/bin/bash", "/opt/kafka_init/init_topics.sh"]
+    environment:
+      - TZ=Asia/Seoul
+    networks:
+      - ticket-network
+
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
     container_name: ticket-kafka-ui
