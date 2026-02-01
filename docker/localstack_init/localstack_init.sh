@@ -35,27 +35,25 @@ create_secret() {
 # 3. 각 서비스별 시크릿 등록 실행
 
 # (1) User Service
-create_secret "user" "postgres_user_pw" "MSA User DB Secret"
+create_secret "user" "postgres_user_pw" "Secrets for User Service"
 
 # (2) Event Service
-create_secret "event" "postgres_event_pw" "MSA Event DB Secret"
+create_secret "event" "postgres_event_pw" "Secrets for Event Service"
 
-# (3) Queue Service
-create_secret "queue" "postgres_queue_pw" "MSA Queue DB Secret"
+# (3) Reservation Service
+create_secret "reservation" "postgres_reservation_pw" "Secrets for Reservation Service"
 
-# (4) Reservation Service
-create_secret "reservation" "postgres_reservation_pw" "MSA Reservation DB Secret"
+# (4) Payment Service
+create_secret "payment" "postgres_payment_pw" "Secrets for Payment Service"
 
-# (5) Payment Service
-create_secret "payment" "postgres_payment_pw" "MSA Payment DB Secret"
-
-# (6) Valkey (Redis) - 필요하다면 등록
+# (5) Common secrets
 VALKEY_PW=$(cat /run/secrets/valkey_pw)
+INTERNAL_API_KEY=$(cat /run/secrets/internal_api_key)
+JWT_SECRET=$(cat /run/secrets/jwt_secret)
 awslocal secretsmanager create-secret \
-    --name "valkey/secure-config" \
-    --description "MSA Valkey Password" \
-    --secret-string "{\"valkey_password\":\"$VALKEY_PW\"}"
-
+    --name "common/secure-config" \
+    --description "Common secrets for all services" \
+    --secret-string "{\"valkey_password\":\"$VALKEY_PW\", \"internal_api_key\":\"$INTERNAL_API_KEY\", \"jwt_secret\":\"$JWT_SECRET\"}"
 
 echo "[SecretsManager] All secrets created successfully."
 awslocal secretsmanager list-secrets

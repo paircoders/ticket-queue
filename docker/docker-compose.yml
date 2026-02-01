@@ -19,7 +19,6 @@ services:
       - postgres_ticket_pw
       - postgres_user_pw
       - postgres_event_pw
-      - postgres_queue_pw
       - postgres_reservation_pw
       - postgres_payment_pw
 
@@ -50,7 +49,7 @@ services:
       # KRaft 설정 (Controller + Broker 역할 동시 수행)
       - KAFKA_NODE_ID=1 # 클러스터 내 브로커 고유 식별자 (ID)
       - KAFKA_PROCESS_ROLES=broker,controller # 역할: 브로커(데이터 처리)와 컨트롤러(관리자) 동시 수행
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093 # 관리자 투표권자 목록 (ID@호스트:포트) -> 자기 자신(1번) 지정
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@ticket-kafka:9093 # 관리자 투표권자 목록 (ID@호스트:포트) -> 자기 자신(1번) 지정
 
       # 리스너 설정
       # EXTERNAL: 로컬 PC(IntelliJ) 요청 처리 (9092)
@@ -133,7 +132,6 @@ services:
     secrets:
       - postgres_user_pw
       - postgres_event_pw
-      - postgres_queue_pw
       - postgres_reservation_pw
       - postgres_payment_pw
       - valkey_pw
@@ -155,8 +153,6 @@ secrets:
       file: ./secrets/postgres_user_pw.txt
     postgres_event_pw:
       file: ./secrets/postgres_event_pw.txt
-    postgres_queue_pw:
-      file: ./secrets/postgres_queue_pw.txt
     postgres_reservation_pw:
       file: ./secrets/postgres_reservation_pw.txt
     postgres_payment_pw:
@@ -165,3 +161,5 @@ secrets:
       file: ./secrets/valkey_pw.txt
     internal_api_key:
       file: ./secrets/internal_api_key.txt
+    jwt_secret:
+      file: ./secrets/jwt_secret.txt

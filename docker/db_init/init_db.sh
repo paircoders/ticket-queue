@@ -33,10 +33,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     \$\$ LANGUAGE plpgsql;
     ALTER FUNCTION event_service.update_timestamp() OWNER TO event_svc_user;
 
-    -- Queue Service
-    CREATE USER queue_svc_user WITH PASSWORD '$QUEUE_SVC_PW';
-    CREATE SCHEMA IF NOT EXISTS queue_service AUTHORIZATION queue_svc_user;
-
     -- Reservation Service
     CREATE USER reservation_svc_user WITH PASSWORD '$RESERVATION_SVC_PW';
     CREATE SCHEMA IF NOT EXISTS reservation_service AUTHORIZATION reservation_svc_user;
