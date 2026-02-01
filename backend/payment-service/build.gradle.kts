@@ -10,15 +10,8 @@ dependencies {
     // Common module
     implementation(project(":common"))
 
-    // Kotlin
-    implementation(libs.bundles.kotlin)
-
     // Spring Boot
-    implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.webflux)  // For WebClient
-    implementation(libs.spring.boot.starter.data.jpa)
-    implementation(libs.spring.boot.starter.validation)
-    implementation(libs.spring.boot.starter.actuator)
 
     // Kafka
     implementation(libs.spring.kafka)
@@ -29,9 +22,6 @@ dependencies {
     // OpenFeign for service-to-service calls
     implementation(libs.spring.cloud.starter.openfeign)
     implementation(libs.spring.cloud.starter.circuitbreaker.resilience4j)
-
-    // Database
-    runtimeOnly(libs.postgresql)
 
     // Test
     testImplementation(libs.bundles.test.base)

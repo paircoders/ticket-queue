@@ -10,15 +10,6 @@ dependencies {
     // Common module
     implementation(project(":common"))
 
-    // Kotlin
-    implementation(libs.bundles.kotlin)
-
-    // Spring Boot
-    implementation(libs.spring.boot.starter.web)
-    implementation(libs.spring.boot.starter.data.jpa)
-    implementation(libs.spring.boot.starter.validation)
-    implementation(libs.spring.boot.starter.actuator)
-
     // Redis with Redisson for distributed locks
     implementation(libs.redisson.spring.boot.starter)
 
@@ -27,9 +18,6 @@ dependencies {
 
     // OpenFeign for service-to-service calls
     implementation(libs.spring.cloud.starter.openfeign)
-
-    // Database
-    runtimeOnly(libs.postgresql)
 
     // Test
     testImplementation(libs.bundles.test.base)
