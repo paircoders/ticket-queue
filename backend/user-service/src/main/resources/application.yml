@@ -6,6 +6,7 @@ spring:
     name: user-service
   config:
     import:
+      - "optional:classpath:/application-common-${spring.profiles.active}.yml"
       - "optional:aws-secretsmanager:user-svc/secure-config"
       - "optional:aws-secretsmanager:common/secure-config"
 

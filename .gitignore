@@ -64,8 +64,8 @@ out/
 Thumbs.db
 
 # Application
-**/application-local.yml
-**/application-local.properties
+.env
+*.env
 
 # Test
 **/test-results/

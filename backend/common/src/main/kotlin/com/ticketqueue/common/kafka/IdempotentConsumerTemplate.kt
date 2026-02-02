@@ -2,10 +2,12 @@ package com.ticketqueue.common.kafka
 
 import com.ticketqueue.common.event.BaseEvent
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
 
 @Component
+@ConditionalOnClass(name = ["org.springframework.kafka.support.Acknowledgment"])
 class IdempotentConsumerTemplate(
     private val processedEventService: ProcessedEventService,
 ) {
