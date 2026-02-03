@@ -4,12 +4,11 @@ server:
 spring:
   application:
     name: user-service
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/ticketing
-    username: user_svc_user
-    password: ${DB_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
+  config:
+    import:
+      - "optional:classpath:/application-common-${spring.profiles.active}.yml"
+      - "optional:aws-secretsmanager:user-svc/secure-config"
+      - "optional:aws-secretsmanager:common/secure-config"
 
   jpa:
     hibernate:
@@ -22,19 +21,14 @@ spring:
     show-sql: true
     open-in-view: false
 
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
 jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-here-for-development-only}
+  secret: ${jwt_secret}
   access-token-expiry: 3600000  # 1 hour in milliseconds
   refresh-token-expiry: 604800000  # 7 days in milliseconds
 
 internal:
   api:
-    key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
+    key: ${internal_api_key}
 
 management:
   endpoints:

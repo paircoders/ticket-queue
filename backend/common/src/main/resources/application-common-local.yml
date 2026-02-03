@@ -1,0 +1,10 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  data:
+    redis:
+      host: 192.168.50.2
+      port: 6379
+      password: ${valkey_password}

@@ -4,6 +4,7 @@ import com.ticketqueue.common.outbox.ProcessedEvent
 import com.ticketqueue.common.outbox.ProcessedEventId
 import com.ticketqueue.common.outbox.ProcessedEventRepository
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
@@ -12,6 +13,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 @Service
+@ConditionalOnClass(name = ["org.springframework.kafka.support.Acknowledgment"])
 class ProcessedEventService(
     private val processedEventRepository: ProcessedEventRepository,
 ) {
