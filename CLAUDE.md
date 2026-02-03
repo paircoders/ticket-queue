@@ -79,20 +79,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 기술 스택
 
 ### Backend
-- Java, spring boot 4.0.2 3.5.10, Spring Cloud Gateway
-- PostgreSQL 18 (단일 인스턴스, 스키마 분리)
-- Redis 7.x (캐시, 대기열, 분산 락)
-- Apache Kafka 4.x KRaft 모드 (이벤트 스트리밍, Zookeeper 불필요)
-- Redisson (분산 락)
-- Resilience4j (Circuit Breaker, Rate Limiter)
+- **Language**: Kotlin (Java 21 기반)
+- **Framework**: Spring Boot 3.5.10, Spring Cloud Gateway
+- **Build Tool**: Gradle (Kotlin DSL)
+- **Database**: PostgreSQL 18 (단일 인스턴스, 스키마 분리)
+- **Cache**: Valkey 8.1.5 (Redis 대체, 캐시, 대기열, 분산 락)
+- **Messaging**: Apache Kafka 4.1.1 KRaft 모드 (이벤트 스트리밍, Zookeeper 불필요)
+- **Distributed Lock**: Redisson
+- **Resilience**: Resilience4j (Circuit Breaker, Rate Limiter)
 
 ### Frontend (미구현)
 - Next.js 14+ (Vercel 배포 예정)
 
 ### Infrastructure
-- AWS: ECS/EKS 타겟, RDS PostgreSQL, ElastiCache Redis, EC2 (Kafka)
-- LocalStack (로컬 AWS 모킹)
-- Docker & Docker Compose
+- **Local**: Docker Compose (PostgreSQL, Valkey, Kafka 통합 환경)
+- **Target**: AWS EC2 단일 인스턴스 배포 (비용 최적화)
+- **Monitoring**: 계획 중 (CloudWatch Logs/Metrics)
 
 ## 아키텍처 핵심 패턴
 
@@ -282,19 +284,102 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 실제 상용 환경에서는 TDE 또는 컬럼 암호화 필요
 - **1인 1계정 강제**: `ci` 컬럼 Unique Constraint
 
+## 개발 환경 설정 및 실행
+
+### 사전 요구사항
+- **JDK 21** 이상
+- **Docker & Docker Compose** 설치
+- **Gradle** (프로젝트 내 Wrapper 사용 가능)
+
+### 로컬 환경 실행 순서
+
+1. **인프라 컨테이너 실행**
+   ```bash
+   cd docker
+   docker-compose up -d
+   ```
+   - PostgreSQL (5432 포트), Valkey (6379 포트), Kafka (9092 포트) 실행
+   - 초기 DB 스키마는 `docker/db_init/` 스크립트로 자동 생성
+
+2. **백엔드 서비스 빌드**
+   ```bash
+   cd backend
+   ./gradlew build
+   ```
+
+3. **각 서비스 실행** (IDE 또는 Gradle)
+   ```bash
+   # API Gateway
+   ./gradlew :api-gateway:bootRun
+
+   # User Service
+   ./gradlew :user-service:bootRun
+
+   # Event Service
+   ./gradlew :event-service:bootRun
+
+   # Queue Service
+   ./gradlew :queue-service:bootRun
+
+   # Reservation Service
+   ./gradlew :reservation-service:bootRun
+
+   # Payment Service
+   ./gradlew :payment-service:bootRun
+   ```
+
+4. **전체 테스트 실행**
+   ```bash
+   ./gradlew test
+   ```
+
+5. **통합 테스트** (TestContainers 사용 시)
+   ```bash
+   ./gradlew integrationTest
+   ```
+
+### 프로젝트 구조
+```
+ticket-queue/
+├── backend/
+│   ├── common/                    # 공통 모듈 (Outbox, Processed Events 등)
+│   ├── api-gateway/               # API Gateway 서비스
+│   ├── user-service/              # User Service
+│   ├── event-service/             # Event Service
+│   ├── queue-service/             # Queue Service
+│   ├── reservation-service/       # Reservation Service
+│   ├── payment-service/           # Payment Service
+│   ├── build.gradle.kts           # 루트 빌드 스크립트
+│   └── settings.gradle.kts        # 서브프로젝트 설정
+├── docker/
+│   ├── docker-compose.yml         # 인프라 컨테이너 설정
+│   └── db_init/                   # PostgreSQL 초기화 스크립트
+├── docs/
+│   ├── REQUIREMENTS.md            # 요구사항 명세 (110개)
+│   ├── ARCHITECTURE.md            # 아키텍처 문서 인덱스
+│   ├── architecture/              # 상세 아키텍처 문서
+│   └── specification/             # API 명세서
+├── frontend/                      # Next.js 프론트엔드 (미구현)
+└── CLAUDE.md                      # 이 파일
+```
+
 ### 개발 가이드라인
 
-### 코드 스타일
-- Java 표준 컨벤션 (Google Style Guide 권장)
-- Commit Messages: Conventional Commits
+#### 코드 스타일
+- **Kotlin 코딩 컨벤션** 준수 (IntelliJ IDEA 기본 포맷터 사용)
+- **Commit Messages**: Conventional Commits 형식
+  - `feat:`, `fix:`, `refactor:`, `chore:`, `docs:` 등
 
-### 테스트 전략 (계획)
-- **Unit Tests**: JUnit 5, Mockito
-- **Integration Tests**: TestContainers (PostgreSQL, Redis, Kafka)
+#### 테스트 전략 (계획)
+- **Unit Tests**: JUnit 5, Mockito, Kotest
+- **Integration Tests**: TestContainers (PostgreSQL, Valkey, Kafka)
 - **Load Testing**: k6 (대기열 및 예매 시나리오 집중)
 
-### 브랜치 전략 (계획)
-- Gitflow 또는 Trunk-based development (TBD)
+#### 브랜치 전략 (계획)
+- **main**: 프로덕션 릴리스
+- **develop**: 개발 통합 브랜치
+- **feature/***: 기능 개발
+- **hotfix/***: 긴급 수정
 
 ## 주의사항 및 제약사항
 
@@ -372,6 +457,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **DLQ 재시도 전략**: 지수 백오프 3회, 재시도 불가능 예외는 즉시 DLQ
 7. **보상 토픽 제외**: `payment.events`의 PaymentFailed가 보상 트리거 (YAGNI 원칙)
 8. **개인정보 평문 저장**: 암호화 복잡도 제거, 아키텍처/로직 검증 집중 (포트폴리오 최적화)
+
+---
+
+## 자주 사용하는 명령어
+
+### 개발 중 자주 사용
+```bash
+# 인프라 재시작 (DB/Redis/Kafka 초기화)
+cd docker && docker-compose down -v && docker-compose up -d
+
+# 특정 서비스만 빌드 및 실행
+./gradlew :user-service:clean :user-service:build :user-service:bootRun
+
+# 전체 프로젝트 클린 빌드
+./gradlew clean build
+
+# 테스트 제외 빌드 (개발 중 빠른 빌드)
+./gradlew build -x test
+
+# 특정 서비스 테스트만 실행
+./gradlew :reservation-service:test
+
+# 로그 레벨 변경하여 실행 (디버깅)
+./gradlew :queue-service:bootRun --debug
+```
+
+### Docker 관련
+```bash
+# 모든 컨테이너 로그 확인
+docker-compose logs -f
+
+# 특정 컨테이너 로그 확인
+docker-compose logs -f postgres
+docker-compose logs -f kafka
+
+# 컨테이너 상태 확인
+docker-compose ps
+
+# PostgreSQL 접속 (데이터 확인)
+docker exec -it ticket-postgres psql -U ticketing_admin -d ticketing
+
+# Valkey CLI 접속
+docker exec -it ticket-valkey valkey-cli
+```
+
+### Kafka 관련 (디버깅)
+```bash
+# Kafka 컨테이너 접속
+docker exec -it ticket-kafka bash
+
+# Topic 목록 확인
+kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# 특정 Topic 메시지 확인
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic payment.events --from-beginning
+
+# Consumer Group 상태 확인
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group reservation-payment-consumer
+```
 
 ---
 

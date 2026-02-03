@@ -1,0 +1,24 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: api-gateway-test
+
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 5s
+
+  # Disable Redis for tests - use embedded or mock
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
