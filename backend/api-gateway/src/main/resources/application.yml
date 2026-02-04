@@ -5,37 +5,36 @@ spring:
   application:
     name: api-gateway
 
-  profiles:
-    active: local
-
   cloud:
     gateway:
-      routes:
-        # 기본 라우트 구조 정의 (세부 필터는 향후 추가 예정)
-        - id: user-service
-          uri: ${SERVICE_URI_USER:http://localhost:8081}
-          predicates:
-            - Path=/auth/**,/users/**
+      server:
+        webflux:
+          routes:
+            # 기본 라우트 구조 정의 (세부 필터는 향후 추가 예정)
+            - id: user-service
+              uri: ${SERVICE_URI_USER:http://192.168.50.2:8081}
+              predicates:
+                - Path=/auth/**,/users/**
 
-        - id: event-service
-          uri: ${SERVICE_URI_EVENT:http://localhost:8082}
-          predicates:
-            - Path=/events/**,/venues/**
+            - id: event-service
+              uri: ${SERVICE_URI_EVENT:http://192.168.50.2:8082}
+              predicates:
+                - Path=/events/**,/venues/**
 
-        - id: queue-service
-          uri: ${SERVICE_URI_QUEUE:http://localhost:8083}
-          predicates:
-            - Path=/queue/**
+            - id: queue-service
+              uri: ${SERVICE_URI_QUEUE:http://192.168.50.2:8083}
+              predicates:
+                - Path=/queue/**
 
-        - id: reservation-service
-          uri: ${SERVICE_URI_RESERVATION:http://localhost:8084}
-          predicates:
-            - Path=/reservations/**
+            - id: reservation-service
+              uri: ${SERVICE_URI_RESERVATION:http://192.168.50.2:8084}
+              predicates:
+                - Path=/reservations/**
 
-        - id: payment-service
-          uri: ${SERVICE_URI_PAYMENT:http://localhost:8085}
-          predicates:
-            - Path=/payments/**
+            - id: payment-service
+              uri: ${SERVICE_URI_PAYMENT:http://192.168.50.2:8085}
+              predicates:
+                - Path=/payments/**
 
 # 기본 Resilience4j 설정 구조
 resilience4j:
@@ -51,11 +50,6 @@ management:
         include: health,info,gateway
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
     gateway:
-      enabled: true
-
-logging:
-  level:
-    root: INFO
-    com.ticketqueue.gateway: INFO
+      access: read_only

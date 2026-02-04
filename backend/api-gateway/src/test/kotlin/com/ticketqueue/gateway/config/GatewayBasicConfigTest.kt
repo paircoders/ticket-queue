@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.cloud.gateway.route.RouteLocator
+import org.springframework.test.context.ActiveProfiles
 
 /**
  * API Gateway 기본 라우트 설정 테스트
@@ -13,6 +14,7 @@ import org.springframework.cloud.gateway.route.RouteLocator
  * - 5개 서비스 라우트 등록 검증
  */
 @SpringBootTest
+@ActiveProfiles("test")
 class GatewayBasicConfigTest {
 
     @Autowired

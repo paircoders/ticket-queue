@@ -1,0 +1,17 @@
+# Local development profile
+# 로컬 개발 환경 전용 설정
+
+logging:
+  level:
+    root: INFO
+    com.ticketqueue.gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
