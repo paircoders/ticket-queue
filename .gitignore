@@ -70,3 +70,7 @@ Thumbs.db
 # Test
 **/test-results/
 **/test-output/
+
+# Etc
+.claude
+.mcp.json

@@ -7,102 +7,49 @@ spring:
 
   cloud:
     gateway:
-      routes:
-        - id: user-service
-          uri: http://localhost:8081
-          predicates:
-            - Path=/auth/**, /users/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: userServiceCircuitBreaker
-                fallbackUri: forward:/fallback/user
+      server:
+        webflux:
+          routes:
+            # 기본 라우트 구조 정의 (세부 필터는 향후 추가 예정)
+            - id: user-service
+              uri: ${SERVICE_URI_USER:http://192.168.50.2:8081}
+              predicates:
+                - Path=/auth/**,/users/**
 
-        - id: event-service
-          uri: http://localhost:8082
-          predicates:
-            - Path=/events/**, /venues/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: eventServiceCircuitBreaker
-                fallbackUri: forward:/fallback/event
+            - id: event-service
+              uri: ${SERVICE_URI_EVENT:http://192.168.50.2:8082}
+              predicates:
+                - Path=/events/**,/venues/**
 
-        - id: queue-service
-          uri: http://localhost:8083
-          predicates:
-            - Path=/queue/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: queueServiceCircuitBreaker
-                fallbackUri: forward:/fallback/queue
+            - id: queue-service
+              uri: ${SERVICE_URI_QUEUE:http://192.168.50.2:8083}
+              predicates:
+                - Path=/queue/**
 
-        - id: reservation-service
-          uri: http://localhost:8084
-          predicates:
-            - Path=/reservations/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: reservationServiceCircuitBreaker
-                fallbackUri: forward:/fallback/reservation
+            - id: reservation-service
+              uri: ${SERVICE_URI_RESERVATION:http://192.168.50.2:8084}
+              predicates:
+                - Path=/reservations/**
 
-        - id: payment-service
-          uri: http://localhost:8085
-          predicates:
-            - Path=/payments/**
-          filters:
-            - name: CircuitBreaker
-              args:
-                name: paymentServiceCircuitBreaker
-                fallbackUri: forward:/fallback/payment
+            - id: payment-service
+              uri: ${SERVICE_URI_PAYMENT:http://192.168.50.2:8085}
+              predicates:
+                - Path=/payments/**
 
-      # Block internal API access
-      default-filters:
-        - name: RewritePath
-          args:
-            regexp: /internal/.*
-            replacement: /404
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
+# 기본 Resilience4j 설정 구조
 resilience4j:
   circuitbreaker:
     configs:
       default:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50
-        waitDurationInOpenState: 30s
-        permittedNumberOfCallsInHalfOpenState: 3
-    instances:
-      userServiceCircuitBreaker:
-        baseConfig: default
-      eventServiceCircuitBreaker:
-        baseConfig: default
-      queueServiceCircuitBreaker:
-        baseConfig: default
-        waitDurationInOpenState: 10s
-      reservationServiceCircuitBreaker:
-        baseConfig: default
-      paymentServiceCircuitBreaker:
-        baseConfig: default
-        waitDurationInOpenState: 60s
+        registerHealthIndicator: true
 
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, gateway, circuitbreakers
+        include: health,info,gateway
   endpoint:
     health:
-      show-details: always
-
-logging:
-  level:
-    org.springframework.cloud.gateway: DEBUG
-    io.github.resilience4j: DEBUG
+      show-details: when-authorized
+    gateway:
+      access: read_only

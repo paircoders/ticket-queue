@@ -13,16 +13,15 @@ dependencies {
     implementation(libs.spring.cloud.starter.gateway)
 
     // Resilience4j
-    implementation(libs.bundles.resilience4j)
-
-    // Redis for rate limiting
-    implementation(libs.spring.boot.starter.data.redis)
+    implementation(libs.resilience4j.reactor)
+    implementation(libs.spring.cloud.starter.circuitbreaker.resilience4j)
 
     // Actuator
     implementation(libs.spring.boot.starter.actuator)
 
     // Test
     testImplementation(libs.bundles.test.base)
+    testImplementation(libs.reactor.test)
 }
 
 dependencyManagement {

@@ -49,7 +49,7 @@ spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
 # Spring Cloud
-spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway" }
+spring-cloud-starter-gateway = { module = "org.springframework.cloud:spring-cloud-starter-gateway-server-webflux" }
 spring-cloud-starter-openfeign = { module = "org.springframework.cloud:spring-cloud-starter-openfeign" }
 spring-cloud-starter-circuitbreaker-resilience4j = { module = "org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j" }
 spring-cloud-aws-dependencies = { module = "io.awspring.cloud:spring-cloud-aws-dependencies", version.ref = "springCloudAws" }
@@ -73,6 +73,7 @@ jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }
 resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
 resilience4j-ratelimiter = { module = "io.github.resilience4j:resilience4j-ratelimiter", version.ref = "resilience4j" }
+resilience4j-reactor = { module = "io.github.resilience4j:resilience4j-reactor", version.ref = "resilience4j" }
 
 # Test
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
@@ -83,6 +84,7 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
+reactor-test = { module = "io.projectreactor:reactor-test" }
 
 [bundles]
 kotlin = ["kotlin-reflect", "kotlin-stdlib", "jackson-module-kotlin"]
