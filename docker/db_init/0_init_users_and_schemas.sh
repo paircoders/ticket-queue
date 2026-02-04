@@ -3,7 +3,6 @@ set -e
 
 USER_SVC_PW=$(cat /run/secrets/postgres_user_pw)
 EVENT_SVC_PW=$(cat /run/secrets/postgres_event_pw)
-QUEUE_SVC_PW=$(cat /run/secrets/postgres_queue_pw)
 RESERVATION_SVC_PW=$(cat /run/secrets/postgres_reservation_pw)
 PAYMENT_SVC_PW=$(cat /run/secrets/postgres_payment_pw)
 
@@ -57,7 +56,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
     -- Common
     CREATE SCHEMA IF NOT EXISTS common;
-    GRANT ALL ON SCHEMA common TO user_svc_user, event_svc_user, queue_svc_user, reservation_svc_user, payment_svc_user;
+    GRANT ALL ON SCHEMA common TO user_svc_user, event_svc_user, reservation_svc_user, payment_svc_user;
 
 EOSQL
 

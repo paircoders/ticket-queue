@@ -104,7 +104,7 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA common TO user_svc_user, event_svc_
 
 ```mermaid
 erDiagram
-    users ||--o{ auth_tokens : has
+    users ||--o{ refresh_tokens : has
     users ||--o{ login_history : has
 
     users {
@@ -126,7 +126,7 @@ erDiagram
         timestamp deleted_at
     }
 
-    auth_tokens {
+    refresh_tokens {
         uuid id PK
         uuid user_id FK
         varchar refresh_token UK
@@ -225,7 +225,7 @@ COMMENT ON COLUMN user_service.users.email IS '이메일. 포트폴리오용으�
 - **개인정보**: 실제 상용 서비스에서는 AES-256 등의 컬럼 암호화나 RDS TDE가 필요하지만, 본 프로젝트에서는 아키텍처 검증에 집중하기 위해 **평문 저장**을 원칙
 - **접근 제어**: DB 접근은 내부망(Docker Network)으로 제한
 
-**`auth_tokens` 테이블:**
+**`refresh_tokens` 테이블:**
 - **refresh_token**: Refresh Token (Unique, 7일 TTL)
 - **token_family**: RTR (Refresh Token Rotation) 추적용 UUID - 로그인마다 발급됨
 - **access_token_jti**: Access Token의 JTI (JWT ID) - 선택적 추적
@@ -242,19 +242,19 @@ COMMENT ON COLUMN user_service.users.email IS '이메일. 포트폴리오용으�
 <summary>SQL</summary>
 
 ```sql
--- auth_tokens 테이블
-CREATE TABLE user_service.auth_tokens (
+-- refresh_tokens 테이블
+CREATE TABLE user_service.refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES user_service.users(id) ON DELETE CASCADE,
-    refresh_token VARCHAR(500) NOT NULL UNIQUE,
     token_family UUID NOT NULL,
-    access_token_jti VARCHAR(100),
+    refresh_token VARCHAR(512) NOT NULL,
+    access_token_jti VARCHAR(255),
     issued_at TIMESTAMP NOT NULL DEFAULT now(),
     expires_at TIMESTAMP NOT NULL,
-    revoked BOOLEAN DEFAULT false,
+    revoked BOOLEAN NOT NULL DEFAULT false,
     revoked_at TIMESTAMP,
 
-    CONSTRAINT chk_tokens_expires CHECK (expires_at > issued_at),
+    CONSTRAINT refresh_tokens_token_unique UNIQUE (refresh_token),
     CONSTRAINT chk_tokens_revoked CHECK (
         (revoked = false AND revoked_at IS NULL) OR
         (revoked = true AND revoked_at IS NOT NULL)
@@ -262,13 +262,17 @@ CREATE TABLE user_service.auth_tokens (
 );
 
 -- 인덱스
-CREATE INDEX idx_auth_tokens_user_revoked ON user_service.auth_tokens(user_id, revoked) WHERE revoked = false;
-CREATE INDEX idx_auth_tokens_family ON user_service.auth_tokens(token_family);
-CREATE INDEX idx_auth_tokens_expires ON user_service.auth_tokens(expires_at) WHERE revoked = false;
+CREATE INDEX idx_refresh_tokens_user_revoked ON user_service.refresh_tokens(user_id, revoked) WHERE revoked = false;
+CREATE INDEX idx_refresh_tokens_family ON user_service.refresh_tokens(token_family);
+CREATE INDEX idx_refresh_tokens_expires ON user_service.refresh_tokens(expires_at) WHERE revoked = false;
 
 -- 테이블 코멘트
-COMMENT ON TABLE user_service.auth_tokens IS 'Refresh Token 관리. RTR (Refresh Token Rotation) 지원.';
-COMMENT ON COLUMN user_service.auth_tokens.token_family IS 'RTR 추적용 UUID. 동일 세션 토큰 그룹핑.';
+COMMENT ON TABLE user_service.refresh_tokens IS 'Refresh Token 관리. RTR (Refresh Token Rotation) 지원.';
+COMMENT ON COLUMN user_service.refresh_tokens.token_family IS 'RTR 추적용 UUID (동일 세션 그룹핑)';
+COMMENT ON COLUMN user_service.refresh_tokens.refresh_token IS '발급된 Refresh Token 문자열';
+COMMENT ON COLUMN user_service.refresh_tokens.access_token_jti IS '발급된 Access Token의 고유 식별자(JTI). 로그아웃/블랙리스트 관리용.';
+COMMENT ON COLUMN user_service.refresh_tokens.revoked IS '토큰 무효화 여부 (로그아웃, RTR 교체, 탈취 감지 시 true로 변경)';
+COMMENT ON COLUMN user_service.refresh_tokens.revoked_at IS '토큰 무효화 일시';
 ```
 </details>
 
