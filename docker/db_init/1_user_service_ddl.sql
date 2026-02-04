@@ -25,6 +25,9 @@ CREATE TABLE user_service.users (
     CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'DORMANT', 'DELETED'))
 );
 
+-- 휴면 계정 배치 최적화
+CREATE INDEX idx_users_last_login ON user_service.users(last_login_at) WHERE status = 'ACTIVE';
+
 -- updated_at Trigger
 CREATE TRIGGER trg_users_updated_at
 BEFORE UPDATE ON user_service.users
@@ -67,6 +70,13 @@ CREATE TABLE user_service.refresh_tokens (
         (revoked = true AND revoked_at IS NOT NULL)
     )
 );
+
+-- 사용자 기준 일괄 무표화
+CREATE INDEX idx_refresh_tokens_user_revoked ON user_service.refresh_tokens(user_id, revoked) WHERE revoked = false;
+-- 재사용 감지 시 token_family 일괄 무효화
+CREATE INDEX idx_refresh_tokens_family ON user_service.refresh_tokens(token_family);
+-- 만료 토큰 삭제 배치
+CREATE INDEX idx_refresh_tokens_expires ON user_service.refresh_tokens(expires_at) WHERE revoked = false;
 
 COMMENT ON TABLE user_service.refresh_tokens IS 'Refresh Token 관리';
 COMMENT ON COLUMN user_service.refresh_tokens.id IS '토큰관리 UUID';

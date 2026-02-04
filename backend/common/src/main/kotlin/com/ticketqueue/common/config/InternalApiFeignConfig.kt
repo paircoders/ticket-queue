@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 @ConditionalOnClass(RequestInterceptor::class)
 class InternalApiFeignConfig(
-    @Value("\${internal.api.key:}")
+    @Value("\${internal_api_key:}")
     private val internalApiKey: String
 ) {
 
