@@ -6,7 +6,7 @@ spring:
     name: event-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ticketing
+    url: jdbc:postgresql://192.168.50.2:5432/ticket_queue
     username: event_svc_user
     password: ${DB_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
@@ -24,11 +24,11 @@ spring:
 
   data:
     redis:
-      host: localhost
+      host: 192.168.50.2
       port: 6379
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: 192.168.50.2:9092
     consumer:
       group-id: event-service
       auto-offset-reset: earliest

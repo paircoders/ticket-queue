@@ -1,0 +1,19 @@
+# Local Development Environment Configuration
+# Usage: Run with --spring.profiles.active=local
+
+spring:
+  datasource:
+    url: jdbc:postgresql://192.168.50.2:5432/ticket_queue
+
+  data:
+    redis:
+      host: 192.168.50.2
+
+  kafka:
+    bootstrap-servers: 192.168.50.2:9092
+
+logging:
+  level:
+    com.ticketqueue.event: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

@@ -12,6 +12,7 @@ dependencies {
 
     // Spring Boot
     implementation(libs.spring.boot.starter.data.redis)
+    implementation(libs.spring.boot.starter.security)
 
     // Kafka
     implementation(libs.spring.kafka)
