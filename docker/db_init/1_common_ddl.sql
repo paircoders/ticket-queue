@@ -33,7 +33,7 @@ COMMENT ON COLUMN common.outbox_events.payload IS '이벤트 데이터 (JSONB). 
 COMMENT ON COLUMN common.outbox_events.created_at IS '이벤트 생성 일시';
 COMMENT ON COLUMN common.outbox_events.published IS '이벤트 발행 여부 (false: 미발행, true: 발행 완료)';
 COMMENT ON COLUMN common.outbox_events.published_at IS '이벤트 발행 일시';
-COMMENT ON COLUMN common.outbox_events.retry_count IS '발행 실패 시 재시도 횟수 (최대 10회)';
+COMMENT ON COLUMN common.outbox_events.retry_count IS '발행 실패 시 재시도 횟수 (최대 3회)';
 COMMENT ON COLUMN common.outbox_events.last_error IS '마지막 발행 실패 에러 메시지';
 
 
