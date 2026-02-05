@@ -26,10 +26,12 @@ class GatewayBasicConfigTest {
         val routes = routeLocator.routes.collectList().block()!!
 
         // then
-        assertThat(routes.size).isEqualTo(5)
+        // /internal/** 차단 라우트 추가로 총 6개
+        assertThat(routes.size).isEqualTo(6)
 
         val routeIds = routes.map { it.id }
         assertThat(routeIds).containsExactlyInAnyOrder(
+            "block-internal-api",  // 내부 API 차단
             "user-service",
             "event-service",
             "queue-service",

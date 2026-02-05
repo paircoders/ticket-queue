@@ -10,6 +10,16 @@ spring:
       server:
         webflux:
           routes:
+            # /internal/** 차단 라우트 (최우선 순위)
+            # 내부 API는 외부 접근 차단
+            - id: block-internal-api
+              uri: no://op
+              predicates:
+                - Path=/internal/**
+              filters:
+                - SetStatus=404
+              order: -1
+
             # 기본 라우트 구조 정의 (세부 필터는 향후 추가 예정)
             - id: user-service
               uri: ${SERVICE_URI_USER:http://192.168.50.2:8081}

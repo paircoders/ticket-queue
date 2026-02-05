@@ -10,6 +10,16 @@ spring:
       server:
         webflux:
           routes:
+            # /internal/** 차단 라우트 (테스트 환경)
+            # 내부 API는 외부 접근 차단
+            - id: block-internal-api
+              uri: no://op
+              predicates:
+                - Path=/internal/**
+              filters:
+                - SetStatus=404
+              order: -1
+
             - id: user-service
               uri: http://localhost:8081
               predicates:
