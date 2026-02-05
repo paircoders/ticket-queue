@@ -4,12 +4,11 @@ server:
 spring:
   application:
     name: event-service
-
-  datasource:
-    url: jdbc:postgresql://192.168.50.2:5432/ticket_queue
-    username: event_svc_user
-    password: ${DB_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
+  config:
+    import:
+      - "optional:classpath:/application-common-${spring.profiles.active}.yml"
+      - "optional:aws-secretsmanager:event-svc/secure-config"
+      - "optional:aws-secretsmanager:common/secure-config"
 
   jpa:
     hibernate:
@@ -26,19 +25,6 @@ spring:
     redis:
       host: 192.168.50.2
       port: 6379
-
-  kafka:
-    bootstrap-servers: 192.168.50.2:9092
-    consumer:
-      group-id: event-service
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: com.ticketqueue.*
-    listener:
-      ack-mode: MANUAL_IMMEDIATE
 
 cache:
   event:

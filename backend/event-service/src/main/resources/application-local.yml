@@ -2,15 +2,28 @@
 # Usage: Run with --spring.profiles.active=local
 
 spring:
-  datasource:
-    url: jdbc:postgresql://192.168.50.2:5432/ticket_queue
+  config:
+    activate:
+      on-profile: local
 
-  data:
-    redis:
-      host: 192.168.50.2
+  datasource:
+    url: jdbc:postgresql://192.168.50.2:5432/ticket_queue?currentSchema=event_service,common
+    username: event_svc_user
+    password: ${db_password}
+    driver-class-name: org.postgresql.Driver
 
   kafka:
     bootstrap-servers: 192.168.50.2:9092
+    consumer:
+      group-id: event-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.ticketqueue.*
+    listener:
+      ack-mode: MANUAL_IMMEDIATE
 
 logging:
   level:
