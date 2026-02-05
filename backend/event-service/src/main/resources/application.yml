@@ -21,11 +21,6 @@ spring:
     show-sql: true
     open-in-view: false
 
-  data:
-    redis:
-      host: 192.168.50.2
-      port: 6379
-
 cache:
   event:
     ttl: 300  # 5 minutes in seconds
