@@ -51,14 +51,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 서비스별 책임 및 담당자
 
-| 서비스 | 담당자 | 핵심 책임 | 데이터 스키마 |
-|--------|--------|----------|--------------|
-| **API Gateway** | A개발자 | 라우팅, JWT 검증, Rate Limiting, Circuit Breaker | 없음 (Stateless) |
-| **User Service** | B개발자 | 인증(JWT), 회원관리, OAuth2, reCAPTCHA | `user_service` |
-| **Event Service** | A개발자 | 공연/공연장/좌석 관리, Redis 캐싱 | `event_service` |
-| **Queue Service** | A개발자 | Redis Sorted Set 기반 대기열, Token 발급 | Redis 전용 |
-| **Reservation Service** | B개발자 | 좌석 선점(분산 락), 예매 관리 | `reservation_service` |
-| **Payment Service** | B개발자 | PortOne 연동, SAGA 패턴, 보상 트랜잭션 | `payment_service` |
+| 서비스 | 담당자 | 핵심 책임 | 데이터 스키마 | Kafka 역할 |
+|--------|--------|----------|--------------|-----------|
+| **API Gateway** | A개발자 | 라우팅, JWT 검증, Rate Limiting, Circuit Breaker | 없음 (Stateless) | - |
+| **User Service** | B개발자 | 인증(JWT), 회원관리, OAuth2, reCAPTCHA | `user_service` | - |
+| **Event Service** | A개발자 | 공연/공연장/좌석 관리, Redis 캐싱 | `event_service` | Consumer 전용 |
+| **Queue Service** | A개발자 | Redis Sorted Set 기반 대기열, Token 발급 | Redis 전용 | - |
+| **Reservation Service** | B개발자 | 좌석 선점(분산 락), 예매 관리 | `reservation_service` | Producer + Consumer |
+| **Payment Service** | B개발자 | PortOne 연동, SAGA 패턴, 보상 트랜잭션 | `payment_service` | Producer 전용 |
 
 ### 데이터베이스 격리 원칙
 - **단일 PostgreSQL 인스턴스**에 스키마로 논리적 분리
@@ -141,8 +141,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **문제**: Kafka 발행 실패 시 데이터 불일치
 - **해결책**: 비즈니스 로직 트랜잭션 내 `common.outbox_events` 테이블에 이벤트 INSERT
 - **Outbox Poller**: 1초마다 미발행 이벤트를 Kafka로 발행 (재시도 최대 3회, 실패 시 DLQ)
-- **필수 적용**: Reservation, Payment Service (P0 데이터 정합성 이슈)
-- **공통 스키마**: `common.outbox_events` 테이블 (모든 서비스 공유)
+- **적용 대상 (Producer 서비스)**:
+  - **Reservation Service**: `ReservationCancelled` 이벤트 발행 (P0 데이터 정합성)
+  - **Payment Service**: `PaymentSuccess`, `PaymentFailed` 이벤트 발행 (P0 데이터 정합성)
+  - **Event Service**: 적용 안 함 (Producer가 아닌 Consumer 전용)
+- **공통 스키마**: `common.outbox_events` 테이블
   - `id`, `aggregate_type`, `aggregate_id`, `event_type`, `payload` (JSONB)
   - `published` (boolean), `published_at`, `retry_count`, `last_error`
 - **정리 배치**: 발행 완료된 이벤트는 7일 후 자동 삭제
@@ -150,11 +153,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 5. 멱등성 보장
 - **Producer**: Kafka 자체 멱등성 활성화 (`enable.idempotence=true`, `acks=all`)
-- **Consumer (권장 방법)**:
-  - **방법 1 (필수)**: `common.processed_events` 테이블에 `event_id` PK + Unique Constraint
+- **Consumer 멱등성 (필수 적용)**:
+  - **적용 대상 (Consumer 서비스)**:
+    - **Reservation Service**: `payment.events` 구독 (PaymentSuccess/PaymentFailed 처리)
+    - **Event Service**: `payment.events`, `reservation.events` 구독 (좌석 상태 변경)
+    - **Payment Service**: 적용 안 함 (Consumer가 아닌 Producer 전용)
+  - **방법 1 (필수)**: `common.processed_events` 테이블에 `(event_id, consumer_service)` 복합 PK + Unique Constraint
     - Consumer 로직 최상단에 먼저 INSERT 시도 (원자적 중복 체크)
     - `DataIntegrityViolationException` 발생 시 이미 처리된 이벤트로 간주하고 종료
     - DB가 Race Condition을 원자적으로 해결 (가장 안전)
+    - 동일 이벤트를 여러 Consumer가 각각 처리 가능 (`consumer_service` 구분)
   - 방법 2 (보조): Redis `SETNX processed:event:{eventId}` (TTL 7일)
   - 방법 3 (보조): 도메인 키(`paymentKey`, `reservationId`) 기반 중복 체크
 - **전달 보장**: At-least-once + Consumer 멱등성 = Exactly-once 효과
