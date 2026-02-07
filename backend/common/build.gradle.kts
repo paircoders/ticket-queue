@@ -29,6 +29,9 @@ dependencies {
     api(libs.spring.boot.starter.validation)
     api(libs.spring.boot.starter.actuator)
 
+    // Spring Cloud
+    api(platform(libs.spring.cloud.dependencies))
+
     // Spring Cloud AWS
     api(platform(libs.spring.cloud.aws.dependencies))
     api(libs.spring.cloud.aws.starter.secrets.manager)
