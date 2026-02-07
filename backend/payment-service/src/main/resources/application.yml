@@ -1,6 +1,10 @@
 server:
   port: 8085
 
+outbox:
+  poller:
+    enabled: true
+
 spring:
   application:
     name: payment-service
