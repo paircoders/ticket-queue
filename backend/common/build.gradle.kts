@@ -44,4 +44,12 @@ dependencies {
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.spring.kafka)
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+
+    // TestContainers
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.bundles.testcontainers)
+
+    // Awaitility for async testing
+    testImplementation("org.awaitility:awaitility:4.2.0")
 }

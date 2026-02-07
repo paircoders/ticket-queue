@@ -1,6 +1,10 @@
 server:
   port: 8084
 
+outbox:
+  poller:
+    enabled: true
+
 spring:
   application:
     name: reservation-service
