@@ -8,8 +8,6 @@ spring:
     import:
       - "optional:classpath:/application-common-${spring.profiles.active}.yml"
       - "optional:aws-secretsmanager:user-svc/secure-config"
-      - "optional:aws-secretsmanager:common/secure-config"
-
   jpa:
     hibernate:
       ddl-auto: validate
@@ -43,3 +41,7 @@ logging:
   level:
     com.ticketqueue.user: DEBUG
     org.hibernate.SQL: DEBUG
+
+recaptcha:
+  url: https://www.google.com/recaptcha/api/siteverify
+  secret: ${recaptcha_secret:6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe}

@@ -2,9 +2,14 @@ spring:
   config:
     activate:
       on-profile: local
-
+    import:
+      - "optional:aws-secretsmanager:common/secure-config"
   data:
     redis:
       host: 192.168.50.2
       port: 6379
       password: ${valkey_password}
+
+encryption:
+  secret-key: ${secret_key}
+  hash-salt: ${hash_salt}

@@ -19,6 +19,9 @@ enum class ErrorCode(
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "유효하지 않은 토큰입니다."),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "EXPIRED_TOKEN", "토큰이 만료되었습니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
+    ALREADY_EXISTS_EMAIL(HttpStatus.CONFLICT, "ALREADY_EXISTS_EMAIL", "이미 사용 중인 이메일입니다."),
+    ALREADY_EXISTS_USER(HttpStatus.CONFLICT, "ALREADY_EXISTS_USER", "이미 가입된 사용자입니다."),
+    RECAPTCHA_FAILED(HttpStatus.BAD_REQUEST, "RECAPTCHA_FAILED", "reCAPTCHA 검증에 실패했습니다."),
 
     // Queue
     QUEUE_FULL(HttpStatus.SERVICE_UNAVAILABLE, "QUEUE_FULL", "대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요."),
