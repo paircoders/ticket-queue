@@ -14,7 +14,7 @@ import java.time.LocalDateTime
 @ConditionalOnProperty(prefix = "outbox.cleanup", name = ["enabled"], havingValue = "true")
 class OutboxCleanupBatchService(
     private val outboxEventRepository: OutboxEventRepository,
-    // 서비스별로 담당하는 aggregateType 주입 (예: "reservation", "payment")
+    // 서비스별로 담당하는 aggregateType 주입 (예: "Reservation", "Payment")
     @Value("\${outbox.cleanup.aggregate-type}") private val aggregateType: String
 ) {
 
