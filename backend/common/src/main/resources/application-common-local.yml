@@ -11,5 +11,5 @@ spring:
       password: ${valkey_password}
 
 encryption:
-  secret-key: ${secret_key}
-  hash-salt: ${hash_salt}
+  secret-key: ${enc_secret_key}
+  hash-salt: ${enc_hash_salt}

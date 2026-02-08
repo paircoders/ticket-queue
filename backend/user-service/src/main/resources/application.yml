@@ -39,9 +39,8 @@ management:
 
 logging:
   level:
-    com.ticketqueue.user: DEBUG
     org.hibernate.SQL: DEBUG
 
 recaptcha:
   url: https://www.google.com/recaptcha/api/siteverify
-  secret: ${recaptcha_secret:6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe}
+  secret: ${recaptcha_secret}

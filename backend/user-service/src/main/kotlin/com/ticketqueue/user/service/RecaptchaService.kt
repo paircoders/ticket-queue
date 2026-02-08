@@ -1,16 +1,20 @@
 package com.ticketqueue.user.service
 
+import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.user.exception.UserException
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestClient
+import org.springframework.web.client.body
 import org.springframework.web.util.UriComponentsBuilder
 
 @Service
 class RecaptchaService(
+    restClientBuilder: RestClient.Builder,
     @Value("\${recaptcha.url}") private val recaptchaUrl: String,
     @Value("\${recaptcha.secret}") private val recaptchaSecret: String
 ) {
-    private val restClient = RestClient.create()
+    private val restClient = restClientBuilder.build()
 
     fun verify(token: String): Boolean {
 
@@ -20,12 +24,16 @@ class RecaptchaService(
             .build()
             .toUri()
 
-        val response = restClient.post()
-            .uri(uri)
-            .retrieve()
-            .body(RecaptchaResponse::class.java)
+        return try {
+            val response = restClient.post()
+                .uri(uri)
+                .retrieve()
+                .body<RecaptchaResponse>()
 
-        return response?.success ?: false
+            response?.success ?: false
+        } catch (e: Exception) {
+            throw UserException(ErrorCode.RECAPTCHA_FAILED)
+        }
     }
 
     private data class RecaptchaResponse(
