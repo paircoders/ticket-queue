@@ -84,3 +84,8 @@ logging:
   level:
     com.ticketqueue.reservation: DEBUG
     org.hibernate.SQL: DEBUG
+
+outbox:
+  cleanup:
+    enabled: true
+    aggregate-type: Reservation

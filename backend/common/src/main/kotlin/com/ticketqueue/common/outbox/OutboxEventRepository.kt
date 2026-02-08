@@ -16,6 +16,14 @@ interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID> {
         aggregateId: UUID
     ): List<OutboxEvent>
 
+    // 전체 서비스의 발행 완료 이벤트 삭제 (전역 정리용)
     @Modifying
     fun deleteByPublishedTrueAndPublishedAtBefore(before: LocalDateTime): Int
+
+    // 특정 aggregateType의 발행 완료 이벤트만 삭제 (서비스별 정리용)
+    @Modifying
+    fun deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+        aggregateType: String,
+        before: LocalDateTime
+    ): Int
 }

@@ -35,7 +35,7 @@ create_secret() {
 # 3. 각 서비스별 시크릿 등록 실행
 
 # (1) User Service
-create_secret "user" "postgres_user_pw" "Secrets for User Service"
+#create_secret "user" "postgres_user_pw" "Secrets for User Service"
 
 # (2) Event Service
 create_secret "event" "postgres_event_pw" "Secrets for Event Service"
@@ -50,10 +50,16 @@ create_secret "payment" "postgres_payment_pw" "Secrets for Payment Service"
 VALKEY_PW=$(cat /run/secrets/valkey_pw)
 INTERNAL_API_KEY=$(cat /run/secrets/internal_api_key)
 JWT_SECRET=$(cat /run/secrets/jwt_secret)
+
 awslocal secretsmanager create-secret \
     --name "common/secure-config" \
     --description "Common secrets for all services" \
-    --secret-string "{\"valkey_password\":\"$VALKEY_PW\", \"internal_api_key\":\"$INTERNAL_API_KEY\", \"jwt_secret\":\"$JWT_SECRET\"}"
+    --secret-string "{\"valkey_password\":\"$VALKEY_PW\", \"internal_api_key\":\"$INTERNAL_API_KEY\", \"jwt_secret\":\"$JWT_SECRET\",\"enc_secret_key\":\"AUlt1REzHFuxIT6yvpbmwSI7CZy78lL5FENfLnwpRV4=\",\"enc_hash_salt\":\"rKad3kiRzNWXVSvVa7mhxqXNVQqxNfKVSj2Jk6V7cGg=\"}"
+
+awslocal secretsmanager create-secret \
+    --name "user-svc/secure-config" \
+    --description "Secrets for user services" \
+    --secret-string "{\"db_password\":\"user@1234\",\"recaptcha_secret\":\"6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe\"}"
 
 echo "[SecretsManager] All secrets created successfully."
 awslocal secretsmanager list-secrets
