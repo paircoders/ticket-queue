@@ -84,6 +84,9 @@ resilience4j-reactor = { module = "io.github.resilience4j:resilience4j-reactor",
 kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstash-logback-encoder" }
 
+# Context Propagation
+micrometer-context-propagation = { module = "io.micrometer:context-propagation" }
+
 # Test
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
