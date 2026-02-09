@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph "Frontend"
-        NextJS[Next.js 16+<br/>Vercel 배포]
+        NextJS[Next.js 16+<br/>Vercel 배포<br/>GitHub CI/CD]
     end
 
     subgraph "AWS Managed Services (Free Tier)"
