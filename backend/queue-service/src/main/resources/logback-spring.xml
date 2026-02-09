@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Service Name -->
+    <property name="SERVICE_NAME" value="queue-service"/>
+
+    <!-- Include common logback-base.xml from common module -->
+    <include resource="logback-base.xml"/>
+
+    <!-- Profile: local -->
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="TEXT_CONSOLE"/>
+        </root>
+        <!-- Service-specific logger levels -->
+        <logger name="com.ticketqueue.queue" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Profile: prod -->
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+            <appender-ref ref="JSON_ROLLING_FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Profile: default (프로필 미지정 시) -->
+    <springProfile name="default">
+        <root level="INFO">
+            <appender-ref ref="TEXT_CONSOLE"/>
+            <appender-ref ref="TEXT_ROLLING_FILE"/>
+        </root>
+    </springProfile>
+</configuration>

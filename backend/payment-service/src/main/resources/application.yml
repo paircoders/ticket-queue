@@ -89,9 +89,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-logging:
-  level:
-    com.ticketqueue.payment: DEBUG
-    org.hibernate.SQL: DEBUG
-    io.github.resilience4j: DEBUG

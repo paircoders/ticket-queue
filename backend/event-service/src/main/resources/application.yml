@@ -41,8 +41,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-logging:
-  level:
-    com.ticketqueue.event: DEBUG
-    org.hibernate.SQL: DEBUG

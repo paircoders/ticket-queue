@@ -36,6 +36,10 @@ dependencies {
     api(platform(libs.spring.cloud.aws.dependencies))
     api(libs.spring.cloud.aws.starter.secrets.manager)
 
+    // Logging
+    api(libs.kotlin.logging)
+    api(libs.logstash.logback.encoder)
+
     // Optional dependencies (Services can implement them if needed)
     compileOnly(libs.spring.boot.starter.security)
     compileOnly(libs.spring.cloud.starter.openfeign)

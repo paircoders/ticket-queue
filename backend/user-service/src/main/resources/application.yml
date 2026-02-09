@@ -37,10 +37,6 @@ management:
     health:
       show-details: always
 
-logging:
-  level:
-    org.hibernate.SQL: DEBUG
-
 recaptcha:
   url: https://www.google.com/recaptcha/api/siteverify
   secret: ${recaptcha_secret}

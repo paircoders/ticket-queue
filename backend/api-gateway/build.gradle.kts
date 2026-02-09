@@ -19,6 +19,10 @@ dependencies {
     // Actuator
     implementation(libs.spring.boot.starter.actuator)
 
+    // Logging
+    implementation(libs.kotlin.logging)
+    implementation(libs.logstash.logback.encoder)
+
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.reactor.test)
