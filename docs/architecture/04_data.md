@@ -412,7 +412,7 @@ CREATE TABLE event_service.venues (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(200) NOT NULL,
     address TEXT NOT NULL,
-    city VARCHAR(100),
+    city VARCHAR(100) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
