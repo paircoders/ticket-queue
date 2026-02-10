@@ -1,15 +1,5 @@
 -- Event Service DDL
 
--- updated_at 자동 업데이트 트리거 함수 (Event Service 전용)
-CREATE OR REPLACE FUNCTION event_service.update_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-
 -- 1. venues Table
 CREATE TABLE event_service.venues (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
