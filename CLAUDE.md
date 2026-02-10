@@ -89,7 +89,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Resilience**: Resilience4j (Circuit Breaker, Rate Limiter)
 
 ### Frontend (미구현)
-- Next.js 14+ (Vercel 배포 예정)
+- Next.js 16+ (Vercel 배포, GitHub 연동 자동 CI/CD)
 
 ### Infrastructure
 - **Local**: Docker Compose (PostgreSQL, Valkey, Kafka 통합 환경)

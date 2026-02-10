@@ -12,6 +12,8 @@ dependencies {
 
     // Spring Boot & Security
     implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.boot.starter.validation)
+    implementation(libs.spring.cloud.starter.openfeign)
     implementation(libs.spring.boot.starter.data.redis)
 
     // JWT

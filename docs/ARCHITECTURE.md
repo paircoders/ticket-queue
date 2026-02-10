@@ -44,3 +44,36 @@
     *   성능 최적화 전략
     *   테스트 전략
     *   운영 계획 (SLA, 장애 대응)
+
+### 5. 프론트엔드 설계
+*   [00. 프론트엔드 개요](./frontend/00_overview.md)
+    *   기술 스택 (Next.js, React Query, Zustand)
+    *   설계 원칙 (UX 우선, 접근성, 반응형)
+    *   프로젝트 구조 및 환경 변수
+*   [01. 페이지 구조 및 라우팅](./frontend/01_pages.md)
+    *   전체 페이지 목록 및 App Router 구조
+    *   라우트 그룹별 레이아웃 계층
+    *   미들웨어 (인증 체크, 리디렉트)
+*   [02. 컴포넌트 설계](./frontend/02_components.md)
+    *   공통 UI 컴포넌트 (Button, Input, Modal 등)
+    *   페이지별 주요 컴포넌트 트리
+    *   디자인 시스템 기초
+*   [03. 상태 관리 및 데이터 흐름](./frontend/03_state_data.md)
+    *   Server State (React Query), Client State (Zustand)
+    *   API 호출 패턴 및 에러 처리
+*   [04. 인증/인가 흐름](./frontend/04_auth_security.md)
+    *   JWT 토큰 저장 전략 (httpOnly 쿠키)
+    *   로그인/회원가입 화면 흐름
+    *   reCAPTCHA 및 PortOne 본인인증 연동
+*   [05. 대기열 UX 설계](./frontend/05_queue_ux.md)
+    *   대기열 진입 → 대기 → 승인 화면 전환
+    *   폴링 전략 (5초 간격 REST 폴링)
+    *   타이머 UI (10분 TTL 시각화)
+*   [06. 결제 UX 설계](./frontend/06_payment_ux.md)
+    *   좌석 선택 → 결제 → 완료 화면 흐름
+    *   PortOne SDK 연동 (결제 위젯 통합)
+    *   좌석 선점 타이머 (5분 TTL)
+*   [07. 성능/SEO 전략](./frontend/07_performance.md)
+    *   페이지별 렌더링 전략 (SSR/CSR)
+    *   이미지 최적화 (next/image)
+    *   Core Web Vitals 목표 및 측정
