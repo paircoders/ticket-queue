@@ -1,12 +1,13 @@
 package com.ticketqueue.common.event
 
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 data class ReservationConfirmedEvent(
     override val eventId: UUID = UUID.randomUUID(),
     override val aggregateId: UUID,
-    override val timestamp: LocalDateTime = LocalDateTime.now(),
+    override val timestamp: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
     override val metadata: EventMetadata = EventMetadata(),
     val scheduleId: UUID,
     val seatIds: List<UUID>,
@@ -23,7 +24,7 @@ data class ReservationConfirmedEvent(
 data class ReservationCancelledEvent(
     override val eventId: UUID = UUID.randomUUID(),
     override val aggregateId: UUID,
-    override val timestamp: LocalDateTime = LocalDateTime.now(),
+    override val timestamp: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
     override val metadata: EventMetadata = EventMetadata(),
     val scheduleId: UUID,
     val seatIds: List<UUID>,

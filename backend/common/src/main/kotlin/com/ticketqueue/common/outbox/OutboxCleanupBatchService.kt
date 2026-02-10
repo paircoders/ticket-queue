@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 // outbox.cleanup.enabled=true 설정이 있을 때만 Bean 등록
 // 서비스별로 정리 배치를 활성화/비활성화 가능
@@ -22,11 +23,11 @@ class OutboxCleanupBatchService(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // 매일 02:00 UTC에 실행 (초 분 시 일 월 요일)
-    @Scheduled(cron = "0 0 2 * * ?")
+    // 매일 02:00 KST에 실행 (초 분 시 일 월 요일)
+    @Scheduled(cron = "0 0 2 * * ?", zone = "Asia/Seoul")
     @Transactional
     fun cleanupPublishedEvents() {
-        val cutoff = LocalDateTime.now().minusDays(retentionDays)
+        val cutoff = LocalDateTime.now(ZoneOffset.UTC).minusDays(retentionDays)
         val deletedCount = outboxEventRepository.deletePublishedEventsBefore(
             aggregateType = aggregateType,
             before = cutoff

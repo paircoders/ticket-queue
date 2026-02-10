@@ -26,6 +26,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: payment_service
         format_sql: true
+        jdbc:
+          time_zone: UTC
     show-sql: true
     open-in-view: false
 

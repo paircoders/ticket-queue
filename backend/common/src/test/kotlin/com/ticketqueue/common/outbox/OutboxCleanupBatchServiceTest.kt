@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @ExtendWith(MockKExtension::class)
 class OutboxCleanupBatchServiceTest {
@@ -40,7 +41,7 @@ class OutboxCleanupBatchServiceTest {
         verify(exactly = 1) {
             outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = "Reservation",
-                before = match { it.isBefore(LocalDateTime.now()) && it.isAfter(LocalDateTime.now().minusDays(8)) }
+                before = match { it.isBefore(LocalDateTime.now(ZoneOffset.UTC)) && it.isAfter(LocalDateTime.now(ZoneOffset.UTC).minusDays(8)) }
             )
         }
     }
@@ -96,7 +97,7 @@ class OutboxCleanupBatchServiceTest {
         val expectedCutoff = fixedNow.minusDays(7)
 
         mockkStatic(LocalDateTime::class)
-        every { LocalDateTime.now() } returns fixedNow
+        every { LocalDateTime.now(ZoneOffset.UTC) } returns fixedNow
 
         val capturedCutoff = slot<LocalDateTime>()
         every {
@@ -146,7 +147,7 @@ class OutboxCleanupBatchServiceTest {
         val expectedCutoff = fixedNow.minusDays(30)
 
         mockkStatic(LocalDateTime::class)
-        every { LocalDateTime.now() } returns fixedNow
+        every { LocalDateTime.now(ZoneOffset.UTC) } returns fixedNow
 
         val capturedCutoff = slot<LocalDateTime>()
         every {
