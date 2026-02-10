@@ -22,7 +22,7 @@
 - 보안, 성능, 모니터링 전략
 
 본 문서는 다음을 포함하지 않습니다:
-- 프론트엔드 상세 설계 (Next.js 구조는 개요만 포함)
+- 프론트엔드 상세 설계 (`docs/frontend/` 디렉토리에서 별도 관리)
 - 상세 API 스펙 (Swagger/OpenAPI 문서로 별도 관리)
 
 ### 1.3 아키텍처 설계 원칙
@@ -66,8 +66,8 @@
 
 | 계층 | 기술 | 용도 |
 |------|------|------|
-| **Frontend** | Next.js 16+ | React 기반 SSR/CSR |
-|  | Vercel | 프론트엔드 배포 플랫폼 |
+| **Frontend** | Next.js 16+ | React 기반 SSR/CSR (CSR-First) |
+|  | Vercel | 프론트엔드 배포 플랫폼 (GitHub 연동 CI/CD) |
 | **API Gateway** | Spring Cloud Gateway | 통합 진입점, 라우팅, 인증 |
 | **Backend** | spring boot 3.5.10 | 마이크로서비스 프레임워크 |
 |  | Kotlin | 백엔드 언어 |
