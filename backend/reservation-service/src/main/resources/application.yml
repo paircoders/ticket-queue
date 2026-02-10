@@ -89,3 +89,4 @@ outbox:
   cleanup:
     enabled: true
     aggregate-type: Reservation
+    retention-days: 7

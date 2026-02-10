@@ -15,7 +15,9 @@ import java.time.LocalDateTime
 class OutboxCleanupBatchService(
     private val outboxEventRepository: OutboxEventRepository,
     // 서비스별로 담당하는 aggregateType 주입 (예: "Reservation", "Payment")
-    @Value("\${outbox.cleanup.aggregate-type}") private val aggregateType: String
+    @Value("\${outbox.cleanup.aggregate-type}") private val aggregateType: String,
+    // 보관 주기 (기본 7일)
+    @Value("\${outbox.cleanup.retention-days:7}") private val retentionDays: Long
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -24,16 +26,16 @@ class OutboxCleanupBatchService(
     @Scheduled(cron = "0 0 2 * * ?")
     @Transactional
     fun cleanupPublishedEvents() {
-        // 7일 이전의 발행 완료된 이벤트 삭제
-        val cutoff = LocalDateTime.now().minusDays(7)
-        val deletedCount = outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+        val cutoff = LocalDateTime.now().minusDays(retentionDays)
+        val deletedCount = outboxEventRepository.deletePublishedEventsBefore(
             aggregateType = aggregateType,
             before = cutoff
         )
         log.info(
-            "Cleaned up {} published outbox events for aggregateType={} older than 7 days",
+            "Cleaned up {} published outbox events for aggregateType={} older than {} days",
             deletedCount,
-            aggregateType
+            aggregateType,
+            retentionDays
         )
     }
 }

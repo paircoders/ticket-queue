@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
     alias(libs.plugins.kotlin.jpa)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spring.dependency.management)
 }
@@ -32,6 +33,10 @@ dependencies {
     // Spring Cloud AWS
     api(platform(libs.spring.cloud.aws.dependencies))
     api(libs.spring.cloud.aws.starter.secrets.manager)
+
+    // Querydsl
+    api(libs.querydsl.jpa)
+    ksp(libs.querydsl.ksp.codegen)
 
     // Optional dependencies (Services can implement them if needed)
     compileOnly(libs.spring.boot.starter.security)

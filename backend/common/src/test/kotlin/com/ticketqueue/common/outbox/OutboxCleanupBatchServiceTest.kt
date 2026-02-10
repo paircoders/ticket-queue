@@ -19,15 +19,15 @@ class OutboxCleanupBatchServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = OutboxCleanupBatchService(outboxEventRepository, "Reservation")
+        service = OutboxCleanupBatchService(outboxEventRepository, "Reservation", retentionDays = 7L)
     }
 
     @Test
     fun `발행 완료된 이벤트 정리 성공`() {
         // given
-        val expectedDeletedCount = 10
+        val expectedDeletedCount = 10L
         every {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = "Reservation",
                 before = any()
             )
@@ -38,7 +38,7 @@ class OutboxCleanupBatchServiceTest {
 
         // then
         verify(exactly = 1) {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = "Reservation",
                 before = match { it.isBefore(LocalDateTime.now()) && it.isAfter(LocalDateTime.now().minusDays(8)) }
             )
@@ -49,17 +49,17 @@ class OutboxCleanupBatchServiceTest {
     fun `삭제 대상이 없는 경우`() {
         // given
         every {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = any(),
                 before = any()
             )
-        } returns 0
+        } returns 0L
 
         // when & then (예외 없이 정상 동작)
         service.cleanupPublishedEvents()
 
         verify(exactly = 1) {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = "Reservation",
                 before = any()
             )
@@ -69,20 +69,20 @@ class OutboxCleanupBatchServiceTest {
     @Test
     fun `aggregateType이 정확히 전달되는지 확인`() {
         // given
-        val paymentService = OutboxCleanupBatchService(outboxEventRepository, "Payment")
+        val paymentService = OutboxCleanupBatchService(outboxEventRepository, "Payment", retentionDays = 7L)
         every {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = any(),
                 before = any()
             )
-        } returns 5
+        } returns 5L
 
         // when
         paymentService.cleanupPublishedEvents()
 
         // then
         verify(exactly = 1) {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = "Payment",
                 before = any()
             )
@@ -90,7 +90,7 @@ class OutboxCleanupBatchServiceTest {
     }
 
     @Test
-    fun `cutoff 날짜가 정확히 7일 전인지 확인`() {
+    fun `cutoff 날짜가 retentionDays 기반으로 계산되는지 확인`() {
         // given
         val fixedNow = LocalDateTime.of(2026, 2, 8, 14, 30, 0)
         val expectedCutoff = fixedNow.minusDays(7)
@@ -100,11 +100,11 @@ class OutboxCleanupBatchServiceTest {
 
         val capturedCutoff = slot<LocalDateTime>()
         every {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = any(),
                 before = capture(capturedCutoff)
             )
-        } returns 3
+        } returns 3L
 
         // when
         service.cleanupPublishedEvents()
@@ -119,9 +119,9 @@ class OutboxCleanupBatchServiceTest {
     @Test
     fun `다수의 이벤트가 삭제된 경우`() {
         // given
-        val largeDeletedCount = 100
+        val largeDeletedCount = 100L
         every {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = any(),
                 before = any()
             )
@@ -131,10 +131,38 @@ class OutboxCleanupBatchServiceTest {
         service.cleanupPublishedEvents()
 
         verify(exactly = 1) {
-            outboxEventRepository.deleteByAggregateTypeAndPublishedTrueAndPublishedAtBefore(
+            outboxEventRepository.deletePublishedEventsBefore(
                 aggregateType = "Reservation",
                 before = any()
             )
         }
+    }
+
+    @Test
+    fun `retentionDays 커스텀 값 적용 확인`() {
+        // given
+        val customRetentionService = OutboxCleanupBatchService(outboxEventRepository, "Reservation", retentionDays = 30L)
+        val fixedNow = LocalDateTime.of(2026, 2, 8, 14, 30, 0)
+        val expectedCutoff = fixedNow.minusDays(30)
+
+        mockkStatic(LocalDateTime::class)
+        every { LocalDateTime.now() } returns fixedNow
+
+        val capturedCutoff = slot<LocalDateTime>()
+        every {
+            outboxEventRepository.deletePublishedEventsBefore(
+                aggregateType = any(),
+                before = capture(capturedCutoff)
+            )
+        } returns 15L
+
+        // when
+        customRetentionService.cleanupPublishedEvents()
+
+        // then
+        capturedCutoff.captured shouldBe expectedCutoff
+
+        // cleanup
+        unmockkStatic(LocalDateTime::class)
     }
 }
