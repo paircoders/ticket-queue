@@ -11,10 +11,10 @@ import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.*
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection
+import org.springframework.context.annotation.Import
 import org.springframework.kafka.support.serializer.JsonDeserializer
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.KafkaContainer
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
@@ -26,6 +26,7 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 @SpringBootTest
+@Import(OutboxPollerTestConfig::class)
 @ActiveProfiles("test")
 @Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -33,6 +34,7 @@ class OutboxPollerIntegrationTest {
 
     companion object {
         @Container
+        @ServiceConnection
         val postgres = PostgreSQLContainer<Nothing>(DockerImageName.parse("postgres:18-alpine"))
             .apply {
                 withDatabaseName("testdb")
@@ -42,22 +44,11 @@ class OutboxPollerIntegrationTest {
             }
 
         @Container
+        @ServiceConnection
         val kafka = KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.8.0"))
             .apply {
                 withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "true")
             }
-
-        @JvmStatic
-        @DynamicPropertySource
-        fun configureProperties(registry: DynamicPropertyRegistry) {
-            // PostgreSQL
-            registry.add("spring.datasource.url", postgres::getJdbcUrl)
-            registry.add("spring.datasource.username", postgres::getUsername)
-            registry.add("spring.datasource.password", postgres::getPassword)
-
-            // Kafka
-            registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers)
-        }
     }
 
     @Autowired

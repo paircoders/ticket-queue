@@ -12,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection
+import org.springframework.context.annotation.Import
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -29,6 +31,7 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 @SpringBootTest
+@Import(OutboxPollerTestConfig::class)
 @ActiveProfiles("test")
 @Testcontainers
 class OutboxPollerRetryIntegrationTest {
@@ -44,6 +47,7 @@ class OutboxPollerRetryIntegrationTest {
 
     companion object {
         @Container
+        @ServiceConnection
         @JvmStatic
         val postgres: PostgreSQLContainer<*> = PostgreSQLContainer(DockerImageName.parse("postgres:18"))
             .withDatabaseName("ticketing")
@@ -52,6 +56,7 @@ class OutboxPollerRetryIntegrationTest {
             .withInitScript("db_init/init.sql")
 
         @Container
+        @ServiceConnection
         @JvmStatic
         val kafka: KafkaContainer = KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"))
 
@@ -63,13 +68,9 @@ class OutboxPollerRetryIntegrationTest {
         @JvmStatic
         @DynamicPropertySource
         fun registerDynamicProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url", postgres::getJdbcUrl)
-            registry.add("spring.datasource.username", postgres::getUsername)
-            registry.add("spring.datasource.password", postgres::getPassword)
-            registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers)
+            // Valkey (Redis)만 수동 설정
             registry.add("spring.data.redis.host", valkey::getHost)
             registry.add("spring.data.redis.port") { valkey.getMappedPort(6379) }
-            registry.add("outbox.poller.enabled") { "true" }
         }
     }
 

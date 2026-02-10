@@ -4,6 +4,9 @@ server:
 outbox:
   poller:
     enabled: true
+    max-retry-count: 3
+    batch-size: 100
+    fixed-delay: 1000
 
 spring:
   application:

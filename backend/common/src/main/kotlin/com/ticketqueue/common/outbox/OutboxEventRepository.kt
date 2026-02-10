@@ -1,8 +1,12 @@
 package com.ticketqueue.common.outbox
 
+import jakarta.persistence.LockModeType
+import jakarta.persistence.QueryHint
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.QueryHints
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -30,14 +34,20 @@ interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID> {
      * - Pageable로 배치 크기 제한 (기본 100개)
      * - 한 번에 너무 많은 이벤트 조회 시 메모리 부담 증가 방지
      *
-     * **동시성:**
-     * - 여러 인스턴스가 동시 조회 시 동일 이벤트 중복 조회 가능
-     * - 하지만 Kafka 멱등성 + Consumer 멱등성으로 중복 처리 방지
+     * **동시성 제어 (Scale-out 대비):**
+     * - @Lock(PESSIMISTIC_WRITE): SELECT ... FOR UPDATE 적용
+     * - lock.timeout=-2: PostgreSQL SKIP LOCKED 활성화
+     * - 효과: 다중 인스턴스 환경에서 동일 이벤트 중복 조회 방지
+     *   - 인스턴스 A가 조회 중인 행은 인스턴스 B가 건너뜀 (무대기)
+     *   - DB 레벨에서 경합 해결 → Kafka 중복 발행 원천 차단
+     * - 단일 인스턴스에서도 오버헤드 무시 가능 (PostgreSQL row-level lock)
      *
      * @param maxRetryCount 최대 재시도 횟수 (기본 3)
      * @param pageable 페이징 정보 (크기, 정렬)
      * @return 미발행 이벤트 목록 (최대 pageable.pageSize개)
      */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
     fun findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
         maxRetryCount: Int,
         pageable: Pageable

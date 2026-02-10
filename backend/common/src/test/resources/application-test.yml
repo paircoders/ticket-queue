@@ -5,6 +5,13 @@ spring:
   main:
     allow-bean-definition-overriding: true
 
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+      region:
+        static: us-east-1
+
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
@@ -41,6 +48,9 @@ spring:
 outbox:
   poller:
     enabled: true
+    max-retry-count: 3
+    batch-size: 100
+    fixed-delay: 1000
 
 logging:
   level:

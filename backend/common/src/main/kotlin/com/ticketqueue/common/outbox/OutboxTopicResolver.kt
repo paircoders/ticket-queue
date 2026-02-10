@@ -1,5 +1,6 @@
 package com.ticketqueue.common.outbox
 
+import com.ticketqueue.common.kafka.KafkaTopicConfig
 import org.springframework.stereotype.Component
 
 /**
@@ -19,37 +20,15 @@ import org.springframework.stereotype.Component
  * - payment.events → dlq.payment
  * - reservation.events → dlq.reservation
  *
+ * **구현 위임:**
+ * - 실제 매핑 로직은 KafkaTopicConfig에 위임
+ * - OutboxTopicResolver는 Outbox 서비스용 인터페이스 제공
+ *
  * @see OutboxPollerService
+ * @see KafkaTopicConfig
  */
 @Component
 class OutboxTopicResolver {
-
-    companion object {
-        /**
-         * Aggregate Type → Kafka 토픽 매핑
-         *
-         * **주의:**
-         * - aggregateType은 OutboxEvent 저장 시 비즈니스 서비스가 지정 ("Payment", "Reservation")
-         * - 대소문자 정확히 일치해야 함 (대소문자 오타 시 IllegalArgumentException)
-         */
-        private val AGGREGATE_TO_TOPIC = mapOf(
-            "Payment" to "payment.events",
-            "Reservation" to "reservation.events"
-        )
-
-        /**
-         * 정상 토픽 → DLQ 토픽 매핑
-         *
-         * **Fallback 전략:**
-         * - 매핑 테이블에 없으면 "dlq.{토픽명}" 자동 생성
-         * - 예: "new.topic" → "dlq.new.topic"
-         * - 이유: 새 서비스 추가 시 DLQ 매핑 누락해도 DLQ 이동 실패 방지
-         */
-        private val TOPIC_TO_DLQ = mapOf(
-            "payment.events" to "dlq.payment",
-            "reservation.events" to "dlq.reservation"
-        )
-    }
 
     /**
      * Aggregate Type으로 Kafka 토픽 조회
@@ -59,7 +38,7 @@ class OutboxTopicResolver {
      * @throws IllegalArgumentException 매핑 테이블에 없는 aggregateType인 경우
      */
     fun resolveTopic(aggregateType: String): String {
-        return AGGREGATE_TO_TOPIC[aggregateType]
+        return KafkaTopicConfig.findByAggregateType(aggregateType)?.topic
             ?: throw IllegalArgumentException("Unknown aggregate type: $aggregateType")
     }
 
@@ -74,6 +53,6 @@ class OutboxTopicResolver {
      * @return DLQ 토픽명 (예: "dlq.payment")
      */
     fun resolveDlqTopic(topic: String): String {
-        return TOPIC_TO_DLQ[topic] ?: "dlq.$topic"
+        return KafkaTopicConfig.resolveDlqTopic(topic)
     }
 }

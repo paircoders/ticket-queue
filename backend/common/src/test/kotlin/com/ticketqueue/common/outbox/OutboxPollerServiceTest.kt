@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.domain.PageRequest
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
+import org.apache.kafka.clients.producer.ProducerRecord
 import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -15,6 +16,7 @@ import io.kotest.assertions.throwables.shouldThrow
 
 class OutboxPollerServiceTest {
 
+    private val queryService = mockk<OutboxPollerQueryService>()
     private val outboxEventRepository = mockk<OutboxEventRepository>()
     private val kafkaTemplate = mockk<KafkaTemplate<String, Any>>()
     private lateinit var topicResolver: OutboxTopicResolver
@@ -24,10 +26,13 @@ class OutboxPollerServiceTest {
     fun setup() {
         clearAllMocks()
         topicResolver = OutboxTopicResolver()
+        val properties = OutboxPollerProperties(enabled = true, maxRetryCount = 3, batchSize = 100, fixedDelay = 1000)
         pollerService = OutboxPollerService(
+            queryService,
             outboxEventRepository,
             topicResolver,
-            kafkaTemplate
+            kafkaTemplate,
+            properties
         )
     }
 
@@ -35,17 +40,14 @@ class OutboxPollerServiceTest {
     fun `pollAndPublish - no events - does nothing`() {
         // Given
         every {
-            outboxEventRepository.findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
-                any(),
-                any()
-            )
+            queryService.fetchUnpublishedEvents(any(), any())
         } returns emptyList()
 
         // When
         pollerService.pollAndPublish()
 
         // Then
-        verify(exactly = 0) { kafkaTemplate.send(any(), any(), any()) }
+        verify(exactly = 0) { kafkaTemplate.send(any<ProducerRecord<String, Any>>()) }
     }
 
     @Test
@@ -55,14 +57,14 @@ class OutboxPollerServiceTest {
         val slot = slot<OutboxEvent>()
 
         every {
-            outboxEventRepository.findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
+            queryService.fetchUnpublishedEvents(
                 any(),
                 any()
             )
         } returns listOf(event)
 
         every {
-            kafkaTemplate.send(any(), any(), any())
+            kafkaTemplate.send(any<ProducerRecord<String, Any>>())
         } returns CompletableFuture.completedFuture(mockk())
 
         every {
@@ -73,7 +75,11 @@ class OutboxPollerServiceTest {
         pollerService.pollAndPublish()
 
         // Then
-        verify { kafkaTemplate.send(eq("payment.events"), any(), any()) }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "payment.events"
+            })
+        }
         slot.captured.published shouldBe true
         slot.captured.publishedAt shouldNotBe null
     }
@@ -86,7 +92,7 @@ class OutboxPollerServiceTest {
         val future = CompletableFuture<SendResult<String, Any>>()
         future.completeExceptionally(RuntimeException("Kafka unavailable"))
 
-        every { kafkaTemplate.send(any(), any(), any()) } returns future
+        every { kafkaTemplate.send(any<ProducerRecord<String, Any>>()) } returns future
         every { outboxEventRepository.save(capture(slot)) } answers { slot.captured }
 
         // When
@@ -110,8 +116,16 @@ class OutboxPollerServiceTest {
         mainFuture.completeExceptionally(RuntimeException("Kafka unavailable"))
         val dlqFuture = CompletableFuture.completedFuture(mockk<SendResult<String, Any>>())
 
-        every { kafkaTemplate.send(eq("reservation.events"), any(), any()) } returns mainFuture
-        every { kafkaTemplate.send(eq("dlq.reservation"), any(), any()) } returns dlqFuture
+        every {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "reservation.events"
+            })
+        } returns mainFuture
+        every {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "dlq.reservation"
+            })
+        } returns dlqFuture
         every { outboxEventRepository.save(capture(slot)) } answers { slot.captured }
 
         // When
@@ -120,8 +134,16 @@ class OutboxPollerServiceTest {
         // Then
         slot.captured.retryCount shouldBe 3
         slot.captured.published shouldBe true
-        verify { kafkaTemplate.send("reservation.events", any(), any()) }
-        verify { kafkaTemplate.send("dlq.reservation", any(), any()) }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "reservation.events"
+            })
+        }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "dlq.reservation"
+            })
+        }
         verify { outboxEventRepository.save(any()) }
     }
 
@@ -159,8 +181,16 @@ class OutboxPollerServiceTest {
         val dlqFuture = CompletableFuture<SendResult<String, Any>>()
         dlqFuture.completeExceptionally(RuntimeException("DLQ also unavailable"))
 
-        every { kafkaTemplate.send(eq("payment.events"), any(), any()) } returns mainFuture
-        every { kafkaTemplate.send(eq("dlq.payment"), any(), any()) } returns dlqFuture
+        every {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "payment.events"
+            })
+        } returns mainFuture
+        every {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "dlq.payment"
+            })
+        } returns dlqFuture
         every { outboxEventRepository.save(capture(slot)) } answers { slot.captured }
 
         // When
@@ -170,8 +200,16 @@ class OutboxPollerServiceTest {
         slot.captured.retryCount shouldBe 3
         slot.captured.published shouldBe true
         slot.captured.lastError shouldBe "ExecutionException: java.lang.RuntimeException: Kafka unavailable"
-        verify { kafkaTemplate.send("payment.events", any(), any()) }
-        verify { kafkaTemplate.send("dlq.payment", any(), any()) }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "payment.events"
+            })
+        }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "dlq.payment"
+            })
+        }
     }
 
     @Test
@@ -180,14 +218,14 @@ class OutboxPollerServiceTest {
         val events = (1..150).map { createOutboxEvent("Payment", "PaymentSuccess") }
 
         every {
-            outboxEventRepository.findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
+            queryService.fetchUnpublishedEvents(
                 3,
-                PageRequest.of(0, 100)
+                100
             )
         } returns events.take(100)
 
         every {
-            kafkaTemplate.send(any(), any(), any())
+            kafkaTemplate.send(any<ProducerRecord<String, Any>>())
         } returns CompletableFuture.completedFuture(mockk())
 
         every {
@@ -198,7 +236,7 @@ class OutboxPollerServiceTest {
         pollerService.pollAndPublish()
 
         // Then: Should process exactly 100 events
-        verify(exactly = 100) { kafkaTemplate.send(any(), any(), any()) }
+        verify(exactly = 100) { kafkaTemplate.send(any<ProducerRecord<String, Any>>()) }
         verify(exactly = 100) { outboxEventRepository.save(any()) }
     }
 
@@ -211,14 +249,14 @@ class OutboxPollerServiceTest {
         val processedEvents = mutableListOf<OutboxEvent>()
 
         every {
-            outboxEventRepository.findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
+            queryService.fetchUnpublishedEvents(
                 any(),
                 any()
             )
         } returns listOf(event1, event2, event3)
 
         every {
-            kafkaTemplate.send(any(), any(), any())
+            kafkaTemplate.send(any<ProducerRecord<String, Any>>())
         } returns CompletableFuture.completedFuture(mockk())
 
         every {
@@ -231,18 +269,30 @@ class OutboxPollerServiceTest {
         // Then: All 3 events should be processed and marked as published
         processedEvents.size shouldBe 3
         processedEvents.all { it.published } shouldBe true
-        verify { kafkaTemplate.send("payment.events", any(), event1.payload) }
-        verify { kafkaTemplate.send("reservation.events", any(), event2.payload) }
-        verify { kafkaTemplate.send("payment.events", any(), event3.payload) }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "payment.events" && it.value() == event1.payload
+            })
+        }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "reservation.events" && it.value() == event2.payload
+            })
+        }
+        verify {
+            kafkaTemplate.send(match<ProducerRecord<String, Any>> {
+                it.topic() == "payment.events" && it.value() == event3.payload
+            })
+        }
     }
 
     @Test
     fun `pollAndPublish - retryCount 3 events excluded from polling`() {
         // Given: Query should exclude retryCount >= 3
         every {
-            outboxEventRepository.findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
+            queryService.fetchUnpublishedEvents(
                 3, // maxRetryCount parameter
-                PageRequest.of(0, 100)
+                100
             )
         } returns emptyList()
 
@@ -251,12 +301,12 @@ class OutboxPollerServiceTest {
 
         // Then: Query was called with correct maxRetryCount (3)
         verify {
-            outboxEventRepository.findByPublishedFalseAndRetryCountLessThanOrderByCreatedAtAsc(
+            queryService.fetchUnpublishedEvents(
                 3,
                 any()
             )
         }
-        verify(exactly = 0) { kafkaTemplate.send(any(), any(), any()) }
+        verify(exactly = 0) { kafkaTemplate.send(any<ProducerRecord<String, Any>>()) }
     }
 
     private fun createOutboxEvent(aggregateType: String, eventType: String) = OutboxEvent(

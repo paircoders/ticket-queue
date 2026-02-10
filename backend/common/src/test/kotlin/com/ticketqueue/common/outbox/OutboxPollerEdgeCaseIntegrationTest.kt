@@ -12,9 +12,9 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.StringDeserializer
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection
+import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
 import org.springframework.transaction.annotation.Transactional
 import org.testcontainers.containers.KafkaContainer
 import org.testcontainers.containers.PostgreSQLContainer
@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit
         "outbox.poller.enabled=true"
     ]
 )
+@Import(OutboxPollerTestConfig::class)
 @ActiveProfiles("test")
 @Testcontainers
 class OutboxPollerEdgeCaseIntegrationTest {
@@ -42,6 +43,7 @@ class OutboxPollerEdgeCaseIntegrationTest {
 
     companion object {
         @Container
+        @ServiceConnection
         @JvmStatic
         val postgresContainer = PostgreSQLContainer<Nothing>("postgres:18-alpine").apply {
             withDatabaseName("testdb")
@@ -51,21 +53,13 @@ class OutboxPollerEdgeCaseIntegrationTest {
         }
 
         @Container
+        @ServiceConnection
         @JvmStatic
         val kafkaContainer = KafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:7.9.0")
         )
 
         private lateinit var kafkaTestConsumer: ManualKafkaConsumer
-
-        @DynamicPropertySource
-        @JvmStatic
-        fun configureProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url", postgresContainer::getJdbcUrl)
-            registry.add("spring.datasource.username", postgresContainer::getUsername)
-            registry.add("spring.datasource.password", postgresContainer::getPassword)
-            registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers)
-        }
 
         @BeforeAll
         @JvmStatic

@@ -13,11 +13,11 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection
+import org.springframework.context.annotation.Import
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.test.utils.KafkaTestUtils
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.context.DynamicPropertyRegistry
-import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.KafkaContainer
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
@@ -35,12 +35,14 @@ import java.util.concurrent.TimeUnit
         "spring.kafka.consumer.bootstrap-servers=\${kafka.bootstrap-servers}"
     ]
 )
+@Import(OutboxPollerTestConfig::class)
 @ActiveProfiles("test")
 @Testcontainers
 class OutboxPollerDlqIntegrationTest {
 
     companion object {
         @Container
+        @ServiceConnection
         val postgresContainer = PostgreSQLContainer<Nothing>(DockerImageName.parse("postgres:18"))
             .apply {
                 withDatabaseName("testdb")
@@ -50,16 +52,8 @@ class OutboxPollerDlqIntegrationTest {
             }
 
         @Container
+        @ServiceConnection
         val kafkaContainer = KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.9.0"))
-
-        @JvmStatic
-        @DynamicPropertySource
-        fun overrideProps(registry: DynamicPropertyRegistry) {
-            registry.add("spring.datasource.url", postgresContainer::getJdbcUrl)
-            registry.add("spring.datasource.username", postgresContainer::getUsername)
-            registry.add("spring.datasource.password", postgresContainer::getPassword)
-            registry.add("kafka.bootstrap-servers", kafkaContainer::getBootstrapServers)
-        }
     }
 
     @Autowired
