@@ -1,6 +1,13 @@
 server:
   port: 8085
 
+outbox:
+  poller:
+    enabled: true
+    max-retry-count: 3
+    batch-size: 100
+    fixed-delay: 1000
+
 spring:
   application:
     name: payment-service

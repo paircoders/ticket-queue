@@ -39,7 +39,7 @@ dependencies {
     // Optional dependencies (Services can implement them if needed)
     compileOnly(libs.spring.boot.starter.security)
     compileOnly(libs.spring.cloud.starter.openfeign)
-    compileOnly(libs.spring.kafka)
+    api(libs.spring.kafka)
 
     // Database
     runtimeOnly(libs.postgresql)
@@ -47,4 +47,14 @@ dependencies {
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.spring.kafka)
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+    testImplementation(libs.spring.boot.starter.security)
+
+    // TestContainers
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.bundles.testcontainers)
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+
+    // Awaitility for async testing
+    testImplementation("org.awaitility:awaitility:4.2.0")
 }
