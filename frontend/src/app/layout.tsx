@@ -1,16 +1,16 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
+import type { Metadata } from 'next'
+import './globals.css'
+import { Providers } from '@/providers'
 
 export const metadata: Metadata = {
-  title: "Ticket Queue - 콘서트 티켓팅 시스템",
-  description: "대규모 트래픽을 처리하는 공정한 티켓팅 서비스",
-};
+  title: 'Ticket Queue - 콘서트 티켓팅 시스템',
+  description: '대규모 트래픽을 처리하는 공정한 티켓팅 서비스',
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
     <html lang="ko">
@@ -23,9 +23,8 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
-        {children}
-        <Toaster />
+        <Providers>{children}</Providers>
       </body>
     </html>
-  );
+  )
 }

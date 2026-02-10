@@ -1,28 +1,24 @@
-import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
+import * as React from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils'
 
-const spinnerVariants = cva(
-  "animate-spin text-muted-foreground",
-  {
-    variants: {
-      size: {
-        sm: "size-4",
-        md: "size-6",
-        lg: "size-8",
-      },
-    },
-    defaultVariants: {
-      size: "md",
+const spinnerVariants = cva('animate-spin text-muted-foreground', {
+  variants: {
+    size: {
+      sm: 'size-4',
+      md: 'size-6',
+      lg: 'size-8',
     },
   },
-);
+  defaultVariants: {
+    size: 'md',
+  },
+})
 
-type SpinnerProps = React.ComponentProps<"svg"> &
-  VariantProps<typeof spinnerVariants>;
+type SpinnerProps = React.ComponentProps<'svg'> & VariantProps<typeof spinnerVariants>
 
-function Spinner({ className, size = "md", ...props }: SpinnerProps) {
+function Spinner({ className, size = 'md', ...props }: SpinnerProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -40,8 +36,8 @@ function Spinner({ className, size = "md", ...props }: SpinnerProps) {
     >
       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
     </svg>
-  );
+  )
 }
 
-export { Spinner, spinnerVariants };
-export type { SpinnerProps };
+export { Spinner, spinnerVariants }
+export type { SpinnerProps }
