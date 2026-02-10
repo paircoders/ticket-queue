@@ -1,6 +1,8 @@
 package com.ticketqueue.common.outbox
 
 import jakarta.persistence.*
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -21,7 +23,8 @@ class OutboxEvent(
     @Column(name = "event_type", nullable = false, length = 100)
     val eventType: String,
 
-    @Column(name = "payload", nullable = false, columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "payload", nullable = false)
     val payload: String,
 
     @Column(name = "published", nullable = false)

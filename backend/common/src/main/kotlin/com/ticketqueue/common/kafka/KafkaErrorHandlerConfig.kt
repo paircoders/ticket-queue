@@ -1,6 +1,6 @@
 package com.ticketqueue.common.kafka
 
-import io.github.oshai.kotlinlogging.KotlinLogging
+import com.ticketqueue.common.kafka.KafkaTopicConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.beans.factory.annotation.Value
@@ -24,13 +24,6 @@ class KafkaErrorHandlerConfig {
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
     private lateinit var bootstrapServers: String
 
-    companion object {
-        private val DLQ_TOPIC_MAP = mapOf(
-            "reservation.events" to "dlq.reservation",
-            "payment.events" to "dlq.payment",
-        )
-    }
-
     @Bean
     fun dlqKafkaTemplate(): KafkaTemplate<String, Any> {
         val producerProps = mutableMapOf<String, Any>(
@@ -50,8 +43,8 @@ class KafkaErrorHandlerConfig {
     ): DeadLetterPublishingRecoverer {
         return DeadLetterPublishingRecoverer(dlqKafkaTemplate) { record, _ ->
             val originalTopic = record.topic()
-            val dlqTopic = DLQ_TOPIC_MAP[originalTopic] ?: "dlq.$originalTopic"
-            logger.warn { "Sending failed record to DLQ: $originalTopic -> $dlqTopic" }
+            val dlqTopic = KafkaTopicConfig.resolveDlqTopic(originalTopic)
+            log.warn("Sending failed record to DLQ: {} -> {}", originalTopic, dlqTopic)
             org.apache.kafka.common.TopicPartition(dlqTopic, -1)
         }
     }

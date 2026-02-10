@@ -170,3 +170,35 @@
 | REQ-INT-008 | Gateway 내부 API 차단 | API Gateway에서 `/internal/**` 경로 라우팅 명시적 차단 (404 응답) | A개발자 | 비기능 | 필수 | 외부 접근 차단 |
 | REQ-INT-009 | API Key 로테이션 | API Key 만료 정책 (권장: 무기한, 필요 시 수동 로테이션) 및 갱신 프로세스 정의 | A/B개발자 | 기능 | 선택 | Key 관리 |
 | REQ-INT-010 | 내부 API Rate Limiting | 서비스 간 호출에도 Rate Limiting 적용 (서비스당 1000 req/분) | A/B개발자 | 비기능 | 선택 | 과부하 방지 |
+
+---
+
+## 8. 프론트엔드 (FRONTEND)
+
+| 요구사항 ID | 요구사항명 | 요구사항 설명                                                     | 담당자 | 분류 | 필수여부 | 비고 |
+|------------|-----------|-------------------------------------------------------------|-------|------|---------|-----|
+| REQ-FE-001 | Next.js App Router | Next.js 16+ App Router 기반 페이지 구조                            | FE개발자 | 기능 | 필수 | SSR/CSR 혼합 |
+| REQ-FE-002 | 반응형 디자인 | 모바일/태블릿/데스크톱 반응형 UI (모바일 우선)                                | FE개발자 | 기능 | 필수 | < 640px, 640-1024px, 1024px+ |
+| REQ-FE-003 | 웹 접근성 | WCAG 2.1 AA 기준 준수 (키보드 네비게이션, 스크린 리더, 색상 대비)                | FE개발자 | 비기능 | 필수 | a11y |
+| REQ-FE-004 | 공연 목록 SSR | 공연 목록 페이지 SSR로 SEO 최적화                                      | FE개발자 | 기능 | 필수 | `/events` |
+| REQ-FE-005 | 공연 상세 OG 태그 | 공연 상세 페이지 Open Graph 태그 및 JSON-LD 구조화 데이터                   | FE개발자 | 기능 | 필수 | SNS 공유 최적화 |
+| REQ-FE-006 | 대기열 실시간 폴링 | 대기열 상태를 5초 간격으로 REST 폴링 (React Query)                       | FE개발자 | 기능 | 필수 | `/queue/[scheduleId]` |
+| REQ-FE-007 | 대기열 타이머 UI | 대기열 TTL 10분 시각화 (분:초 형식, 경고 색상)                             | FE개발자 | 기능 | 필수 | 1분 미만 경고 |
+| REQ-FE-008 | 좌석 선점 타이머 UI | 좌석 선점 TTL 5분 시각화 (분:초 형식, 만료 시 리디렉트)                        | FE개발자 | 기능 | 필수 | `/payment/[reservationId]` |
+| REQ-FE-009 | PortOne 결제 위젯 | PortOne SDK 통합 (결제 요청 → 위젯 → 승인)                            | FE개발자 | 기능 | 필수 | 3단계 플로우 |
+| REQ-FE-010 | JWT httpOnly Cookie | Access/Refresh Token을 httpOnly Cookie에 저장 (XSS 방지)          | FE개발자 | 비기능 | 필수 | Secure, SameSite=Strict |
+| REQ-FE-011 | 토큰 자동 갱신 | Access Token 만료 시 Refresh Token으로 자동 갱신 (Axios Interceptor) | FE개발자 | 기능 | 필수 | 401 에러 처리 |
+| REQ-FE-012 | 이미지 최적화 | next/image 사용, WebP/AVIF 포맷 지원, Lazy Loading                | FE개발자 | 비기능 | 필수 | CDN |
+| REQ-FE-013 | 코드 스플리팅 | Dynamic Import로 라우트별 코드 스플리팅 (번들 사이즈 < 200KB)               | FE개발자 | 비기능 | 필수 | First Load JS |
+| REQ-FE-014 | Core Web Vitals | LCP < 2.5s, FID < 100ms, CLS < 0.1                          | FE개발자 | 비기능 | 필수 | Vercel Analytics |
+| REQ-FE-015 | 에러 바운더리 | React Query 에러 바운더리 및 전역 에러 처리                              | FE개발자 | 기능 | 필수 | HTTP 상태 코드별 처리 |
+| REQ-FE-016 | 로딩 상태 처리 | Suspense Boundary 및 Skeleton UI                             | FE개발자 | 기능 | 필수 | 사용자 경험 |
+| REQ-FE-017 | Toast 알림 | 성공/에러/경고 Toast 알림 (3초 자동 닫힘)                                | FE개발자 | 기능 | 필수 | Sonner 또는 유사 라이브러리 |
+| REQ-FE-018 | 폼 검증 | React Hook Form + Zod 스키마 기반 폼 검증                           | FE개발자 | 기능 | 필수 | 클라이언트 측 검증 |
+| REQ-FE-019 | reCAPTCHA 통합 | 로그인/회원가입 시 reCAPTCHA v2 검증                                  | FE개발자 | 기능 | 필수 | Google reCAPTCHA |
+| REQ-FE-020 | PortOne 본인인증 | 회원가입 시 PortOne CI/DI 본인인증                                   | FE개발자 | 기능 | 필수 | 1인 1계정 강제 |
+| REQ-FE-021 | 회원가입 4단계 | 약관동의 → CAPTCHA → 본인인증 → 정보입력 단계별 진행                         | FE개발자 | 기능 | 필수 | `/signup` |
+| REQ-FE-022 | 좌석 선택 UI | 실시간 좌석 상태 표시 (AVAILABLE/HOLD/SOLD), 최대 4장 제한                | FE개발자 | 기능 | 필수 | `/reservation/[scheduleId]` |
+| REQ-FE-023 | 미들웨어 인증 가드 | Next.js 미들웨어로 인증 필요 경로 보호 (Access Token 검증)                 | FE개발자 | 비기능 | 필수 | `/middleware.ts` |
+| REQ-FE-024 | Queue Token 검증 | 예매/결제 페이지 진입 시 Queue Token 검증 (미들웨어)                        | FE개발자 | 비기능 | 필수 | 새치기 방지 |
+| REQ-FE-025 | Vercel 배포 | Vercel에 프로덕션 배포, GitHub 연동 자동 CI/CD (push 시 자동 배포, PR 프리뷰), 환경 변수 설정 | FE개발자 | 비기능 | 필수 | Edge Functions |
