@@ -6,5 +6,5 @@ export default function Loading() {
         <p className="mt-4 text-gray-600">로딩 중...</p>
       </div>
     </div>
-  );
+  )
 }
