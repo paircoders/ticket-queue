@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <included>
+    <!--
+        이 파일을 include하는 서비스는 반드시 SERVICE_NAME property를 정의해야 합니다.
+        예: <property name="SERVICE_NAME" value="user-service"/>
+    -->
     <!-- Properties -->
+    <property name="SERVICE_NAME" value="${SERVICE_NAME:-unknown-service}"/>
     <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
     <property name="TEXT_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-NO_TRACE}] %-5level %logger{36} - %msg%n"/>
 
