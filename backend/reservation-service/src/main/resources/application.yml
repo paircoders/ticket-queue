@@ -7,6 +7,10 @@ outbox:
     max-retry-count: 3
     batch-size: 100
     fixed-delay: 1000
+  cleanup:
+    enabled: true
+    aggregate-type: Reservation
+    retention-days: 7
 
 spring:
   application:
