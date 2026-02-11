@@ -1008,7 +1008,7 @@ COMMENT ON COLUMN common.outbox_events.payload IS '이벤트 데이터 (JSONB). 
 </details>
 
 **Outbox 정리 배치 작업:**
-- **실행 주기**: 매일 02:00 UTC
+- **실행 주기**: 매일 02:00 KST (Asia/Seoul)
 - **SQL**:
   ```sql
   -- 발행 완료된 오래된 이벤트 삭제 (7일 보관)
