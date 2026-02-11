@@ -42,3 +42,6 @@ export { Spinner, spinnerVariants } from './spinner'
 export type { SpinnerProps } from './spinner'
 
 export { Checkbox } from './checkbox'
+
+export { Skeleton } from './skeleton'
+export type { SkeletonProps } from './skeleton'
