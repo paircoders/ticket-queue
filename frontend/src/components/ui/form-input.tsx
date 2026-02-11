@@ -1,16 +1,15 @@
-"use client";
+'use client'
 
-import * as React from "react";
+import * as React from 'react'
 
-import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
-interface FormInputProps
-  extends Omit<React.ComponentProps<"input">, "onChange"> {
-  label?: string;
-  error?: string;
-  onChange?: (value: string) => void;
+interface FormInputProps extends Omit<React.ComponentProps<'input'>, 'onChange'> {
+  label?: string
+  error?: string
+  onChange?: (value: string) => void
 }
 
 function FormInput({
@@ -21,20 +20,20 @@ function FormInput({
   id: externalId,
   ...props
 }: FormInputProps) {
-  const generatedId = React.useId();
-  const id = externalId ?? generatedId;
-  const errorId = `${id}-error`;
-  const hasError = !!error;
+  const generatedId = React.useId()
+  const id = externalId ?? generatedId
+  const errorId = `${id}-error`
+  const hasError = !!error
 
   const handleChange = React.useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      onChange?.(e.target.value);
+      onChange?.(e.target.value)
     },
     [onChange],
-  );
+  )
 
   return (
-    <div className={cn("grid gap-2", className)}>
+    <div className={cn('grid gap-2', className)}>
       {label && <Label htmlFor={id}>{label}</Label>}
       <Input
         id={id}
@@ -49,8 +48,8 @@ function FormInput({
         </p>
       )}
     </div>
-  );
+  )
 }
 
-export { FormInput };
-export type { FormInputProps };
+export { FormInput }
+export type { FormInputProps }
