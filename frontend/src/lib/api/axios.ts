@@ -3,6 +3,7 @@ import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth-store'
 import { useQueueStore } from '@/stores/queue-store'
 import { handleApiError } from './error-handler'
+import { redirectTo } from '@/lib/navigation'
 import type { RefreshResponse } from '@/types/auth'
 
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
@@ -82,7 +83,7 @@ apiClient.interceptors.response.use(
         isRefreshing = false
         processQueue(error, null)
         logout()
-        window.location.href = '/login'
+        redirectTo('/login')
         return Promise.reject(error)
       }
 
@@ -106,7 +107,7 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null)
         logout()
-        window.location.href = '/login'
+        redirectTo('/login')
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
