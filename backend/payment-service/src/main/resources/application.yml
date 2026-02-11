@@ -7,6 +7,10 @@ outbox:
     max-retry-count: 3
     batch-size: 100
     fixed-delay: 1000
+  cleanup:
+    enabled: true
+    aggregate-type: Payment
+    retention-days: 7
 
 spring:
   application:
@@ -104,9 +108,3 @@ logging:
     com.ticketqueue.payment: DEBUG
     org.hibernate.SQL: DEBUG
     io.github.resilience4j: DEBUG
-
-outbox:
-  cleanup:
-    enabled: true
-    aggregate-type: Payment
-    retention-days: 7

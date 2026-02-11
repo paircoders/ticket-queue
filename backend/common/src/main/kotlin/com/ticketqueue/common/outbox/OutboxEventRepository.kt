@@ -4,6 +4,8 @@ import jakarta.persistence.LockModeType
 import jakarta.persistence.QueryHint
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.QueryHints
 import java.util.UUID
 
 interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID>, OutboxEventRepositoryCustom {
@@ -58,4 +60,26 @@ interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID>, OutboxEventR
         aggregateType: String,
         aggregateId: UUID
     ): List<OutboxEvent>
+
+    /**
+     * 발행된 이벤트 개수 조회 (테스트/모니터링용)
+     *
+     * **사용 시나리오:**
+     * - 테스트 코드에서 폴링 진행 상황 확인
+     * - 모니터링 대시보드에서 발행 통계 표시
+     *
+     * @return 발행 완료된 이벤트 개수
+     */
+    fun countByPublishedTrue(): Long
+
+    /**
+     * 미발행 이벤트 개수 조회 (테스트/모니터링용)
+     *
+     * **사용 시나리오:**
+     * - 테스트 코드에서 대기 중인 이벤트 개수 확인
+     * - 모니터링 대시보드에서 발행 대기 통계 표시
+     *
+     * @return 발행 대기 중인 이벤트 개수
+     */
+    fun countByPublishedFalse(): Long
 }
