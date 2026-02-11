@@ -32,15 +32,18 @@ class TraceIdWebFilter : WebFilter {
     companion object {
         const val TRACE_ID_HEADER = "X-Trace-Id"
         const val TRACE_ID_MDC_KEY = "traceId"
+        private const val MAX_TRACE_ID_LENGTH = 64
+        private val TRACE_ID_PATTERN = Regex("^[a-zA-Z0-9\\-]{1,64}$")
+    }
+
+    private fun isValidTraceId(traceId: String): Boolean {
+        return traceId.length <= MAX_TRACE_ID_LENGTH && TRACE_ID_PATTERN.matches(traceId)
     }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         val incomingTraceId = exchange.request.headers.getFirst(TRACE_ID_HEADER)
-        val traceId = if (!incomingTraceId.isNullOrBlank()) {
-            incomingTraceId
-        } else {
-            UUID.randomUUID().toString()
-        }
+        val traceId = incomingTraceId?.takeIf { isValidTraceId(it) }
+            ?: UUID.randomUUID().toString()
 
         exchange.response.headers.set(TRACE_ID_HEADER, traceId)
 
@@ -56,6 +59,8 @@ class TraceIdWebFilter : WebFilter {
             .contextWrite { context ->
                 context.put(TRACE_ID_MDC_KEY, traceId)
             }
+            // MdcContextPropagationConfig의 자동 전파와 중복되지만,
+            // context-propagation 라이브러리 미작동 시 안전장치 역할
             .doOnEach { signal ->
                 if (!signal.isOnError) {
                     signal.contextView.getOrDefault<String>(TRACE_ID_MDC_KEY, null)?.let {

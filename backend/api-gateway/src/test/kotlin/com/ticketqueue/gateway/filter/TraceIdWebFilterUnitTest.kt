@@ -134,4 +134,68 @@ class TraceIdWebFilterUnitTest {
         val downstreamTraceId = downstreamHeaders?.getFirst(TraceIdWebFilter.TRACE_ID_HEADER)
         downstreamTraceId.shouldNotBeBlank()
     }
+
+    @Test
+    fun `64자 초과 TraceId는 거부하고 새 UUID 생성`() {
+        // Given: 65자 길이의 TraceId
+        val tooLongTraceId = "a".repeat(65)
+        val request = MockServerHttpRequest.get("/test")
+            .header(TraceIdWebFilter.TRACE_ID_HEADER, tooLongTraceId)
+            .build()
+        val exchange = MockServerWebExchange.from(request)
+
+        // When: 필터 실행
+        val result = filter.filter(exchange, mockChain)
+
+        // Then: 새로운 UUID 생성 (입력값 거부)
+        StepVerifier.create(result)
+            .verifyComplete()
+
+        val responseTraceId = exchange.response.headers.getFirst(TraceIdWebFilter.TRACE_ID_HEADER)
+        responseTraceId.shouldNotBeBlank()
+        responseTraceId shouldNotBe tooLongTraceId
+        responseTraceId!! shouldContain "-" // UUID 형식
+    }
+
+    @Test
+    fun `특수문자 또는 개행 포함 TraceId는 거부하고 새 UUID 생성`() {
+        // Given: 특수문자 및 개행 포함 TraceId (로그 주입 시도)
+        val maliciousTraceId = "trace\nFAKE_LOG: admin access"
+        val request = MockServerHttpRequest.get("/test")
+            .header(TraceIdWebFilter.TRACE_ID_HEADER, maliciousTraceId)
+            .build()
+        val exchange = MockServerWebExchange.from(request)
+
+        // When: 필터 실행
+        val result = filter.filter(exchange, mockChain)
+
+        // Then: 새로운 UUID 생성 (악의적 입력 거부)
+        StepVerifier.create(result)
+            .verifyComplete()
+
+        val responseTraceId = exchange.response.headers.getFirst(TraceIdWebFilter.TRACE_ID_HEADER)
+        responseTraceId.shouldNotBeBlank()
+        responseTraceId shouldNotBe maliciousTraceId
+        responseTraceId!! shouldContain "-" // UUID 형식
+    }
+
+    @Test
+    fun `유효한 alphanumeric-hyphen TraceId는 그대로 유지`() {
+        // Given: 유효한 패턴의 TraceId
+        val validTraceId = "abc123-XYZ-456-def-789"
+        val request = MockServerHttpRequest.get("/test")
+            .header(TraceIdWebFilter.TRACE_ID_HEADER, validTraceId)
+            .build()
+        val exchange = MockServerWebExchange.from(request)
+
+        // When: 필터 실행
+        val result = filter.filter(exchange, mockChain)
+
+        // Then: 입력값 그대로 유지
+        StepVerifier.create(result)
+            .verifyComplete()
+
+        val responseTraceId = exchange.response.headers.getFirst(TraceIdWebFilter.TRACE_ID_HEADER)
+        responseTraceId shouldBe validTraceId
+    }
 }
