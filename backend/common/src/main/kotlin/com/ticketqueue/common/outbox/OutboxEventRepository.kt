@@ -4,23 +4,9 @@ import jakarta.persistence.LockModeType
 import jakarta.persistence.QueryHint
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Lock
-import org.springframework.data.jpa.repository.Modifying
-import org.springframework.data.jpa.repository.QueryHints
-import java.time.LocalDateTime
 import java.util.UUID
 
-/**
- * Outbox 이벤트 저장소 (common.outbox_events 테이블)
- *
- * **핵심 역할:**
- * - Transactional Outbox Pattern의 이벤트 영속성 관리
- * - 폴링 대상 조회, 모니터링 통계, 정리 배치 쿼리 제공
- *
- * @see OutboxEvent
- * @see OutboxPollerService
- */
-interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID> {
+interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID>, OutboxEventRepositoryCustom {
 
     /**
      * 미발행 이벤트 조회 (폴링 대상)
@@ -72,39 +58,4 @@ interface OutboxEventRepository : JpaRepository<OutboxEvent, UUID> {
         aggregateType: String,
         aggregateId: UUID
     ): List<OutboxEvent>
-
-    /**
-     * 발행 완료 이벤트 개수 (디버깅/모니터링용)
-     *
-     * @return published=true인 이벤트 개수
-     */
-    fun countByPublishedTrue(): Long
-
-    /**
-     * 미발행 이벤트 개수 (디버깅/모니터링용)
-     *
-     * **주의:**
-     * - DLQ 이동된 이벤트는 published=true이므로 제외됨
-     * - 실제 "처리 대기 중"인 이벤트만 카운트
-     *
-     * @return published=false인 이벤트 개수
-     */
-    fun countByPublishedFalse(): Long
-
-    /**
-     * 발행 완료 이벤트 정리 배치 (7일 후 삭제)
-     *
-     * **정리 정책:**
-     * - published=true AND published_at < 7일 전 이벤트 삭제
-     * - 이유: Outbox 테이블 크기 무한 증가 방지
-     * - 7일 근거: Kafka 토픽 보관 기간(3일)보다 길게 설정 (재처리 여유)
-     *
-     * **실행 주기:**
-     * - 매일 새벽 3시 @Scheduled 배치로 실행 권장
-     *
-     * @param before 삭제 기준 시각 (이 시각 이전 발행된 이벤트 삭제)
-     * @return 삭제된 이벤트 개수
-     */
-    @Modifying
-    fun deleteByPublishedTrueAndPublishedAtBefore(before: LocalDateTime): Int
 }

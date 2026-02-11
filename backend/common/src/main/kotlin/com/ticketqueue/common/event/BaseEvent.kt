@@ -1,6 +1,7 @@
 package com.ticketqueue.common.event
 
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 abstract class BaseEvent(
@@ -9,7 +10,7 @@ abstract class BaseEvent(
     open val aggregateId: UUID,
     open val aggregateType: String,
     open val version: String = "v1",
-    open val timestamp: LocalDateTime = LocalDateTime.now(),
+    open val timestamp: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
     open val metadata: EventMetadata = EventMetadata()
 )
 

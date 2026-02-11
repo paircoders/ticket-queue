@@ -3,6 +3,7 @@ package com.ticketqueue.common.outbox
 import jakarta.persistence.*
 import java.io.Serializable
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 data class ProcessedEventId(
@@ -29,7 +30,7 @@ class ProcessedEvent(
     val eventType: String,
 
     @Column(name = "processed_at", nullable = false)
-    val processedAt: LocalDateTime = LocalDateTime.now()
+    val processedAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

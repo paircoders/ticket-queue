@@ -26,6 +26,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: reservation_service
         format_sql: true
+        jdbc:
+          time_zone: UTC
     show-sql: true
     open-in-view: false
 
@@ -91,3 +93,9 @@ logging:
   level:
     com.ticketqueue.reservation: DEBUG
     org.hibernate.SQL: DEBUG
+
+outbox:
+  cleanup:
+    enabled: true
+    aggregate-type: Reservation
+    retention-days: 7

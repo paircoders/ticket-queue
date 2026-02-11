@@ -26,6 +26,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: payment_service
         format_sql: true
+        jdbc:
+          time_zone: UTC
     show-sql: true
     open-in-view: false
 
@@ -102,3 +104,9 @@ logging:
     com.ticketqueue.payment: DEBUG
     org.hibernate.SQL: DEBUG
     io.github.resilience4j: DEBUG
+
+outbox:
+  cleanup:
+    enabled: true
+    aggregate-type: Payment
+    retention-days: 7

@@ -35,7 +35,7 @@ create_secret() {
 # 3. 각 서비스별 시크릿 등록 실행
 
 # (1) User Service
-create_secret "user" "postgres_user_pw" "Secrets for User Service"
+#create_secret "user" "postgres_user_pw" "Secrets for User Service"
 
 # (2) Event Service
 create_secret "event" "postgres_event_pw" "Secrets for Event Service"
