@@ -6,4 +6,10 @@ import org.springframework.stereotype.Repository
 import java.util.UUID
 
 @Repository
-interface HallRepository : JpaRepository<Hall, UUID>
+interface HallRepository : JpaRepository<Hall, UUID> {
+    fun findByVenueId(venueId: UUID): List<Hall>
+    fun findByVenueIdAndId(venueId: UUID, id: UUID): Hall?
+    fun existsByVenueId(venueId: UUID): Boolean
+    fun existsByVenueIdAndName(venueId: UUID, name: String): Boolean
+    fun existsByVenueIdAndNameAndIdNot(venueId: UUID, name: String, id: UUID): Boolean
+}

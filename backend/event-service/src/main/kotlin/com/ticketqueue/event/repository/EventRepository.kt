@@ -6,4 +6,7 @@ import org.springframework.stereotype.Repository
 import java.util.UUID
 
 @Repository
-interface EventRepository : JpaRepository<Event, UUID>
+interface EventRepository : JpaRepository<Event, UUID> {
+    fun existsByVenueId(venueId: UUID): Boolean
+    fun existsByHallId(hallId: UUID): Boolean
+}

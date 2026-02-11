@@ -20,4 +20,5 @@ dependencies {
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.bundles.testcontainers)
+    testImplementation(libs.spring.security.test)
 }
