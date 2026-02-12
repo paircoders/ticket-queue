@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: user-service-test
+  config:
+    import: []
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
+      - io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
+
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+      region:
+        static: us-east-1
+
+jwt:
+  secret: test-jwt-secret
+  access-token-expiry: 3600000
+  refresh-token-expiry: 604800000
+
+internal:
+  api:
+    key: test-key
+
+recaptcha:
+  url: https://test.recaptcha.url
+  secret: test-secret
+
+encryption:
+  secret-key: dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3Q=
+  hash-salt: dGVzdC1oYXNoLXNhbHQtZm9yLXVuaXQtdGVzdGluZw==
