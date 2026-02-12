@@ -4,6 +4,7 @@ import jakarta.persistence.*
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Entity
@@ -40,7 +41,7 @@ class OutboxEvent(
     var lastError: String? = null,
 
     @Column(name = "created_at", nullable = false)
-    val createdAt: LocalDateTime = LocalDateTime.now()
+    val createdAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

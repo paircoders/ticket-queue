@@ -1,8 +1,10 @@
 package com.ticketqueue.common.config
 
+import com.ticketqueue.common.outbox.OutboxPollerProperties
 import jakarta.persistence.EntityManagerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.domain.EntityScan
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 
@@ -32,4 +34,5 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 @ConditionalOnClass(EntityManagerFactory::class)
 @EnableJpaRepositories(basePackages = ["com.ticketqueue.common.outbox"])
 @EntityScan(basePackages = ["com.ticketqueue.common.outbox"])
+@EnableConfigurationProperties(OutboxPollerProperties::class)
 class CommonJpaConfig

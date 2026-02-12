@@ -135,6 +135,8 @@ services:
       - postgres_reservation_pw
       - postgres_payment_pw
       - valkey_pw
+      - internal_api_key
+      - jwt_secret
       
 volumes:
   postgres_data:

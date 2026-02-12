@@ -16,7 +16,7 @@ data class ErrorResponse(
             return ErrorResponse(
                 code = errorCode.code,
                 message = message ?: errorCode.message,
-                timestamp = DateTimeUtils.now(),
+                timestamp = DateTimeUtils.nowFormatted(),
                 traceId = resolveTraceId()
             )
         }

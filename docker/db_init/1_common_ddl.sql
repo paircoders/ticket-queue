@@ -26,7 +26,7 @@ COMMENT ON TABLE common.outbox_events IS 'Transactional Outbox 패턴. 이벤트
 
 -- 컬럼 코멘트
 COMMENT ON COLUMN common.outbox_events.id IS '이벤트 고유 ID (Transactional Outbox)';
-COMMENT ON COLUMN common.outbox_events.aggregate_type IS '이벤트 발행 주체 (Reservation/Payment/Event)';
+COMMENT ON COLUMN common.outbox_events.aggregate_type IS '이벤트 발행 주체 (Reservation/Payment)';
 COMMENT ON COLUMN common.outbox_events.aggregate_id IS '이벤트 발행 대상 엔티티 ID';
 COMMENT ON COLUMN common.outbox_events.event_type IS '이벤트 타입 (PaymentSuccess/PaymentFailed/ReservationCancelled 등)';
 COMMENT ON COLUMN common.outbox_events.payload IS '이벤트 데이터 (JSONB). 예: {"reservationId": "uuid", "userId": "uuid"}';
