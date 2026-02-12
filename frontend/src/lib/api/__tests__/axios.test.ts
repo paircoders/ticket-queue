@@ -8,6 +8,11 @@ import { redirectTo } from '@/lib/navigation'
 
 jest.mock('../error-handler')
 jest.mock('@/lib/navigation')
+jest.mock('@/lib/auth/cookies', () => ({
+  setAccessTokenCookie: jest.fn().mockResolvedValue(undefined),
+  setRefreshTokenCookie: jest.fn().mockResolvedValue(undefined),
+  clearAllTokenCookies: jest.fn().mockResolvedValue(undefined),
+}))
 
 const mockRedirectTo = redirectTo as jest.MockedFunction<typeof redirectTo>
 
@@ -50,7 +55,7 @@ describe('Axios Interceptors', () => {
 
   describe('Request Interceptor', () => {
     it('adds Authorization header when accessToken exists', async () => {
-      useAuthStore.getState().setTokens('access-token', 'refresh-token')
+      useAuthStore.getState().setAccessToken('access-token')
 
       mock.onGet('/test').reply((config) => {
         expect(config.headers?.Authorization).toBe('Bearer access-token')
@@ -82,7 +87,7 @@ describe('Axios Interceptors', () => {
     })
 
     it('adds both headers when both tokens exist', async () => {
-      useAuthStore.getState().setTokens('access-token', 'refresh-token')
+      useAuthStore.getState().setAccessToken('access-token')
       useQueueStore.getState().setQueueToken('queue-token-123', 'schedule-1')
 
       mock.onGet('/test').reply((config) => {
@@ -97,7 +102,7 @@ describe('Axios Interceptors', () => {
 
   describe('Response Interceptor - Token Refresh', () => {
     it('refreshes token on 401 and retries original request', async () => {
-      useAuthStore.getState().setTokens('old-access', 'refresh-token')
+      useAuthStore.getState().setAccessToken('old-access')
 
       // First call: 401, second call (retry): success
       let callCount = 0
@@ -122,8 +127,8 @@ describe('Axios Interceptors', () => {
       const response = await apiClient.get('/test')
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.stringContaining('/auth/refresh'),
-        { refreshToken: 'refresh-token' },
+        expect.stringContaining('/api/auth/refresh'),
+        {},
         expect.any(Object)
       )
 
@@ -131,20 +136,8 @@ describe('Axios Interceptors', () => {
       expect(response.data.result).toBe('ok')
     })
 
-    it('logs out and redirects when no refreshToken', async () => {
-      useAuthStore.getState().setAccessToken('access-token') // No refresh token
-
-      mock.onGet('/test').reply(401, { message: 'Unauthorized' })
-
-      await expect(apiClient.get('/test')).rejects.toThrow()
-
-      expect(mockAxiosPost).not.toHaveBeenCalled()
-      expect(useAuthStore.getState().accessToken).toBeNull()
-      expect(mockRedirectTo).toHaveBeenCalledWith('/login')
-    })
-
     it('logs out and redirects when refresh API fails', async () => {
-      useAuthStore.getState().setTokens('access-token', 'refresh-token')
+      useAuthStore.getState().setAccessToken('access-token')
 
       mock.onGet('/test').reply(401, { message: 'Unauthorized' })
 
@@ -157,7 +150,7 @@ describe('Axios Interceptors', () => {
     })
 
     it('does not retry when request already has _retry flag', async () => {
-      useAuthStore.getState().setTokens('access-token', 'refresh-token')
+      useAuthStore.getState().setAccessToken('access-token')
 
       // First call: 401 triggers refresh + retry with _retry=true
       // Second call (retry): also 401, but _retry is set so no more refresh
@@ -181,7 +174,7 @@ describe('Axios Interceptors', () => {
     })
 
     it('handles concurrent 401s with single refresh call', async () => {
-      useAuthStore.getState().setTokens('old-access', 'refresh-token')
+      useAuthStore.getState().setAccessToken('old-access')
 
       const deferred = createDeferred<any>()
 
@@ -223,7 +216,7 @@ describe('Axios Interceptors', () => {
     })
 
     it('rejects all queued requests when refresh fails', async () => {
-      useAuthStore.getState().setTokens('old-access', 'refresh-token')
+      useAuthStore.getState().setAccessToken('old-access')
 
       const deferred = createDeferred<any>()
 
