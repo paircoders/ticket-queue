@@ -37,6 +37,8 @@ export interface Seat {
   id: string
   seatNumber: string
   status: string
+  grade: string
+  price: number
 }
 
 export interface SeatGrade {

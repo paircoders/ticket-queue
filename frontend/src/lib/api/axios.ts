@@ -76,29 +76,28 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const { refreshToken, logout, setAccessToken, setTokens } =
-        useAuthStore.getState()
-
-      if (!refreshToken) {
-        isRefreshing = false
-        processQueue(error, null)
-        logout()
-        redirectTo('/login')
-        return Promise.reject(error)
-      }
+      const { logout, setAccessToken } = useAuthStore.getState()
 
       try {
-        // Use plain axios to avoid infinite loop
+        // Next.js API 라우트로 변경 (refreshToken은 httpOnly 쿠키에서 자동으로 전달)
         const { data } = await axios.post<RefreshResponse>(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`,
-          { refreshToken },
+          '/api/auth/refresh',
+          {}, // body 없음 (쿠키에서 읽음)
           {
+            baseURL: '', // baseURL 오버라이드 (Next.js API 라우트)
             headers: { 'Content-Type': 'application/json' },
           }
         )
 
-        setAccessToken(data.accessToken)
-        setTokens(data.accessToken, data.refreshToken)
+        setAccessToken(data.accessToken) // Zustand 업데이트
+
+        // Server Action으로 쿠키 업데이트
+        const { setAccessTokenCookie, setRefreshTokenCookie } =
+          await import('@/lib/auth/cookies')
+        await setAccessTokenCookie(data.accessToken)
+        if (data.refreshToken) {
+          await setRefreshTokenCookie(data.refreshToken)
+        }
 
         processQueue(null, data.accessToken)
 
@@ -106,6 +105,11 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
+
+        // Server Action으로 쿠키 삭제
+        const { clearAllTokenCookies } = await import('@/lib/auth/cookies')
+        await clearAllTokenCookies()
+
         logout()
         redirectTo('/login')
         return Promise.reject(refreshError)
