@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -51,7 +52,7 @@ class ProcessedEventService(
 
     @Transactional
     fun cleanupOldEvents(retentionDays: Long = 7): Int {
-        val cutoff = LocalDateTime.now().minusDays(retentionDays)
+        val cutoff = LocalDateTime.now(ZoneOffset.UTC).minusDays(retentionDays)
         val deletedCount = processedEventRepository.deleteByProcessedAtBefore(cutoff)
         logger.info { "Cleaned up $deletedCount processed events older than $retentionDays days" }
         return deletedCount

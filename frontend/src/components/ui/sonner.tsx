@@ -1,4 +1,4 @@
-"use client";
+'use client'
 
 import {
   CircleCheckIcon,
@@ -6,8 +6,8 @@ import {
   Loader2Icon,
   OctagonXIcon,
   TriangleAlertIcon,
-} from "lucide-react";
-import { Toaster as Sonner, type ToasterProps } from "sonner";
+} from 'lucide-react'
+import { Toaster as Sonner, type ToasterProps } from 'sonner'
 
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
@@ -26,14 +26,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--color-popover)",
-          "--normal-text": "var(--color-popover-foreground)",
-          "--normal-border": "var(--color-border)",
+          '--normal-bg': 'var(--color-popover)',
+          '--normal-text': 'var(--color-popover-foreground)',
+          '--normal-border': 'var(--color-border)',
         } as React.CSSProperties
       }
       {...props}
     />
-  );
-};
+  )
+}
 
-export { Toaster };
+export { Toaster }

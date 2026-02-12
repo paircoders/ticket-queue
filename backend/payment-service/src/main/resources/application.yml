@@ -7,6 +7,10 @@ outbox:
     max-retry-count: 3
     batch-size: 100
     fixed-delay: 1000
+  cleanup:
+    enabled: true
+    aggregate-type: Payment
+    retention-days: 7
 
 spring:
   application:
@@ -26,6 +30,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: payment_service
         format_sql: true
+        jdbc:
+          time_zone: UTC
     show-sql: false
     open-in-view: false
 
@@ -96,3 +102,9 @@ management:
   endpoint:
     health:
       show-details: always
+
+outbox:
+  cleanup:
+    enabled: true
+    aggregate-type: Payment
+    retention-days: 7

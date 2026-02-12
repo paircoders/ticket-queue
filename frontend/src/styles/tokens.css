@@ -11,7 +11,7 @@
   --color-primary-400: oklch(0.63 0.13 250);
   --color-primary-500: oklch(0.55 0.15 250);
   --color-primary-600: oklch(0.48 0.15 250);
-  --color-primary-700: oklch(0.40 0.13 250);
+  --color-primary-700: oklch(0.4 0.13 250);
   --color-primary-800: oklch(0.33 0.11 250);
   --color-primary-900: oklch(0.27 0.09 250);
 
@@ -23,17 +23,17 @@
   --color-secondary-400: oklch(0.66 0.025 265);
   --color-secondary-500: oklch(0.56 0.03 265);
   --color-secondary-600: oklch(0.48 0.03 265);
-  --color-secondary-700: oklch(0.40 0.025 265);
+  --color-secondary-700: oklch(0.4 0.025 265);
   --color-secondary-800: oklch(0.32 0.02 265);
   --color-secondary-900: oklch(0.25 0.015 265);
 
   /* Semantic Colors - 의미론적 색상 */
-  --color-success: oklch(0.72 0.15 155);        /* 성공 메시지, 확인 (#10B981) */
-  --color-warning: oklch(0.80 0.15 85);         /* 경고 메시지 (#F59E0B) */
-  --color-error: oklch(0.63 0.20 25);           /* 에러, 삭제 액션 (#EF4444) */
-  --color-danger: oklch(0.63 0.20 25);          /* error 별칭 */
-  --color-background: oklch(0.99 0 0);          /* 배경색 (#F9FAFB) */
-  --color-text: oklch(0.20 0 0);                /* 기본 텍스트 (#111827) */
+  --color-success: oklch(0.72 0.15 155); /* 성공 메시지, 확인 (#10B981) */
+  --color-warning: oklch(0.8 0.15 85); /* 경고 메시지 (#F59E0B) */
+  --color-error: oklch(0.63 0.2 25); /* 에러, 삭제 액션 (#EF4444) */
+  --color-danger: oklch(0.63 0.2 25); /* error 별칭 */
+  --color-background: oklch(0.99 0 0); /* 배경색 (#F9FAFB) */
+  --color-text: oklch(0.2 0 0); /* 기본 텍스트 (#111827) */
 
   /* Gray Scale - 중성 회색 */
   --color-gray-50: oklch(0.98 0 0);
@@ -45,44 +45,44 @@
   --color-gray-600: oklch(0.45 0 0);
   --color-gray-700: oklch(0.37 0 0);
   --color-gray-800: oklch(0.27 0 0);
-  --color-gray-900: oklch(0.20 0 0);
+  --color-gray-900: oklch(0.2 0 0);
 
   /* ============================================
      타이포그래피 (Typography)
      ============================================ */
 
-  --text-h1: 2.5rem / 1.2 700;              /* 40px, Bold */
-  --text-h2: 2rem / 1.3 600;                /* 32px, SemiBold */
-  --text-h3: 1.5rem / 1.4 600;              /* 24px, SemiBold */
-  --text-body: 1rem / 1.5 400;              /* 16px, Regular */
-  --text-caption: 0.875rem / 1.4 400;       /* 14px, Regular */
+  --text-h1: 2.5rem / 1.2 700; /* 40px, Bold */
+  --text-h2: 2rem / 1.3 600; /* 32px, SemiBold */
+  --text-h3: 1.5rem / 1.4 600; /* 24px, SemiBold */
+  --text-body: 1rem / 1.5 400; /* 16px, Regular */
+  --text-caption: 0.875rem / 1.4 400; /* 14px, Regular */
 
   /* ============================================
      간격 (Spacing)
      ============================================ */
 
-  --spacing-xs: 0.25rem;                    /* 4px - 아이콘-텍스트 간격 */
-  --spacing-sm: 0.5rem;                     /* 8px - 컴포넌트 내부 간격 */
-  --spacing-md: 1rem;                       /* 16px - 컴포넌트 간 간격 */
-  --spacing-lg: 1.5rem;                     /* 24px - 섹션 간 간격 */
-  --spacing-xl: 2rem;                       /* 32px - 페이지 레벨 간격 */
-  --spacing-header: 64px;                   /* 헤더 높이 */
-  --spacing-sidebar: 280px;                 /* 사이드바 너비 */
+  --spacing-xs: 0.25rem; /* 4px - 아이콘-텍스트 간격 */
+  --spacing-sm: 0.5rem; /* 8px - 컴포넌트 내부 간격 */
+  --spacing-md: 1rem; /* 16px - 컴포넌트 간 간격 */
+  --spacing-lg: 1.5rem; /* 24px - 섹션 간 간격 */
+  --spacing-xl: 2rem; /* 32px - 페이지 레벨 간격 */
+  --spacing-header: 64px; /* 헤더 높이 */
+  --spacing-sidebar: 280px; /* 사이드바 너비 */
 
   /* ============================================
      Border Radius
      ============================================ */
 
-  --radius-sm: 0.25rem;                     /* 4px - Badge, Tag */
-  --radius-md: 0.5rem;                      /* 8px - Button, Input, Card */
-  --radius-lg: 1rem;                        /* 16px - Modal, Dialog */
-  --radius-full: 9999px;                    /* Avatar, Pill Button */
+  --radius-sm: 0.25rem; /* 4px - Badge, Tag */
+  --radius-md: 0.5rem; /* 8px - Button, Input, Card */
+  --radius-lg: 1rem; /* 16px - Modal, Dialog */
+  --radius-full: 9999px; /* Avatar, Pill Button */
 
   /* ============================================
      폰트 (Fonts)
      ============================================ */
 
-  --font-sans: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+  --font-sans: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
 
   /* ============================================
      브레이크포인트 (Breakpoints)

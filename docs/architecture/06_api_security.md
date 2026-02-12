@@ -67,10 +67,10 @@
 
 #### 1.2.3 대기열 API (Queue Service)
 
-| Method | Endpoint | 설명 | 인증 | Rate Limit |
-|--------|----------|------|------|-----------|
+| Method | Endpoint | 설명 | 인증 | Rate Limit  |
+|--------|----------|------|------|-------------|
 | POST | `/queue/enter` | 대기열 진입 | 필수 | 100/분 (사용자) |
-| GET | `/queue/status` | 대기열 상태 조회 | 필수 | 60/분 (사용자) |
+| GET | `/queue/status` | 대기열 상태 조회 | 필수 | 15/분 (사용자)   |
 | DELETE | `/queue/leave` | 대기열 이탈 | 필수 | 100/분 (사용자) |
 
 **관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-002, REQ-QUEUE-008

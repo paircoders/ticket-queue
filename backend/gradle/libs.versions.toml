@@ -1,6 +1,7 @@
 [versions]
 # Kotlin
 kotlin = "2.1.0"
+ksp = "2.1.0-1.0.29"
 
 # Spring
 spring-boot = "3.5.10"
@@ -10,6 +11,9 @@ spring-dependency-management = "1.1.7"
 
 # Database
 postgresql = "42.7.4"
+
+# Querydsl
+querydsl = "6.12"
 
 # Redis
 redisson = "3.40.2"
@@ -74,6 +78,10 @@ jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
 jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
 jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 
+# Querydsl
+querydsl-jpa = { module = "io.github.openfeign.querydsl:querydsl-jpa", version.ref = "querydsl" }
+querydsl-ksp-codegen = { module = "io.github.openfeign.querydsl:querydsl-ksp-codegen", version.ref = "querydsl" }
+
 # Resilience4j
 resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spring-boot3", version.ref = "resilience4j" }
 resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
@@ -106,5 +114,6 @@ testcontainers = ["testcontainers-junit-jupiter", "testcontainers-postgresql", "
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
 kotlin-jpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
