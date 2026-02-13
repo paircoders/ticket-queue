@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <!--
+        WARNING: api-gateway는 WebFlux 기반으로 common 모듈(WebMVC)을 의존할 수 없습니다.
+        따라서 logback-base.xml의 appender 정의들을 이 파일에서 중복 선언합니다.
+        logback-base.xml을 수정할 때는 반드시 이 파일도 동기화해야 합니다.
+    -->
     <!-- Service Name -->
     <property name="SERVICE_NAME" value="api-gateway"/>
     <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>

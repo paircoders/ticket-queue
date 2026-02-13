@@ -40,6 +40,7 @@ dependencies {
     // Logging
     api(libs.kotlin.logging)
     api(libs.logstash.logback.encoder)
+    
     // Querydsl
     api(libs.querydsl.jpa)
     ksp(libs.querydsl.ksp.codegen)
@@ -60,9 +61,11 @@ dependencies {
 
     // TestContainers
     testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.bundles.test.base)
     testImplementation(libs.bundles.testcontainers)
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
 
     // Awaitility for async testing
     testImplementation("org.awaitility:awaitility:4.2.0")
+    implementation(kotlin("test"))
 }

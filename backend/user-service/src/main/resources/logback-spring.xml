@@ -13,6 +13,7 @@
         </root>
         <!-- Service-specific logger levels -->
         <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="com.ticketqueue.user" level="DEBUG"/>
     </springProfile>
 
     <!-- Profile: prod -->

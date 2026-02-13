@@ -36,7 +36,7 @@ class RecaptchaService(
         }
     }
 
-    private data class RecaptchaResponse(
+    internal data class RecaptchaResponse(
         val success: Boolean,
         val challengeTs: String? = null,
         val hostname: String? = null,

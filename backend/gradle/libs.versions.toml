@@ -37,6 +37,7 @@ logstash-logback-encoder = "8.1"
 testcontainers = "1.20.4"
 mockk = "1.13.13"
 kotest = "5.9.1"
+springmockk = "4.0.2"
 
 [libraries]
 # Kotlin
@@ -101,8 +102,10 @@ testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", ve
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+springmockk = { module = "com.ninja-squad:springmockk", version.ref = "springmockk" }
 kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
 kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
+kotest-extensions-spring = { module = "io.kotest.extensions:kotest-extensions-spring", version = "1.3.0" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 reactor-test = { module = "io.projectreactor:reactor-test" }
 
@@ -110,7 +113,7 @@ reactor-test = { module = "io.projectreactor:reactor-test" }
 kotlin = ["kotlin-reflect", "kotlin-stdlib", "jackson-module-kotlin"]
 jjwt = ["jjwt-api", "jjwt-impl", "jjwt-jackson"]
 resilience4j = ["resilience4j-spring-boot3", "resilience4j-circuitbreaker", "resilience4j-ratelimiter"]
-test-base = ["spring-boot-starter-test", "mockk", "kotest-runner-junit5", "kotest-assertions-core"]
+test-base = ["spring-boot-starter-test", "mockk", "springmockk", "kotest-runner-junit5", "kotest-assertions-core", "kotest-extensions-spring"]
 testcontainers = ["testcontainers-junit-jupiter", "testcontainers-postgresql", "testcontainers-kafka"]
 
 [plugins]
