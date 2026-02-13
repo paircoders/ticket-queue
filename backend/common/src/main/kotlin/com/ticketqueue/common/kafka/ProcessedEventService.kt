@@ -3,7 +3,7 @@ package com.ticketqueue.common.kafka
 import com.ticketqueue.common.outbox.ProcessedEvent
 import com.ticketqueue.common.outbox.ProcessedEventId
 import com.ticketqueue.common.outbox.ProcessedEventRepository
-import org.slf4j.LoggerFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
@@ -19,7 +19,7 @@ class ProcessedEventService(
     private val processedEventRepository: ProcessedEventRepository,
 ) {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val logger = KotlinLogging.logger {}
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun tryRecord(
@@ -39,7 +39,7 @@ class ProcessedEventService(
             )
             true
         } catch (e: DataIntegrityViolationException) {
-            log.debug("Event already processed: eventId={}, consumer={}", eventId, consumerService)
+            logger.debug { "Event already processed: eventId=$eventId, consumer=$consumerService" }
             false
         }
     }
@@ -47,14 +47,14 @@ class ProcessedEventService(
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun deleteRecord(eventId: UUID, consumerService: String) {
         processedEventRepository.deleteById(ProcessedEventId(eventId, consumerService))
-        log.debug("Deleted processed event record for retry: eventId={}, consumer={}", eventId, consumerService)
+        logger.debug { "Deleted processed event record for retry: eventId=$eventId, consumer=$consumerService" }
     }
 
     @Transactional
     fun cleanupOldEvents(retentionDays: Long = 7): Int {
         val cutoff = LocalDateTime.now(ZoneOffset.UTC).minusDays(retentionDays)
         val deletedCount = processedEventRepository.deleteByProcessedAtBefore(cutoff)
-        log.info("Cleaned up {} processed events older than {} days", deletedCount, retentionDays)
+        logger.info { "Cleaned up $deletedCount processed events older than $retentionDays days" }
         return deletedCount
     }
 }

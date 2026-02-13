@@ -16,7 +16,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: user_service
         format_sql: true
-    show-sql: true
+    show-sql: false
     open-in-view: false
 
 jwt:
@@ -36,10 +36,6 @@ management:
   endpoint:
     health:
       show-details: always
-
-logging:
-  level:
-    org.hibernate.SQL: DEBUG
 
 recaptcha:
   url: https://www.google.com/recaptcha/api/siteverify

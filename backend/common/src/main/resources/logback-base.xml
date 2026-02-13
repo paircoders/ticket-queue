@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<included>
+    <!--
+        이 파일을 include하는 서비스는 반드시 SERVICE_NAME property를 정의해야 합니다.
+        예: <property name="SERVICE_NAME" value="user-service"/>
+    -->
+    <!-- Properties -->
+    <property name="SERVICE_NAME" value="${SERVICE_NAME:-unknown-service}"/>
+    <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
+    <property name="TEXT_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-NO_TRACE}] %-5level %logger{36} - %msg%n"/>
+
+    <!-- TEXT Console Appender (개발용) -->
+    <appender name="TEXT_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${TEXT_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- JSON Console Appender (프로덕션용) -->
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"serviceName":"${SERVICE_NAME}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <!-- TEXT Rolling File Appender -->
+    <appender name="TEXT_ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/${SERVICE_NAME}/application.log</file>
+        <encoder>
+            <pattern>${TEXT_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${SERVICE_NAME}/application.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- JSON Rolling File Appender (프로덕션용) -->
+    <appender name="JSON_ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/${SERVICE_NAME}/application-json.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"serviceName":"${SERVICE_NAME}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${SERVICE_NAME}/application-json.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+</included>

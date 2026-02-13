@@ -37,6 +37,10 @@ dependencies {
     api(platform(libs.spring.cloud.aws.dependencies))
     api(libs.spring.cloud.aws.starter.secrets.manager)
 
+    // Logging
+    api(libs.kotlin.logging)
+    api(libs.logstash.logback.encoder)
+    
     // Querydsl
     api(libs.querydsl.jpa)
     ksp(libs.querydsl.ksp.codegen)

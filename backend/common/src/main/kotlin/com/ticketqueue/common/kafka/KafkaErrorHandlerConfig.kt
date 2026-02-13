@@ -3,7 +3,6 @@ package com.ticketqueue.common.kafka
 import com.ticketqueue.common.kafka.KafkaTopicConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
@@ -20,7 +19,7 @@ import org.springframework.util.backoff.ExponentialBackOff
 @ConditionalOnClass(KafkaTemplate::class)
 class KafkaErrorHandlerConfig {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val logger = KotlinLogging.logger {}
 
     @Value("\${spring.kafka.bootstrap-servers:localhost:9092}")
     private lateinit var bootstrapServers: String
@@ -67,10 +66,10 @@ class KafkaErrorHandlerConfig {
             errorHandler.addNotRetryableExceptions(exceptionClass)
         }
 
-        log.info(
-            "Kafka error handler configured: backoff=exponential(1s/2x/10s), maxRetries=3, nonRetryable={}",
-            ExceptionClassifier.nonRetryableExceptions().map { it.simpleName },
-        )
+        logger.info {
+            "Kafka error handler configured: backoff=exponential(1s/2x/10s), maxRetries=3, " +
+            "nonRetryable=${ExceptionClassifier.nonRetryableExceptions().map { it.simpleName }}"
+        }
 
         return errorHandler
     }

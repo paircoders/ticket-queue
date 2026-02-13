@@ -24,9 +24,3 @@ spring:
         spring.json.trusted.packages: com.ticketqueue.*
     listener:
       ack-mode: MANUAL_IMMEDIATE
-
-logging:
-  level:
-    com.ticketqueue.event: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

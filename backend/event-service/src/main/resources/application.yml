@@ -18,7 +18,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: event_service
         format_sql: true
-    show-sql: true
+    show-sql: false
     open-in-view: false
 
 cache:
@@ -41,8 +41,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-logging:
-  level:
-    com.ticketqueue.event: DEBUG
-    org.hibernate.SQL: DEBUG

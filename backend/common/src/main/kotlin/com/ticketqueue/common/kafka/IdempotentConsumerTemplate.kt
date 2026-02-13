@@ -1,7 +1,7 @@
 package com.ticketqueue.common.kafka
 
 import com.ticketqueue.common.event.BaseEvent
-import org.slf4j.LoggerFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
@@ -12,7 +12,7 @@ class IdempotentConsumerTemplate(
     private val processedEventService: ProcessedEventService,
 ) {
 
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val logger = KotlinLogging.logger {}
 
     fun <T : BaseEvent> process(
         event: T,
@@ -24,10 +24,7 @@ class IdempotentConsumerTemplate(
         val eventType = event.eventType
         val aggregateId = event.aggregateId
 
-        log.debug(
-            "Processing event: eventId={}, type={}, consumer={}",
-            eventId, eventType, consumerService,
-        )
+        logger.debug { "Processing event: eventId=$eventId, type=$eventType, consumer=$consumerService" }
 
         val isNew = processedEventService.tryRecord(
             eventId = eventId,
@@ -37,7 +34,7 @@ class IdempotentConsumerTemplate(
         )
 
         if (!isNew) {
-            log.info("Skipping duplicate event: eventId={}, consumer={}", eventId, consumerService)
+            logger.info { "Skipping duplicate event: eventId=$eventId, consumer=$consumerService" }
             acknowledgment.acknowledge()
             return
         }
@@ -45,20 +42,14 @@ class IdempotentConsumerTemplate(
         try {
             businessLogic(event)
             acknowledgment.acknowledge()
-            log.debug("Event processed successfully: eventId={}, consumer={}", eventId, consumerService)
+            logger.debug { "Event processed successfully: eventId=$eventId, consumer=$consumerService" }
         } catch (e: Exception) {
             if (ExceptionClassifier.isRetryable(e)) {
-                log.warn(
-                    "Retryable error processing event: eventId={}, consumer={}, error={}",
-                    eventId, consumerService, e.message,
-                )
+                logger.warn { "Retryable error processing event: eventId=$eventId, consumer=$consumerService, error=${e.message}" }
                 processedEventService.deleteRecord(eventId, consumerService)
                 throw e
             } else {
-                log.error(
-                    "Non-retryable error processing event: eventId={}, consumer={}, error={}",
-                    eventId, consumerService, e.message, e,
-                )
+                logger.error(e) { "Non-retryable error processing event: eventId=$eventId, consumer=$consumerService, error=${e.message}" }
                 throw e
             }
         }

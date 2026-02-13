@@ -32,7 +32,7 @@ spring:
         format_sql: true
         jdbc:
           time_zone: UTC
-    show-sql: true
+    show-sql: false
     open-in-view: false
 
   data:
@@ -92,11 +92,6 @@ management:
   endpoint:
     health:
       show-details: always
-
-logging:
-  level:
-    com.ticketqueue.reservation: DEBUG
-    org.hibernate.SQL: DEBUG
 
 outbox:
   cleanup:

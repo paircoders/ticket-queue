@@ -29,6 +29,10 @@ resilience4j = "2.2.0"
 # Jackson
 jackson-kotlin = "2.18.2"
 
+# Logging
+kotlin-logging = "7.0.3"
+logstash-logback-encoder = "8.1"
+
 # Test
 testcontainers = "1.20.4"
 mockk = "1.13.13"
@@ -84,6 +88,10 @@ resilience4j-spring-boot3 = { module = "io.github.resilience4j:resilience4j-spri
 resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
 resilience4j-ratelimiter = { module = "io.github.resilience4j:resilience4j-ratelimiter", version.ref = "resilience4j" }
 resilience4j-reactor = { module = "io.github.resilience4j:resilience4j-reactor", version.ref = "resilience4j" }
+
+# Logging
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+logstash-logback-encoder = { module = "net.logstash.logback:logstash-logback-encoder", version.ref = "logstash-logback-encoder" }
 
 # Test
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }

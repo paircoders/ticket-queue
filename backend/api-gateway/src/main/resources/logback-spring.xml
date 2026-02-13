@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+        WARNING: api-gateway는 WebFlux 기반으로 common 모듈(WebMVC)을 의존할 수 없습니다.
+        따라서 logback-base.xml의 appender 정의들을 이 파일에서 중복 선언합니다.
+        logback-base.xml을 수정할 때는 반드시 이 파일도 동기화해야 합니다.
+    -->
+    <!-- Service Name -->
+    <property name="SERVICE_NAME" value="api-gateway"/>
+    <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
+    <property name="TEXT_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-NO_TRACE}] %-5level %logger{36} - %msg%n"/>
+
+    <!-- TEXT Console Appender (개발용) -->
+    <appender name="TEXT_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${TEXT_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- JSON Console Appender (프로덕션용) -->
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"serviceName":"${SERVICE_NAME}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <!-- TEXT Rolling File Appender -->
+    <appender name="TEXT_ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/${SERVICE_NAME}/application.log</file>
+        <encoder>
+            <pattern>${TEXT_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${SERVICE_NAME}/application.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- JSON Rolling File Appender (프로덕션용) -->
+    <appender name="JSON_ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/${SERVICE_NAME}/application-json.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"serviceName":"${SERVICE_NAME}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+                <stackTrace>stackTrace</stackTrace>
+            </fieldNames>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/${SERVICE_NAME}/application-json.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Profile: local -->
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="TEXT_CONSOLE"/>
+        </root>
+        <!-- Service-specific logger levels -->
+        <logger name="com.ticketqueue.gateway" level="DEBUG"/>
+        <logger name="org.springframework.cloud.gateway" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Profile: prod -->
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+            <appender-ref ref="JSON_ROLLING_FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Profile: default (프로필 미지정 시) -->
+    <springProfile name="default">
+        <root level="INFO">
+            <appender-ref ref="TEXT_CONSOLE"/>
+            <appender-ref ref="TEXT_ROLLING_FILE"/>
+        </root>
+    </springProfile>
+</configuration>

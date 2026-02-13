@@ -1,6 +1,6 @@
 package com.ticketqueue.common.config
 
-import org.slf4j.LoggerFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpRequest
 import org.springframework.http.client.ClientHttpRequestExecution
 import org.springframework.http.client.ClientHttpRequestInterceptor
@@ -8,7 +8,7 @@ import org.springframework.http.client.ClientHttpResponse
 import java.nio.charset.StandardCharsets
 
 class ExternalApiLoggingInterceptor : ClientHttpRequestInterceptor {
-    private val log = LoggerFactory.getLogger(javaClass)
+    private val logger = KotlinLogging.logger {}
 
     override fun intercept(
         request: HttpRequest,
@@ -22,11 +22,11 @@ class ExternalApiLoggingInterceptor : ClientHttpRequestInterceptor {
     }
 
     private fun logRequest(request: HttpRequest, body: ByteArray) {
-        log.info(">>> External Request: [{} {}] Body: {}",
-            request.method, request.uri, String(body, StandardCharsets.UTF_8))
+        val bodyString = String(body, StandardCharsets.UTF_8)
+        logger.info { ">>> External Request: [${request.method} ${request.uri}] Body: $bodyString" }
     }
 
     private fun logResponse(response: ClientHttpResponse) {
-        log.info("<<< External Response: [{}]", response.statusCode)
+        logger.info { "<<< External Response: [${response.statusCode}]" }
     }
 }

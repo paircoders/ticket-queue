@@ -34,7 +34,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-logging:
-  level:
-    com.ticketqueue.queue: DEBUG
