@@ -23,6 +23,9 @@ dependencies {
     implementation(libs.kotlin.logging)
     implementation(libs.logstash.logback.encoder)
 
+    // Context Propagation (Reactor Context ↔ MDC 자동 동기화)
+    implementation(libs.micrometer.context.propagation)
+
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.reactor.test)
