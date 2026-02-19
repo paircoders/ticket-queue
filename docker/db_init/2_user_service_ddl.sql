@@ -7,7 +7,7 @@ CREATE TABLE user_service.users (
     email_hash VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
-    phone VARCHAR(50) NOT NULL,
+    phone VARCHAR(100) NOT NULL,
     phone_hash VARCHAR(255) NOT NULL,
     ci VARCHAR(512),
     ci_hash VARCHAR(255),

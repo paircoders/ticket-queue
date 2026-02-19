@@ -137,6 +137,12 @@ services:
       - valkey_pw
       - internal_api_key
       - jwt_secret
+      - portone_api_secret
+      - portone_store_id
+      - portone_channel_key
+      - recaptcha_secret
+      - enc_secret_key
+      - enc_hash_salt
       
 volumes:
   postgres_data:
@@ -165,3 +171,15 @@ secrets:
       file: ./secrets/internal_api_key.txt
     jwt_secret:
       file: ./secrets/jwt_secret.txt
+    portone_api_secret:
+      file: ./secrets/portone_api_secret.txt
+    portone_store_id:
+      file: ./secrets/portone_store_id.txt
+    portone_channel_key:
+      file: ./secrets/portone_channel_key.txt
+    recaptcha_secret:
+      file: ./secrets/recaptcha_secret.txt
+    enc_secret_key:
+      file: ./secrets/enc_secret_key.txt
+    enc_hash_salt:
+      file: ./secrets/enc_hash_salt.txt
