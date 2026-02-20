@@ -69,16 +69,16 @@ class VenueService(
     /**
      * 공연장 상세 조회
      *
-     * 공연장 기본 정보와 함께 소속 홀 목록을 포함하여 반환한다.
+     * QueryDSL LEFT JOIN FETCH로 Venue와 Hall을 단일 쿼리로 조회하여 N+1 문제를 해결한다.
      *
      * @param venueId 조회할 공연장 ID
      * @return 공연장 상세 정보 (홀 목록 포함)
      * @throws EventException 공연장이 존재하지 않을 경우 (VENUE_NOT_FOUND)
      */
     fun getVenue(venueId: UUID): VenueDto.DetailResponse {
-        val venue = findVenueById(venueId)
-        val halls = hallRepository.findByVenueId(venueId)
-        return VenueDto.DetailResponse.from(venue, halls)
+        val venue = venueRepository.findVenueWithHalls(venueId)
+            ?: throw EventException(ErrorCode.VENUE_NOT_FOUND)
+        return VenueDto.DetailResponse.from(venue, venue.halls)
     }
 
     /**

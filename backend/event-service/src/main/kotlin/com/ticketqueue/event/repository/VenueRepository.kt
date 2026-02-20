@@ -8,6 +8,6 @@ import org.springframework.stereotype.Repository
 import java.util.UUID
 
 @Repository
-interface VenueRepository : JpaRepository<Venue, UUID> {
+interface VenueRepository : JpaRepository<Venue, UUID>, VenueRepositoryCustom {
     fun findByCity(city: String, pageable: Pageable): Page<Venue>
 }

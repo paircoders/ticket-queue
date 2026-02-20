@@ -54,6 +54,8 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    // 내부 서비스 간 통신 API - Spring Security 공개 (API Key 인증은 InternalApiAuthInterceptor에서 처리)
+                    .requestMatchers("/internal/**").permitAll()
                     // 공연장/홀 조회 API - 공개
                     .requestMatchers(HttpMethod.GET, "/venues/**").permitAll()
                     // 공연장/홀 변경 API - ADMIN 전용

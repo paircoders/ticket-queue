@@ -130,7 +130,7 @@ class HallService(
 
         // 이름이 실제로 변경될 때만 중복 검증 (자기 자신 제외)
         if (request.name != null && request.name != hall.name) {
-            if (hallRepository.existsByVenueIdAndNameAndIdNot(venueId, request.name, hallId)) {
+            if (hallRepository.existsByVenueIdAndNameExcluding(venueId, request.name, hallId)) {
                 throw EventException(ErrorCode.HALL_NAME_DUPLICATE)
             }
         }

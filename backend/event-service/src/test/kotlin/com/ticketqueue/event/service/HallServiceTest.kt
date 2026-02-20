@@ -215,7 +215,7 @@ class HallServiceTest {
                 seatTemplate = newTemplate
             )
             every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
-            every { hallRepository.existsByVenueIdAndNameAndIdNot(venueId, "올림픽홀", hallId) } returns false
+            every { hallRepository.existsByVenueIdAndNameExcluding(venueId, "올림픽홀", hallId) } returns false
 
             val result = hallService.updateHall(venueId, hallId, request)
 
@@ -254,7 +254,7 @@ class HallServiceTest {
             val hall = createHall()
             val request = HallDto.UpdateRequest(name = "올림픽홀")
             every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
-            every { hallRepository.existsByVenueIdAndNameAndIdNot(venueId, "올림픽홀", hallId) } returns true
+            every { hallRepository.existsByVenueIdAndNameExcluding(venueId, "올림픽홀", hallId) } returns true
 
             val exception = assertThrows<EventException> {
                 hallService.updateHall(venueId, hallId, request)

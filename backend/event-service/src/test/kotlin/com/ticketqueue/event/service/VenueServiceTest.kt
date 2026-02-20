@@ -117,22 +117,20 @@ class VenueServiceTest {
     inner class GetVenue {
 
         @Test
-        @DisplayName("공연장 상세를 조회한다")
+        @DisplayName("공연장 상세를 조회한다 (fetch join으로 단일 쿼리)")
         fun success() {
             val venue = createVenue()
-            val halls = listOf(
-                Hall(
-                    id = UUID.randomUUID(),
-                    venue = venue,
-                    name = "KSPO DOME",
-                    capacity = 15000,
-                    seatTemplate = "{}",
-                    createdAt = now,
-                    updatedAt = now
-                )
+            val hall = Hall(
+                id = UUID.randomUUID(),
+                venue = venue,
+                name = "KSPO DOME",
+                capacity = 15000,
+                seatTemplate = "{}",
+                createdAt = now,
+                updatedAt = now
             )
-            every { venueRepository.findById(venueId) } returns Optional.of(venue)
-            every { hallRepository.findByVenueId(venueId) } returns halls
+            venue.halls.add(hall)
+            every { venueRepository.findVenueWithHalls(venueId) } returns venue
 
             val result = venueService.getVenue(venueId)
 
@@ -144,7 +142,7 @@ class VenueServiceTest {
         @Test
         @DisplayName("존재하지 않는 공연장 조회 시 예외가 발생한다")
         fun notFound() {
-            every { venueRepository.findById(venueId) } returns Optional.empty()
+            every { venueRepository.findVenueWithHalls(venueId) } returns null
 
             val exception = assertThrows<EventException> {
                 venueService.getVenue(venueId)
