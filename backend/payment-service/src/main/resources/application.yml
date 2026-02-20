@@ -96,9 +96,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-outbox:
-  cleanup:
-    enabled: true
-    aggregate-type: Payment
-    retention-days: 7

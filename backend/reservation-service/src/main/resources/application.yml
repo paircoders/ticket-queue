@@ -91,9 +91,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-outbox:
-  cleanup:
-    enabled: true
-    aggregate-type: Reservation
-    retention-days: 7
