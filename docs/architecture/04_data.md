@@ -1047,7 +1047,7 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (e
 </details>
 
 **정리 배치 작업:**
-- **실행 주기**: 매일 02:00 UTC
+- **실행 주기**: 매일 02:00 KST (Asia/Seoul)
 - **SQL**:
   ```sql
   -- 30일 이상 된 처리 기록 삭제

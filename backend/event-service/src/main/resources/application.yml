@@ -1,6 +1,11 @@
 server:
   port: 8082
 
+processed-event:
+  cleanup:
+    enabled: true
+    retention-days: 30
+
 spring:
   application:
     name: event-service
