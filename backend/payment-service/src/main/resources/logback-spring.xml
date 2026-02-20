@@ -15,6 +15,7 @@
         <logger name="com.ticketqueue.payment" level="DEBUG"/>
         <logger name="org.hibernate.SQL" level="DEBUG"/>
         <logger name="io.github.resilience4j" level="DEBUG"/>
+        <logger name="feign" level="DEBUG"/>
     </springProfile>
 
     <!-- Profile: prod -->

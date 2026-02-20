@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class InternalApiKeyValidator(
-    @Value("\${internal_api_key:}")
+    @Value("\${internal.api.key:}")
     private val internalApiKey: String
 ) {
     private val logger = KotlinLogging.logger {}

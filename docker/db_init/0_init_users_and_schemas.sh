@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 USER_SVC_PW=$(cat /run/secrets/postgres_user_pw)
