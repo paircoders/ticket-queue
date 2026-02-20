@@ -54,17 +54,17 @@ spring:
     listener:
       ack-mode: MANUAL_IMMEDIATE
 
-portone:
-  api-secret: ${PORTONE_API_SECRET:test-api-secret}
-  base-url: https://api.portone.io
-  timeout: 10000  # 10 seconds
-
 feign:
+  circuitbreaker:
+    enabled: true
   client:
     config:
       default:
-        connect-timeout: 5000
+        connect-timeout: 2000
         read-timeout: 5000
+      portone-v2-client:
+        connect-timeout: 2000
+        read-timeout: 10000
       reservation-service:
         url: http://localhost:8084
 
@@ -78,7 +78,7 @@ resilience4j:
         waitDurationInOpenState: 60s
         permittedNumberOfCallsInHalfOpenState: 3
     instances:
-      portone:
+      portone-v2-client:
         baseConfig: default
   retry:
     configs:
@@ -87,7 +87,7 @@ resilience4j:
         waitDuration: 1s
         exponentialBackoffMultiplier: 2
     instances:
-      portone:
+      portone-v2-client:
         baseConfig: default
 
 internal:

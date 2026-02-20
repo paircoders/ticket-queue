@@ -40,3 +40,28 @@ management:
 recaptcha:
   url: https://www.google.com/recaptcha/api/siteverify
   secret: ${recaptcha_secret}
+
+feign:
+  circuitbreaker:
+    enabled: true
+  client:
+    config:
+      default:
+        connect-timeout: 2000
+        read-timeout: 5000
+      portone-v2-client:
+        connect-timeout: 2000
+        read-timeout: 10000
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10        # 최근 10번 호출을 표본으로 삼음
+        minimumNumberOfCalls: 5      # 최소 5번은 호출되어야 실패율 계산을 시작함
+        failureRateThreshold: 50     # 실패율이 50% 이상(표본 내 절반 이상)이면 차단
+        waitDurationInOpenState: 60s # 차단(OPEN) 상태를 60초간 유지 후 HALF-OPEN으로 전환
+        permittedNumberOfCallsInHalfOpenState: 3 # 복구 확인을 위해 3번만 먼저 호출
+    instances:
+      portone-v2-client:
+        baseConfig: default
