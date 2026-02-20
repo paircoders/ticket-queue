@@ -1,6 +1,7 @@
 package com.ticketqueue.common.kafka
 
 import com.ticketqueue.common.kafka.KafkaTopicConfig
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.beans.factory.annotation.Value
@@ -44,7 +45,7 @@ class KafkaErrorHandlerConfig {
         return DeadLetterPublishingRecoverer(dlqKafkaTemplate) { record, _ ->
             val originalTopic = record.topic()
             val dlqTopic = KafkaTopicConfig.resolveDlqTopic(originalTopic)
-            log.warn("Sending failed record to DLQ: {} -> {}", originalTopic, dlqTopic)
+            logger.warn { "Sending failed record to DLQ: $originalTopic -> $dlqTopic" }
             org.apache.kafka.common.TopicPartition(dlqTopic, -1)
         }
     }

@@ -76,7 +76,7 @@ feign:
     config:
       default:
         connect-timeout: 5000
-        read-timeout: 5000
+        read-timeout: 10000
       event-service:
         url: http://localhost:8082
 
