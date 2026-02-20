@@ -14,6 +14,7 @@
         <!-- Service-specific logger levels -->
         <logger name="com.ticketqueue.reservation" level="DEBUG"/>
         <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="feign" level="DEBUG"/>
     </springProfile>
 
     <!-- Profile: prod -->

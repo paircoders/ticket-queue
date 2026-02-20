@@ -1,7 +1,11 @@
 package com.ticketqueue.common.config
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.security.InternalApiKeyValidator
+import feign.Logger
 import feign.RequestInterceptor
+import feign.Retryer
+import feign.codec.ErrorDecoder
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
@@ -9,8 +13,8 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 @ConditionalOnClass(RequestInterceptor::class)
-class InternalApiFeignConfig(
-    @Value("\${internal_api_key}")
+class FeignConfig(
+    @Value("\${internal.api.key}")
     private val internalApiKey: String
 ) {
 
@@ -19,5 +23,21 @@ class InternalApiFeignConfig(
         return RequestInterceptor { template ->
             template.header(InternalApiKeyValidator.HEADER_NAME, internalApiKey)
         }
+    }
+
+    @Bean
+    fun feignErrorDecoder(objectMapper: ObjectMapper): ErrorDecoder {
+        return FeignErrorDecoder(objectMapper)
+    }
+
+    // 재시도 정책: 지수 백오프, period=500ms, maxPeriod=2000ms, maxAttempts=3
+    @Bean
+    fun feignRetryer(): Retryer {
+        return Retryer.Default(500, 2000, 3)
+    }
+
+    @Bean
+    fun feignLoggerLevel(): Logger.Level {
+        return Logger.Level.FULL
     }
 }
