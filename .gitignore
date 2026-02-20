@@ -75,6 +75,7 @@ Thumbs.db
 # Etc
 .claude
 .mcp.json
+.omc
 
 # Frontend / Node.js
 node_modules/

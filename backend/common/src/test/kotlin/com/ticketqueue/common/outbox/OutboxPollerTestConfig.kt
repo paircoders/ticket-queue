@@ -1,6 +1,5 @@
 package com.ticketqueue.common.outbox
 
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -50,7 +49,7 @@ class OutboxPollerTestConfig {
         queryService: OutboxPollerQueryService,
         outboxEventRepository: OutboxEventRepository,
         topicResolver: OutboxTopicResolver,
-        @Qualifier("dlqKafkaTemplate") kafkaTemplate: KafkaTemplate<String, Any>,
+        kafkaTemplate: KafkaTemplate<String, Any>,
         properties: OutboxPollerProperties
     ): OutboxPollerService {
         return OutboxPollerService(
