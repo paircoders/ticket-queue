@@ -13,8 +13,13 @@ dependencies {
     // Spring Boot & Security
     implementation(libs.spring.boot.starter.security)
     implementation(libs.spring.boot.starter.validation)
+    implementation(libs.spring.boot.starter.webflux)
     implementation(libs.spring.cloud.starter.openfeign)
+    implementation(libs.spring.cloud.starter.circuitbreaker.resilience4j)
     implementation(libs.spring.boot.starter.data.redis)
+
+    // Resilience4j for circuit breaker
+    implementation(libs.bundles.resilience4j)
 
     // JWT
     implementation(libs.bundles.jjwt)

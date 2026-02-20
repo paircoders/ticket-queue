@@ -70,3 +70,8 @@ dependencies {
     testImplementation("org.awaitility:awaitility:4.2.0")
     implementation(kotlin("test"))
 }
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    jvmArgs("--add-opens", "java.base/java.time=ALL-UNNAMED")
+}
