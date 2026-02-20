@@ -37,12 +37,6 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      acks: all
-      properties:
-        enable.idempotence: true
     consumer:
       group-id: payment-service
       auto-offset-reset: earliest
@@ -61,7 +55,7 @@ feign:
     config:
       default:
         connect-timeout: 2000
-        read-timeout: 5000
+        read-timeout: 10000
       portone-v2-client:
         connect-timeout: 2000
         read-timeout: 10000

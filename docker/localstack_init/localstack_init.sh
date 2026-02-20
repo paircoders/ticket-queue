@@ -35,7 +35,12 @@ create_secret() {
 # 3. 각 서비스별 시크릿 등록 실행
 
 # (1) User Service
-#create_secret "user" "postgres_user_pw" "Secrets for User Service"
+USER_DB_PW=$(cat /run/secrets/postgres_user_pw)
+RECAPTCHA_SECRET=$(cat /run/secrets/recaptcha_secret)
+awslocal secretsmanager create-secret \
+    --name "user-svc/secure-config" \
+    --description "Secrets for User Service" \
+    --secret-string "{\"db_password\":\"$USER_DB_PW\", \"recaptcha_secret\":\"$RECAPTCHA_SECRET\"}"
 
 # (2) Event Service
 create_secret "event" "postgres_event_pw" "Secrets for Event Service"
@@ -50,10 +55,16 @@ create_secret "payment" "postgres_payment_pw" "Secrets for Payment Service"
 VALKEY_PW=$(cat /run/secrets/valkey_pw)
 INTERNAL_API_KEY=$(cat /run/secrets/internal_api_key)
 JWT_SECRET=$(cat /run/secrets/jwt_secret)
+PORTONE_API_SECRET=$(cat /run/secrets/portone_api_secret)
+PORTONE_STORE_ID=$(cat /run/secrets/portone_store_id)
+PORTONE_CHANNEL_KEY=$(cat /run/secrets/portone_channel_key)
+ENC_SECRET_KEY=$(cat /run/secrets/enc_secret_key)
+ENC_HASH_SALT=$(cat /run/secrets/enc_hash_salt)
+
 awslocal secretsmanager create-secret \
     --name "common/secure-config" \
     --description "Common secrets for all services" \
-    --secret-string "{\"valkey_password\":\"$VALKEY_PW\", \"internal_api_key\":\"$INTERNAL_API_KEY\", \"jwt_secret\":\"$JWT_SECRET\"}"
+    --secret-string "{\"valkey_password\":\"$VALKEY_PW\", \"internal_api_key\":\"$INTERNAL_API_KEY\", \"jwt_secret\":\"$JWT_SECRET\", \"portone_api_secret\":\"$PORTONE_API_SECRET\", \"portone_store_id\":\"$PORTONE_STORE_ID\", \"portone_channel_key\":\"$PORTONE_CHANNEL_KEY\", \"enc_secret_key\":\"$ENC_SECRET_KEY\", \"enc_hash_salt\":\"$ENC_HASH_SALT\"}"
 
 echo "[SecretsManager] All secrets created successfully."
 awslocal secretsmanager list-secrets

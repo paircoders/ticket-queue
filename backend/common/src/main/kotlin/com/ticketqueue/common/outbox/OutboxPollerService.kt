@@ -3,7 +3,6 @@ package com.ticketqueue.common.outbox
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.data.domain.PageRequest
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.scheduling.annotation.Scheduled
@@ -38,7 +37,6 @@ class OutboxPollerService(
     private val queryService: OutboxPollerQueryService,
     private val outboxEventRepository: OutboxEventRepository,
     private val topicResolver: OutboxTopicResolver,
-    @Qualifier("dlqKafkaTemplate")
     private val kafkaTemplate: KafkaTemplate<String, Any>,
     private val properties: OutboxPollerProperties
 ) {
