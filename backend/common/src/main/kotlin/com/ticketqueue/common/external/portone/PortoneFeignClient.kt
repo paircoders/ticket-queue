@@ -24,11 +24,13 @@ interface PortoneFeignClient {
     /**
      * 본인인증 정보 상세 조회 (V2)
      * @param identityVerificationId 인증 고유 ID
+     * @param storeId 상점 ID (optional)
      * @param token Authorization: Bearer {ACCESS_TOKEN}
      */
     @GetMapping("/identity-verifications/{identityVerificationId}")
     fun getIdentityVerification(
         @PathVariable("identityVerificationId") identityVerificationId: String,
+        @RequestParam("storeId") storeId: String?,
         @RequestHeader("Authorization") token: String
     ): PortoneIdentityV2Response
 }

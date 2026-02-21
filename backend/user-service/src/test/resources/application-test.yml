@@ -13,10 +13,15 @@ spring:
 
   cloud:
     aws:
-      secretsmanager:
-        enabled: false
       region:
         static: us-east-1
+      credentials:
+          access-key: test-access-key
+          secret-key: test-secret-key
+      secretsmanager:
+        enabled: false
+      parameterstore:
+        enabled: false
 
 jwt:
   secret: test-jwt-secret

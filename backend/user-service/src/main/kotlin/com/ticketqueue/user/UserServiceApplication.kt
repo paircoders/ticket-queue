@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 @SpringBootApplication(scanBasePackages = ["com.ticketqueue.user", "com.ticketqueue.common"])
 @EnableJpaRepositories(basePackages = ["com.ticketqueue.user.repository"])
 @EntityScan(basePackages = ["com.ticketqueue.user.entity"])
-@EnableFeignClients
+@EnableFeignClients(basePackages = ["com.ticketqueue.user", "com.ticketqueue.common"])
 class UserServiceApplication
 
 fun main(args: Array<String>) {

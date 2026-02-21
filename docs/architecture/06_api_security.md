@@ -222,7 +222,8 @@ INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-44665544000
 
 **PortOne 본인인증 (CI/DI):**
 - 회원가입 시 필수
-- CI (Connecting Information): 1인 1계정 강제
+- **검증 방식**: 프론트엔드에서 PortOne SDK를 통해 획득한 `identityVerificationId`만 서버로 전달. 서버는 이를 사용하여 PortOne API로부터 직접 CI/DI를 조회하여 위변조를 방지함.
+- CI (Connecting Information): 1인 1계정 강제 (중복 가입 차단)
 - 테스트 모드 사용
 
 **reCAPTCHA:**

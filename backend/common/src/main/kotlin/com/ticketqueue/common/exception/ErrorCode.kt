@@ -20,7 +20,7 @@ enum class ErrorCode(
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "EXPIRED_TOKEN", "토큰이 만료되었습니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),
     ALREADY_EXISTS_EMAIL(HttpStatus.CONFLICT, "ALREADY_EXISTS_EMAIL", "이미 사용 중인 이메일입니다."),
-    ALREADY_EXISTS_USER(HttpStatus.CONFLICT, "ALREADY_EXISTS_USER", "이미 가입된 사용자입니다."),
+    DUPLICATE_IDENTITY(HttpStatus.CONFLICT, "DUPLICATE_IDENTITY", "이미 본인인증이 완료된 다른 계정이 존재합니다."),
     RECAPTCHA_FAILED(HttpStatus.BAD_REQUEST, "RECAPTCHA_FAILED", "reCAPTCHA 검증에 실패했습니다."),
 
     // Queue
@@ -41,6 +41,13 @@ enum class ErrorCode(
     PAYMENT_TIMEOUT(HttpStatus.REQUEST_TIMEOUT, "PAYMENT_TIMEOUT", "결제 처리 시간이 초과되었습니다."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_AMOUNT_MISMATCH", "결제 금액이 일치하지 않습니다."),
     REFUND_FAILED(HttpStatus.BAD_REQUEST, "REFUND_FAILED", "환불에 실패했습니다."),
+    
+    // PortOne (Identity Verification)
+    PORTONE_VERIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "PORTONE_VERIFICATION_NOT_FOUND", "본인인증 기록을 찾을 수 없습니다."),
+    PORTONE_VERIFICATION_TIMEOUT(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_TIMEOUT", "본인인증 시간이 초과되었거나 완료되지 않았습니다."),
+    PORTONE_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_FAILED", "본인인증에 실패했습니다."),
+    PORTONE_API_ERROR(HttpStatus.BAD_GATEWAY, "PORTONE_API_ERROR", "인증 서비스 서버와의 통신 중 오류가 발생했습니다."),
+    PORTONE_MISSING_REQUIRED_INFO(HttpStatus.BAD_REQUEST, "PORTONE_MISSING_REQUIRED_INFO", "본인인증 응답에 필수 정보(CI/DI)가 누락되었습니다."),
 
     // Internal API
     INTERNAL_API_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "INTERNAL_API_UNAUTHORIZED", "내부 API 인증에 실패했습니다."),
