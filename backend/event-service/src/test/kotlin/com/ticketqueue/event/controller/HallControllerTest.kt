@@ -154,6 +154,15 @@ class HallControllerTest {
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$[0].name").value("KSPO DOME"))
         }
+
+        @Test
+        @DisplayName("404 Not Found - 존재하지 않는 공연장")
+        fun venueNotFound() {
+            every { hallService.getHalls(venueId) } throws EventException(ErrorCode.VENUE_NOT_FOUND)
+
+            mockMvc.perform(get("/venues/{venueId}/halls", venueId))
+                .andExpect(status().isNotFound)
+        }
     }
 
     @Nested

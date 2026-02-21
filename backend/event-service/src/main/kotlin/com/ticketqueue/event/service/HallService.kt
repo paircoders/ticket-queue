@@ -103,7 +103,7 @@ class HallService(
         val seatTemplate = try {
             objectMapper.readValue(hall.seatTemplate, SeatTemplateDto::class.java)
         } catch (e: JsonProcessingException) {
-            throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE)
+            throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE, cause = e)
         }
         return HallDto.DetailResponse.from(hall, seatTemplate)
     }
