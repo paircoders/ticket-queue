@@ -4,15 +4,14 @@ import com.ticketqueue.common.exception.BusinessException
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.external.portone.*
 import com.ticketqueue.user.exception.UserException
-import feign.FeignException
 import feign.Request
 import feign.RetryableException
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
-import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 class PortoneServiceTest {
 
@@ -58,9 +57,9 @@ class PortoneServiceTest {
         val result = portoneService.verifyIdentity(identityVerificationId)
 
         // then
-        assertThat(result.name).isEqualTo("홍길동")
-        assertThat(result.ci).isEqualTo("test-ci")
-        assertThat(result.di).isEqualTo("test-di")
+        result.name shouldBe "홍길동"
+        result.ci shouldBe "test-ci"
+        result.di shouldBe "test-di"
     }
 
     @Test
@@ -78,10 +77,10 @@ class PortoneServiceTest {
         } throws businessException
 
         // when & then
-        val exception = assertThrows<UserException> {
+        val exception = shouldThrow<UserException> {
             portoneService.verifyIdentity(identityVerificationId)
         }
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.PORTONE_VERIFICATION_NOT_FOUND)
+        exception.errorCode shouldBe ErrorCode.PORTONE_VERIFICATION_NOT_FOUND
     }
 
     @Test
@@ -99,10 +98,10 @@ class PortoneServiceTest {
         } throws businessException
 
         // when & then
-        val exception = assertThrows<UserException> {
+        val exception = shouldThrow<UserException> {
             portoneService.verifyIdentity(identityVerificationId)
         }
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.PORTONE_VERIFICATION_FAILED)
+        exception.errorCode shouldBe ErrorCode.PORTONE_VERIFICATION_FAILED
     }
 
     @Test
@@ -116,7 +115,7 @@ class PortoneServiceTest {
             500,
             "Internal Server Error",
             Request.HttpMethod.GET,
-            null as Long?,
+            0L,
             mockk<Request>(relaxed = true) // Request는 복잡하므로 relaxed mock 사용
         )
 
@@ -125,9 +124,9 @@ class PortoneServiceTest {
         } throws retryableException
 
         // when & then
-        val exception = assertThrows<UserException> {
+        val exception = shouldThrow<UserException> {
             portoneService.verifyIdentity(identityVerificationId)
         }
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.PORTONE_API_ERROR)
+        exception.errorCode shouldBe ErrorCode.PORTONE_API_ERROR
     }
 }
