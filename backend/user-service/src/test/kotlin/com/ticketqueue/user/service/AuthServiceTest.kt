@@ -1,6 +1,7 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneIdentityV2Response
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.entity.UserRole
@@ -25,6 +26,7 @@ class AuthServiceTest {
     private lateinit var passwordEncoder: PasswordEncoder
     private lateinit var recaptchaService: RecaptchaService
     private lateinit var encryptionService: EncryptionService
+    private lateinit var portoneService: PortoneService
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -33,7 +35,8 @@ class AuthServiceTest {
         passwordEncoder = mockk()
         recaptchaService = mockk()
         encryptionService = mockk()
-        authService = AuthService(userRepository, passwordEncoder, recaptchaService, encryptionService)
+        portoneService = mockk()
+        authService = AuthService(userRepository, passwordEncoder, recaptchaService, encryptionService, portoneService)
     }
 
     private fun createSignupRequest(
@@ -41,17 +44,27 @@ class AuthServiceTest {
         password: String = "password123!",
         name: String = "홍길동",
         phone: String = "01012345678",
-        ci: String = "test-ci-value",
-        di: String = "test-di-value",
+        identityVerificationId: String = "test-verification-id",
         recaptchaToken: String = "valid-recaptcha-token"
     ) = AuthDto.SignupRequest(
         email = email,
         password = password,
         name = name,
         phone = phone,
-        ci = ci,
-        di = di,
+        identityVerificationId = identityVerificationId,
         recaptchaToken = recaptchaToken
+    )
+
+    private fun createVerifiedCustomer(
+        name: String = "홍길동",
+        phone: String = "01012345678",
+        ci: String? = "test-ci-value",
+        di: String? = "test-di-value"
+    ) = PortoneIdentityV2Response.VerifiedCustomerDetail(
+        name = name,
+        phoneNumber = phone,
+        ci = ci,
+        di = di
     )
 
     @Test
@@ -59,6 +72,7 @@ class AuthServiceTest {
         // given
         val request = createSignupRequest()
         val userId = UUID.randomUUID()
+        val verifiedCustomer = createVerifiedCustomer()
 
         val savedUser = User(
             id = userId,
@@ -70,22 +84,10 @@ class AuthServiceTest {
             phoneHash = "phone-hash",
             ci = "encrypted-ci",
             ciHash = "ci-hash",
-            di = request.di,
-            role = UserRole.USER,
-            status = UserStatus.ACTIVE
+            di = verifiedCustomer.di!!
         )
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns false
-        every { encryptionService.hash(request.ci) } returns "ci-hash"
-        every { userRepository.existsByCiHash("ci-hash") } returns false
-        every { encryptionService.encrypt(request.email) } returns "encrypted-email"
-        every { encryptionService.encrypt(request.name) } returns "encrypted-name"
-        every { encryptionService.encrypt(request.phone) } returns "encrypted-phone"
-        every { encryptionService.encrypt(request.ci) } returns "encrypted-ci"
-        every { encryptionService.hash(request.phone) } returns "phone-hash"
-        every { passwordEncoder.encode(request.password) } returns "bcrypt-password-hash"
+        mockSignupDependencies(request, verifiedCustomer)
         every { userRepository.save(any()) } returns savedUser
 
         // when
@@ -104,6 +106,7 @@ class AuthServiceTest {
         val request = createSignupRequest()
         val userId = UUID.randomUUID()
         val userSlot = slot<User>()
+        val verifiedCustomer = createVerifiedCustomer()
 
         val savedUser = User(
             id = userId,
@@ -115,20 +118,10 @@ class AuthServiceTest {
             phoneHash = "phone-hash",
             ci = "encrypted-ci",
             ciHash = "ci-hash",
-            di = request.di
+            di = verifiedCustomer.di!!
         )
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns false
-        every { encryptionService.hash(request.ci) } returns "ci-hash"
-        every { userRepository.existsByCiHash("ci-hash") } returns false
-        every { encryptionService.encrypt(request.email) } returns "encrypted-email"
-        every { encryptionService.encrypt(request.name) } returns "encrypted-name"
-        every { encryptionService.encrypt(request.phone) } returns "encrypted-phone"
-        every { encryptionService.encrypt(request.ci) } returns "encrypted-ci"
-        every { encryptionService.hash(request.phone) } returns "phone-hash"
-        every { passwordEncoder.encode(request.password) } returns "bcrypt-password-hash"
+        mockSignupDependencies(request, verifiedCustomer)
         every { userRepository.save(capture(userSlot)) } returns savedUser
 
         // when
@@ -143,7 +136,33 @@ class AuthServiceTest {
         assertThat(capturedUser.phoneHash).isEqualTo("phone-hash")
         assertThat(capturedUser.ci).isEqualTo("encrypted-ci")
         assertThat(capturedUser.ciHash).isEqualTo("ci-hash")
-        assertThat(capturedUser.di).isEqualTo(request.di)
+        assertThat(capturedUser.di).isEqualTo(verifiedCustomer.di)
+    }
+
+    private fun mockSignupDependencies(
+        request: AuthDto.SignupRequest,
+        verifiedCustomer: PortoneIdentityV2Response.VerifiedCustomerDetail,
+        emailExists: Boolean = false,
+        ciExists: Boolean = false
+    ) {
+        every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
+        every { encryptionService.hash(request.email) } returns "email-hash"
+        every { userRepository.existsByEmailHash("email-hash") } returns emailExists
+        
+        if (!emailExists) {
+            every { encryptionService.hash(verifiedCustomer.ci!!) } returns "ci-hash"
+            every { userRepository.existsByCiHash("ci-hash") } returns ciExists
+            
+            if (!ciExists) {
+                every { encryptionService.encrypt(request.email) } returns "encrypted-email"
+                every { encryptionService.encrypt(request.name) } returns "encrypted-name"
+                every { encryptionService.encrypt(request.phone) } returns "encrypted-phone"
+                every { encryptionService.encrypt(verifiedCustomer.ci!!) } returns "encrypted-ci"
+                every { encryptionService.hash(request.phone) } returns "phone-hash"
+                every { passwordEncoder.encode(request.password) } returns "bcrypt-password-hash"
+            }
+        }
     }
 
     @Test
@@ -152,6 +171,7 @@ class AuthServiceTest {
         val request = createSignupRequest()
         val userId = UUID.randomUUID()
         val userSlot = slot<User>()
+        val verifiedCustomer = createVerifiedCustomer()
 
         val savedUser = User(
             id = userId,
@@ -163,20 +183,10 @@ class AuthServiceTest {
             phoneHash = "phone-hash",
             ci = "encrypted-ci",
             ciHash = "ci-hash",
-            di = request.di
+            di = verifiedCustomer.di!!
         )
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns false
-        every { encryptionService.hash(request.ci) } returns "ci-hash"
-        every { userRepository.existsByCiHash("ci-hash") } returns false
-        every { encryptionService.encrypt(request.email) } returns "encrypted-email"
-        every { encryptionService.encrypt(request.name) } returns "encrypted-name"
-        every { encryptionService.encrypt(request.phone) } returns "encrypted-phone"
-        every { encryptionService.encrypt(request.ci) } returns "encrypted-ci"
-        every { encryptionService.hash(request.phone) } returns "phone-hash"
-        every { passwordEncoder.encode(request.password) } returns "bcrypt-password-hash"
+        mockSignupDependencies(request, verifiedCustomer)
         every { userRepository.save(capture(userSlot)) } returns savedUser
 
         // when
@@ -203,13 +213,29 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `PortOne 본인인증 정보에 CI가 없는 경우 - PORTONE_MISSING_REQUIRED_INFO 예외`() {
+        // given
+        val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer(ci = null)
+
+        every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
+
+        // when & then
+        val exception = assertThrows<UserException> {
+            authService.signup(request)
+        }
+
+        assertThat(exception.errorCode).isEqualTo(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
+    }
+
+    @Test
     fun `이메일 중복 - ALREADY_EXISTS_EMAIL 예외`() {
         // given
         val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer()
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns true
+        mockSignupDependencies(request, verifiedCustomer, emailExists = true)
 
         // when & then
         val exception = assertThrows<UserException> {
@@ -220,26 +246,23 @@ class AuthServiceTest {
     }
 
     @Test
-    fun `CI 중복 - ALREADY_EXISTS_USER 예외`() {
+    fun `CI 중복 - DUPLICATE_IDENTITY 예외`() {
         // given
         val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer()
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns false
-        every { encryptionService.hash(request.ci) } returns "ci-hash"
-        every { userRepository.existsByCiHash("ci-hash") } returns true
+        mockSignupDependencies(request, verifiedCustomer, ciExists = true)
 
         // when & then
         val exception = assertThrows<UserException> {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.ALREADY_EXISTS_USER)
+        assertThat(exception.errorCode).isEqualTo(ErrorCode.DUPLICATE_IDENTITY)
     }
 
     @Test
-    fun `reCAPTCHA가 이메일 체크보다 먼저 수행`() {
+    fun `reCAPTCHA가 PortOne 호출보다 먼저 수행`() {
         // given
         val request = createSignupRequest()
         val callOrder = mutableListOf<String>()
@@ -247,6 +270,32 @@ class AuthServiceTest {
         every { recaptchaService.verify(request.recaptchaToken) } answers {
             callOrder.add("recaptcha")
             false
+        }
+        every { portoneService.verifyIdentity(any()) } answers {
+            callOrder.add("portone")
+            createVerifiedCustomer()
+        }
+
+        // when & then
+        assertThrows<UserException> {
+            authService.signup(request)
+        }
+
+        assertThat(callOrder).containsExactly("recaptcha")
+        verify(exactly = 0) { portoneService.verifyIdentity(any()) }
+    }
+
+    @Test
+    fun `PortOne 호출이 이메일 체크보다 먼저 수행`() {
+        // given
+        val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer()
+        val callOrder = mutableListOf<String>()
+
+        every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { portoneService.verifyIdentity(request.identityVerificationId) } answers {
+            callOrder.add("portone")
+            throw UserException(ErrorCode.PORTONE_VERIFICATION_FAILED)
         }
         every { encryptionService.hash(request.email) } answers {
             callOrder.add("emailHash")
@@ -258,7 +307,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(callOrder).containsExactly("recaptcha")
+        assertThat(callOrder).containsExactly("portone")
         verify(exactly = 0) { encryptionService.hash(request.email) }
     }
 
@@ -266,9 +315,11 @@ class AuthServiceTest {
     fun `이메일 체크가 CI 체크보다 먼저 수행`() {
         // given
         val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer()
         val callOrder = mutableListOf<String>()
 
         every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
         every { encryptionService.hash(request.email) } answers {
             callOrder.add("emailHash")
             "email-hash"
@@ -277,7 +328,7 @@ class AuthServiceTest {
             callOrder.add("emailCheck")
             true
         }
-        every { encryptionService.hash(request.ci) } answers {
+        every { encryptionService.hash(verifiedCustomer.ci!!) } answers {
             callOrder.add("ciHash")
             "ci-hash"
         }
@@ -288,17 +339,16 @@ class AuthServiceTest {
         }
 
         assertThat(callOrder).containsExactly("emailHash", "emailCheck")
-        verify(exactly = 0) { encryptionService.hash(request.ci) }
+        verify(exactly = 0) { encryptionService.hash(verifiedCustomer.ci!!) }
     }
 
     @Test
     fun `이메일 해시로 중복 체크 수행`() {
         // given
         val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer()
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns true
+        mockSignupDependencies(request, verifiedCustomer, emailExists = true)
 
         // when & then
         assertThrows<UserException> {
@@ -315,6 +365,7 @@ class AuthServiceTest {
         val request = createSignupRequest()
         val userId = UUID.randomUUID()
         val userSlot = slot<User>()
+        val verifiedCustomer = createVerifiedCustomer()
 
         val savedUser = User(
             id = userId,
@@ -326,20 +377,10 @@ class AuthServiceTest {
             phoneHash = "phone-hash",
             ci = "encrypted-ci",
             ciHash = "ci-hash",
-            di = request.di
+            di = verifiedCustomer.di!!
         )
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns false
-        every { encryptionService.hash(request.ci) } returns "ci-hash"
-        every { userRepository.existsByCiHash("ci-hash") } returns false
-        every { encryptionService.encrypt(request.email) } returns "encrypted-email"
-        every { encryptionService.encrypt(request.name) } returns "encrypted-name"
-        every { encryptionService.encrypt(request.phone) } returns "encrypted-phone"
-        every { encryptionService.encrypt(request.ci) } returns "encrypted-ci"
-        every { encryptionService.hash(request.phone) } returns "phone-hash"
-        every { passwordEncoder.encode(request.password) } returns "bcrypt-password-hash"
+        mockSignupDependencies(request, verifiedCustomer)
         every { userRepository.save(capture(userSlot)) } returns savedUser
 
         // when
@@ -369,10 +410,9 @@ class AuthServiceTest {
     fun `이메일 중복 시 save 미호출`() {
         // given
         val request = createSignupRequest()
+        val verifiedCustomer = createVerifiedCustomer()
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns true
+        mockSignupDependencies(request, verifiedCustomer, emailExists = true)
 
         // when & then
         assertThrows<UserException> {

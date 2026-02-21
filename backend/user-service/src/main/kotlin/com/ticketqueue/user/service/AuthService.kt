@@ -14,7 +14,8 @@ class AuthService(
     private val userRepository: UserRepository,
     private val passwordEncoder: PasswordEncoder,
     private val recaptchaService: RecaptchaService,
-    private val encryptionService: EncryptionService
+    private val encryptionService: EncryptionService,
+    private val portoneService: PortoneService
 ) {
 
     @Transactional
@@ -24,28 +25,33 @@ class AuthService(
             throw UserException(ErrorCode.RECAPTCHA_FAILED)
         }
 
-        // 2. 이메일 중복 체크 (hash 사용)
+        // 2. PortOne 본인인증 검증
+        val verifiedCustomer = portoneService.verifyIdentity(request.identityVerificationId)
+        val verifiedCi = verifiedCustomer.ci ?: throw UserException(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
+        val verifiedDi = verifiedCustomer.di ?: throw UserException(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
+
+        // 3. 이메일 중복 체크 (hash 사용)
         val emailHash = encryptionService.hash(request.email)
         if (userRepository.existsByEmailHash(emailHash)) {
             throw UserException(ErrorCode.ALREADY_EXISTS_EMAIL)
         }
 
-        // 3. CI 중복 체크 (hash 사용 - 1인 1계정)
-        val ciHash = encryptionService.hash(request.ci)
+        // 4. CI 중복 체크 (hash 사용 - 1인 1계정)
+        val ciHash = encryptionService.hash(verifiedCi)
         if (userRepository.existsByCiHash(ciHash)) {
-            throw UserException(ErrorCode.ALREADY_EXISTS_USER)
+            throw UserException(ErrorCode.DUPLICATE_IDENTITY)
         }
 
-        // 4. 데이터 암호화 및 해싱
+        // 5. 데이터 암호화 및 해싱
         val encryptedEmail = encryptionService.encrypt(request.email)
         val encryptedName = encryptionService.encrypt(request.name)
         val encryptedPhone = encryptionService.encrypt(request.phone)
-        val encryptedCi = encryptionService.encrypt(request.ci)
+        val encryptedCi = encryptionService.encrypt(verifiedCi)
         
         val phoneHash = encryptionService.hash(request.phone)
         val passwordHash = passwordEncoder.encode(request.password)
 
-        // 5. 엔티티 생성 및 저장
+        // 6. 엔티티 생성 및 저장
         val user = User(
             email = encryptedEmail,
             emailHash = emailHash,
@@ -55,7 +61,7 @@ class AuthService(
             phoneHash = phoneHash,
             ci = encryptedCi,
             ciHash = ciHash,
-            di = request.di
+            di = verifiedDi
         )
 
         val savedUser = userRepository.save(user)
