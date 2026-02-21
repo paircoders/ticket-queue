@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-**Ticket Queue**는 대규모 트래픽을 처리하는 콘서트 티켓팅 시스템입니다. MSA(마이크로서비스 아키텍처)를 기반으로 하며, 현재 **설계 단계(Design Phase)**에 있습니다.
+**Ticket Queue**는 대규모 트래픽을 처리하는 콘서트 티켓팅 시스템입니다. MSA(마이크로서비스 아키텍처)를 기반으로 하며, 현재 **구현 진행 단계(Implementation Phase)**에 있습니다.
 
 ### 핵심 목표
 - K-pop 콘서트와 같은 높은 동시성 환경에서의 공정한 티켓 판매
@@ -79,14 +79,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 기술 스택
 
 ### Backend
-- **Language**: Kotlin (Java 21 기반)
-- **Framework**: Spring Boot 3.5.10, Spring Cloud Gateway
-- **Build Tool**: Gradle (Kotlin DSL)
+- **Language**: Kotlin 2.1.0 (Java 21 기반)
+- **Framework**: Spring Boot 3.5.10, Spring Cloud Gateway (Spring Cloud 2025.0.1)
+- **Build Tool**: Gradle (Kotlin DSL), KSP (Kotlin Symbol Processing)
 - **Database**: PostgreSQL 18 (단일 인스턴스, 스키마 분리)
+- **ORM**: Spring Data JPA + QueryDSL 6.12 (openfeign fork, KSP 코드 생성)
 - **Cache**: Valkey 8.1.5 (Redis 대체, 캐시, 대기열, 분산 락)
-- **Messaging**: Apache Kafka 4.1.1 KRaft 모드 (이벤트 스트리밍, Zookeeper 불필요)
-- **Distributed Lock**: Redisson
-- **Resilience**: Resilience4j (Circuit Breaker, Rate Limiter)
+- **Messaging**: Apache Kafka (KRaft 모드, Zookeeper 불필요)
+- **Distributed Lock**: Redisson 3.40.2
+- **Resilience**: Resilience4j 2.2.0 (Circuit Breaker, Rate Limiter)
+- **JWT**: JJWT 0.12.6
+- **Cloud**: Spring Cloud AWS 3.4.2 (Secrets Manager 연동)
 
 ### Frontend (미구현)
 - Next.js 16+ (Vercel 배포, GitHub 연동 자동 CI/CD)
@@ -288,9 +291,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 암호화
 - **비밀번호**: BCrypt 해싱 (REQ-AUTH-014)
-- **개인정보**: 평문 저장 (포트폴리오 범위 내 아키텍처 검증 집중)
-  - 실제 상용 환경에서는 TDE 또는 컬럼 암호화 필요
-- **1인 1계정 강제**: `ci` 컬럼 Unique Constraint
+- **개인정보**: AES 암호화 적용 (`EncryptionService.encrypt()`) — 이메일, 이름, 전화번호, CI
+- **검색용 해시**: SHA-256 해시(`EncryptionService.hash()`) — emailHash, phoneHash, ciHash (중복 체크용)
+- **1인 1계정 강제**: `ci_hash` 컬럼 Unique Constraint
 
 ## 개발 환경 설정 및 실행
 
@@ -378,10 +381,10 @@ ticket-queue/
 - **Commit Messages**: Conventional Commits 형식
   - `feat:`, `fix:`, `refactor:`, `chore:`, `docs:` 등
 
-#### 테스트 전략 (계획)
-- **Unit Tests**: JUnit 5, Mockito, Kotest
-- **Integration Tests**: TestContainers (PostgreSQL, Valkey, Kafka)
-- **Load Testing**: k6 (대기열 및 예매 시나리오 집중)
+#### 테스트 전략
+- **Unit Tests**: JUnit 5, MockK, Kotest (Mockito 대신 MockK 사용)
+- **Integration Tests**: TestContainers (PostgreSQL, Kafka) — common 모듈 Outbox 테스트 구현 완료
+- **Load Testing**: k6 (대기열 및 예매 시나리오 집중, 미구현)
 
 #### 브랜치 전략 (계획)
 - **main**: 프로덕션 릴리스
@@ -432,28 +435,25 @@ ticket-queue/
 
 ## 현재 상태 및 다음 단계
 
-**현재**: 설계 및 문서화 완료 (Draft 1.1.0)
-- 110개 요구사항 정의 완료 (필수 74개, 선택 36개)
-- 최근 업데이트:
-  - **API 명세서 작성 완료**: 6개 서비스별 상세 API 명세 (`docs/specification/`)
-  - 데이터 아키텍처: User/Event/Reservation/Payment 스키마 상세 설계 완료
-  - 메시징 아키텍처: DLQ 예외 분류 및 재시도 전략 구체화
-  - 공통 규약: 날짜/시간 형식, 에러 응답 형식 표준화
+**현재**: 구현 진행 중 (Implementation Phase, feat/32 브랜치)
 
-**다음 단계**:
-1. 각 서비스의 Spring Boot 프로젝트 생성 및 기본 구조 설정
-2. PostgreSQL 스키마 및 ERD 기반 JPA Entity 구현
-   - `common.outbox_events`, `common.processed_events` 우선 구현
-3. Redis 및 Kafka 연동 설정
-   - Redisson 분산 락 설정
-   - Kafka Producer/Consumer 설정 (멱등성, 수동 커밋)
-4. API Gateway 라우팅 및 JWT 검증 필터 구현
-5. Queue Service 대기열 로직 구현 (Redis Sorted Set, Lua 스크립트)
-6. Reservation Service 분산 락 및 좌석 선점 로직 구현
-   - `hold_seats:{scheduleId}` SET 관리 로직
-7. Payment Service PortOne 연동 및 SAGA 패턴 구현
-   - Outbox Pattern 적용
-8. 통합 테스트 및 부하 테스트 (k6)
+### ✅ 완료된 구현
+- **Common 모듈** — Outbox Pattern(OutboxPollerService, OutboxCleanupBatchService), Kafka 멱등성(IdempotentConsumerTemplate, ProcessedEventService, KafkaErrorHandlerConfig), 공통 이벤트 스키마(BaseEvent/PaymentEvents/ReservationEvents), 내부 API 보안(InternalApiKeyValidator/InternalApiAuthInterceptor), 공통 설정(JacksonConfig, QuerydslConfig, TimeZoneConfig, TraceIdFilter)
+- **Event Service** — Venue/Hall CRUD API (Controller, Service, Repository, QueryDSL), JPA Entity (Event, EventSchedule, Hall, Venue, Seat), Kafka Consumer 설정, Redis 설정, 내부 API 보안 필터
+- **User Service** — 회원가입 API (reCAPTCHA, AES 암호화, 해시 중복 체크), AuthController/AuthService, SecurityConfig
+- **API Gateway** — TraceId 전파 필터, 기본 프로젝트 구조
+- **Payment Service** — Kafka/Resilience4j/WebClient 기본 설정
+- **Queue Service** — Redis/Queue 기본 설정 (QueueConfig, QueueProperties)
+- **Reservation Service** — Kafka/Redisson 기본 설정
+
+### 🔄 진행 필요
+1. **User Service**: 로그인/로그아웃/토큰 갱신 API, JWT 발급, Refresh Token Rotation
+2. **API Gateway**: JWT 검증 필터, 라우팅 설정 (Issue #13~#19), Circuit Breaker
+3. **Event Service**: 공연(Event)/회차(EventSchedule)/좌석(Seat) CRUD API, Redis 캐싱
+4. **Queue Service**: 대기열 진입/상태/이탈 API (Redis Sorted Set, Lua 스크립트), Queue Token 발급
+5. **Reservation Service**: 좌석 선점 API (Redisson 분산 락), 예매 조회/관리, Kafka Consumer
+6. **Payment Service**: PortOne 연동, 결제 요청/승인 API, SAGA 패턴, Outbox Pattern 적용
+7. **통합 테스트 및 부하 테스트** (k6)
 
 ## 핵심 설계 결정 (ADR 요약)
 
@@ -464,7 +464,7 @@ ticket-queue/
 5. **단일 Queue Token + Reservation 기반 결제 권한**: qp_token 제거, 결제 권한은 Reservation(PENDING + hold_expires_at) 검증
 6. **DLQ 재시도 전략**: 지수 백오프 3회, 재시도 불가능 예외는 즉시 DLQ
 7. **보상 토픽 제외**: `payment.events`의 PaymentFailed가 보상 트리거 (YAGNI 원칙)
-8. **개인정보 평문 저장**: 암호화 복잡도 제거, 아키텍처/로직 검증 집중 (포트폴리오 최적화)
+8. **개인정보 AES 암호화 + 해시**: 이메일/이름/전화번호/CI는 AES 암호화 저장, 검색/중복 체크용 해시(emailHash 등) 별도 관리
 
 ---
 

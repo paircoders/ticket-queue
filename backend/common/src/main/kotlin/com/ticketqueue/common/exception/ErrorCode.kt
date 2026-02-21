@@ -49,5 +49,13 @@ enum class ErrorCode(
     EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "EVENT_NOT_FOUND", "존재하지 않는 공연입니다."),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "SCHEDULE_NOT_FOUND", "존재하지 않는 공연 회차입니다."),
     TICKET_SALE_NOT_STARTED(HttpStatus.BAD_REQUEST, "TICKET_SALE_NOT_STARTED", "티켓 판매가 아직 시작되지 않았습니다."),
-    TICKET_SALE_ENDED(HttpStatus.BAD_REQUEST, "TICKET_SALE_ENDED", "티켓 판매가 종료되었습니다.")
+    TICKET_SALE_ENDED(HttpStatus.BAD_REQUEST, "TICKET_SALE_ENDED", "티켓 판매가 종료되었습니다."),
+    VENUE_NOT_FOUND(HttpStatus.NOT_FOUND, "VENUE_NOT_FOUND", "존재하지 않는 공연장입니다."),
+    VENUE_HAS_HALLS(HttpStatus.CONFLICT, "VENUE_HAS_HALLS", "홀이 존재하는 공연장은 삭제할 수 없습니다."),
+    VENUE_HAS_EVENTS(HttpStatus.CONFLICT, "VENUE_HAS_EVENTS", "공연이 존재하는 공연장은 삭제할 수 없습니다."),
+    HALL_NOT_FOUND(HttpStatus.NOT_FOUND, "HALL_NOT_FOUND", "존재하지 않는 홀입니다."),
+    HALL_NAME_DUPLICATE(HttpStatus.CONFLICT, "HALL_NAME_DUPLICATE", "동일 공연장 내 중복된 홀 이름입니다."),
+    HALL_HAS_EVENTS(HttpStatus.CONFLICT, "HALL_HAS_EVENTS", "공연이 존재하는 홀은 삭제할 수 없습니다."),
+    INVALID_SEAT_TEMPLATE(HttpStatus.INTERNAL_SERVER_ERROR, "SEAT_TEMPLATE_INVALID", "좌석 템플릿 데이터가 손상되었습니다."),
+    INVALID_SEAT_TEMPLATE_MAPPING(HttpStatus.BAD_REQUEST, "SEAT_TEMPLATE_MAPPING_INVALID", "좌석 템플릿의 행-등급 매핑이 올바르지 않습니다.")
 }
