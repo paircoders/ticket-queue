@@ -1,0 +1,181 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "en-US"
+tone_instructions: "Be concise and direct. Skip obvious issues. Focus on critical bugs, security, and performance."
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+
+  path_filters:
+    - "!**/build/**"
+    - "!**/.gradle/**"
+    - "!**/node_modules/**"
+    - "!**/.next/**"
+    - "!**/dist/**"
+    - "!**/*.lock"
+    - "!**/*.snap"
+    - "!**/*.min.js"
+
+  path_instructions:
+    - path: "**/*.kt"
+      instructions: |
+        Focus on: coroutine safety, null safety, thread safety in high-traffic scenarios.
+        Flag: blocking calls inside coroutines, improper exception handling, memory leaks.
+        Check: proper use of Flow vs suspend functions, efficient collection operations.
+
+    - path: "**/kafka/**"
+      instructions: |
+        Check: consumer group configs, proper offset management, idempotent producers.
+        Flag: missing error handling for deserialization failures, unhandled rebalance events.
+        Verify: DLQ strategy exists for poison pill messages.
+
+    - path: "**/repository/**,**/entity/**,**/*Repository.kt,**/*Entity.kt"
+      instructions: |
+        Check: N+1 query risks, missing indexes for high-traffic queries, proper pagination.
+        Flag: missing @Transactional boundaries, lazy loading issues, large result sets without limits.
+        Verify: PostgreSQL-specific optimizations (e.g., batch inserts, proper use of sequences).
+
+    - path: "**/*Controller.kt,**/router/**,**/handler/**"
+      instructions: |
+        Check: input validation, rate limiting considerations, proper HTTP status codes.
+        Flag: missing authentication/authorization, sensitive data in responses, large payload returns.
+
+    - path: "src/**/*.tsx,src/**/*.ts,app/**/*.tsx,app/**/*.ts"
+      instructions: |
+        Check: unnecessary re-renders, missing error boundaries, proper loading states.
+        Flag: direct API calls without retry logic, missing suspense boundaries, memory leaks in useEffect.
+        Verify: proper handling of race conditions in async operations.
+
+    - path: "**/Dockerfile,**/docker-compose*.yml"
+      instructions: |
+        Check: non-root user, minimal base image, no secrets in layers, multi-stage builds.
+        Flag: COPY . . without .dockerignore, missing health checks, pinned vs latest tags.
+
+    - path: "**/*.tf,**/terraform/**,**/cdk/**,**/*.yaml,**/*.yml"
+      instructions: |
+        Check: security group over-permissiveness, missing encryption at rest/in transit.
+        Flag: hardcoded secrets, public S3 buckets, missing VPC configurations.
+        Verify: proper IAM least-privilege policies.
+
+    - path: "**/migration/**,**/db/**,**/*Migration*.kt,**/*.sql"
+      instructions: |
+        Check: backward compatibility (zero-downtime deployment safe), missing indexes.
+        Flag: non-reversible migrations without backup plan, locking operations on large tables.
+        Verify: migration scripts are idempotent.
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "SKIP"
+      - "DO NOT MERGE"
+    base_branches:
+      - "develop"
+      - "staging"
+
+  tools:
+    # Kotlin/JVM
+    detekt:
+      enabled: true
+
+    # Next.js / TypeScript
+    eslint:
+      enabled: true
+    oxc:
+      enabled: false
+    biome:
+      enabled: false
+
+    # Docker & IaC
+    hadolint:
+      enabled: true
+    checkov:
+      enabled: true
+    trivy:
+      enabled: true
+    tflint:
+      enabled: true
+
+    # Security - Secrets
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+
+    # DB / SQL
+    sqlfluff:
+      enabled: true
+
+    # CI
+    actionlint:
+      enabled: true
+
+    # YAML
+    yamllint:
+      enabled: true
+
+    # Markdown
+    markdownlint:
+      enabled: true
+
+    # Unused
+    ruff:
+      enabled: false
+    pylint:
+      enabled: false
+    flake8:
+      enabled: false
+    rubocop:
+      enabled: false
+    swiftlint:
+      enabled: false
+    phpstan:
+      enabled: false
+    phpmd:
+      enabled: false
+    golangci-lint:
+      enabled: false
+    clippy:
+      enabled: false
+    buf:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: "Must follow Conventional Commits: feat|fix|chore|docs|refactor|perf|test(<scope>): <description>"
+    description:
+      mode: "warning"
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
+
+knowledge_base:
+  web_search:
+    enabled: true
+  learnings:
+    scope: "global"
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "docs/CODING_STANDARDS.md"
+      - "docs/architecture/*.md"
+      - "docs/contributions/*.md"
+      - "docs/specification/*.md"
+      - "ARCHITECTURE.md"
+      - "REQUIREMENTS.md"
+
+chat:
+  auto_reply: true

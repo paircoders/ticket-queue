@@ -96,19 +96,23 @@ class TraceIdWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `PUT 요청에도 TraceId 적용`() {
+        // PUT /reservations/1은 인증 필요 → JWT 필터가 401 반환
+        // TraceId 필터는 JWT 필터보다 먼저 실행되므로 401 응답에도 TraceId 헤더 존재
         webTestClient.put()
             .uri("/reservations/1")
             .exchange()
-            .expectStatus().is5xxServerError
+            .expectStatus().isUnauthorized
             .expectHeader().exists(TraceIdWebFilter.TRACE_ID_HEADER)
     }
 
     @Test
     fun `DELETE 요청에도 TraceId 적용`() {
+        // DELETE /reservations/1은 인증 필요 → JWT 필터가 401 반환
+        // TraceId 필터는 JWT 필터보다 먼저 실행되므로 401 응답에도 TraceId 헤더 존재
         webTestClient.delete()
             .uri("/reservations/1")
             .exchange()
-            .expectStatus().is5xxServerError
+            .expectStatus().isUnauthorized
             .expectHeader().exists(TraceIdWebFilter.TRACE_ID_HEADER)
     }
 

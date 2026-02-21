@@ -5,6 +5,12 @@ spring:
   application:
     name: api-gateway
 
+  data:
+    redis:
+      host: ${REDIS_HOST:192.168.50.111}
+      port: ${REDIS_PORT:6379}
+      password: ${valkey_password}
+
   cloud:
     gateway:
       server:
@@ -22,29 +28,32 @@ spring:
 
             # 기본 라우트 구조 정의 (세부 필터는 향후 추가 예정)
             - id: user-service
-              uri: ${SERVICE_URI_USER:http://192.168.50.2:8081}
+              uri: ${SERVICE_URI_USER:http://192.168.50.111:8081}
               predicates:
                 - Path=/auth/**,/users/**
 
             - id: event-service
-              uri: ${SERVICE_URI_EVENT:http://192.168.50.2:8082}
+              uri: ${SERVICE_URI_EVENT:http://192.168.50.111:8082}
               predicates:
                 - Path=/events/**,/venues/**
 
             - id: queue-service
-              uri: ${SERVICE_URI_QUEUE:http://192.168.50.2:8083}
+              uri: ${SERVICE_URI_QUEUE:http://192.168.50.111:8083}
               predicates:
                 - Path=/queue/**
 
             - id: reservation-service
-              uri: ${SERVICE_URI_RESERVATION:http://192.168.50.2:8084}
+              uri: ${SERVICE_URI_RESERVATION:http://192.168.50.111:8084}
               predicates:
                 - Path=/reservations/**
 
             - id: payment-service
-              uri: ${SERVICE_URI_PAYMENT:http://192.168.50.2:8085}
+              uri: ${SERVICE_URI_PAYMENT:http://192.168.50.111:8085}
               predicates:
                 - Path=/payments/**
+
+jwt:
+  secret: ${jwt_secret}
 
 # 기본 Resilience4j 설정 구조
 resilience4j:

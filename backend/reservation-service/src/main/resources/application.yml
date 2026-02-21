@@ -12,6 +12,11 @@ outbox:
     aggregate-type: Reservation
     retention-days: 7
 
+processed-event:
+  cleanup:
+    enabled: true
+    retention-days: 30
+
 spring:
   application:
     name: reservation-service
@@ -86,9 +91,3 @@ management:
   endpoint:
     health:
       show-details: always
-
-outbox:
-  cleanup:
-    enabled: true
-    aggregate-type: Reservation
-    retention-days: 7

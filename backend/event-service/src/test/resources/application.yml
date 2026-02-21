@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: event-service-test
+  config:
+    import: ""
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+      region:
+        static: us-east-1
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  kafka:
+    bootstrap-servers: localhost:9092
+
+internal:
+  api:
+    key: test-api-key
