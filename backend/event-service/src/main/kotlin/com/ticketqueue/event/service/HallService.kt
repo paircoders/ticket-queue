@@ -193,11 +193,9 @@ class HallService(
             throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING)
         }
 
-        // 모든 행이 gradeMapping에 존재하는지 확인
-        val unmappedRows = seatTemplate.rows.filter { row ->
-            !seatTemplate.gradeMapping.containsKey(row)
-        }
-        if (unmappedRows.isNotEmpty()) {
+        // rows와 gradeMapping 키가 완전히 일치하는지 양방향 검증
+        // 정방향: 매핑 누락 행 검출 / 역방향: 잉여 매핑 키 검출
+        if (uniqueRows != seatTemplate.gradeMapping.keys) {
             throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING)
         }
     }

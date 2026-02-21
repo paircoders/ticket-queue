@@ -120,6 +120,25 @@ class HallControllerTest {
             )
                 .andExpect(status().isBadRequest)
         }
+
+        @Test
+        @DisplayName("404 Not Found - 존재하지 않는 공연장")
+        fun venueNotFound() {
+            every { hallService.createHall(venueId, any()) } throws
+                EventException(ErrorCode.VENUE_NOT_FOUND)
+
+            val request = HallDto.CreateRequest(
+                name = "KSPO DOME",
+                capacity = 15000,
+                seatTemplate = seatTemplateDto
+            )
+            mockMvc.perform(
+                post("/venues/{venueId}/halls", venueId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request))
+            )
+                .andExpect(status().isNotFound)
+        }
     }
 
     @Nested

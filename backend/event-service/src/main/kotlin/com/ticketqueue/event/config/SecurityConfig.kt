@@ -62,8 +62,8 @@ class SecurityConfig(
                     .requestMatchers(HttpMethod.POST, "/venues/**").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PATCH, "/venues/**").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.DELETE, "/venues/**").hasRole("ADMIN")
-                    // 액추에이터 - 공개
-                    .requestMatchers("/actuator/**").permitAll()
+                    // 액추에이터 - 헬스체크/정보만 공개
+                    .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                     .anyRequest().authenticated()
             }
             .exceptionHandling { exceptions ->

@@ -57,7 +57,9 @@ class VenueService(
      * @return 페이징된 공연장 목록
      */
     fun getVenues(page: Int, size: Int, city: String?): Page<VenueDto.Response> {
-        val pageable = PageRequest.of(page, size)
+        val safePage = page.coerceAtLeast(0)
+        val safeSize = size.coerceIn(1, 100)
+        val pageable = PageRequest.of(safePage, safeSize)
         val venues = if (city != null) {
             venueRepository.findByCity(city, pageable)
         } else {

@@ -135,6 +135,72 @@ class HallServiceTest {
             }
             assertEquals(ErrorCode.HALL_NAME_DUPLICATE, exception.errorCode)
         }
+
+        @Test
+        @DisplayName("중복 행 이름이 있으면 예외가 발생한다")
+        fun duplicateRowNames() {
+            val venue = createVenue()
+            val request = HallDto.CreateRequest(
+                name = "KSPO DOME",
+                capacity = 15000,
+                seatTemplate = SeatTemplateDto(
+                    rows = listOf("A", "A", "B"),
+                    seatsPerRow = 10,
+                    gradeMapping = mapOf("A" to "VIP", "B" to "S")
+                )
+            )
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.existsByVenueIdAndName(venueId, "KSPO DOME") } returns false
+
+            val exception = assertThrows<EventException> {
+                hallService.createHall(venueId, request)
+            }
+            assertEquals(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("gradeMapping에 매핑되지 않은 행이 있으면 예외가 발생한다")
+        fun unmappedRow() {
+            val venue = createVenue()
+            val request = HallDto.CreateRequest(
+                name = "KSPO DOME",
+                capacity = 15000,
+                seatTemplate = SeatTemplateDto(
+                    rows = listOf("A", "B", "C"),
+                    seatsPerRow = 10,
+                    gradeMapping = mapOf("A" to "VIP", "B" to "S")
+                )
+            )
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.existsByVenueIdAndName(venueId, "KSPO DOME") } returns false
+
+            val exception = assertThrows<EventException> {
+                hallService.createHall(venueId, request)
+            }
+            assertEquals(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("gradeMapping에 잉여 키가 있으면 예외가 발생한다")
+        fun orphanGradeMappingKeys() {
+            val venue = createVenue()
+            val request = HallDto.CreateRequest(
+                name = "KSPO DOME",
+                capacity = 15000,
+                seatTemplate = SeatTemplateDto(
+                    rows = listOf("A", "B"),
+                    seatsPerRow = 10,
+                    gradeMapping = mapOf("A" to "VIP", "B" to "S", "C" to "A")
+                )
+            )
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.existsByVenueIdAndName(venueId, "KSPO DOME") } returns false
+
+            val exception = assertThrows<EventException> {
+                hallService.createHall(venueId, request)
+            }
+            assertEquals(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING, exception.errorCode)
+        }
     }
 
     @Nested
@@ -193,6 +259,18 @@ class HallServiceTest {
                 hallService.getHall(venueId, hallId)
             }
             assertEquals(ErrorCode.HALL_NOT_FOUND, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("손상된 JSON seatTemplate 조회 시 예외가 발생한다")
+        fun invalidSeatTemplateJson() {
+            val hall = createHall(seatTemplate = "invalid-json")
+            every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
+
+            val exception = assertThrows<EventException> {
+                hallService.getHall(venueId, hallId)
+            }
+            assertEquals(ErrorCode.INVALID_SEAT_TEMPLATE, exception.errorCode)
         }
     }
 
