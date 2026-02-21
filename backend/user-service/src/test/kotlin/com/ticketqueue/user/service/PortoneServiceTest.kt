@@ -6,6 +6,7 @@ import com.ticketqueue.common.external.portone.*
 import com.ticketqueue.user.exception.UserException
 import feign.FeignException
 import feign.Request
+import feign.RetryableException
 import io.mockk.every
 import io.mockk.mockk
 import org.assertj.core.api.Assertions.assertThat
@@ -111,12 +112,17 @@ class PortoneServiceTest {
         val accessToken = "Bearer test-token"
         
         every { portoneTokenService.getAccessToken() } returns accessToken
-        val businessException = mockk<BusinessException>()
-        every { businessException.errorCode.status.value() } returns 500
-        
+        val retryableException = RetryableException(
+            500,
+            "Internal Server Error",
+            Request.HttpMethod.GET,
+            null as Long?,
+            mockk<Request>(relaxed = true) // Request는 복잡하므로 relaxed mock 사용
+        )
+
         every {
             portoneClient.getIdentityVerification(any(), any(), any())
-        } throws businessException
+        } throws retryableException
 
         // when & then
         val exception = assertThrows<UserException> {

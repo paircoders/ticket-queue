@@ -21,7 +21,7 @@ class AuthController(
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
     fun signup(@Valid @RequestBody request: AuthDto.SignupRequest): AuthDto.SignupResponse {
-        logger.info { "     ::::: Request to signup ( email : ${request.email}  ) :::::" }
+        logger.info { "     ::::: Signup request received :::::" }
         return authService.signup(request)
     }
 }
