@@ -5,6 +5,12 @@ spring:
   application:
     name: api-gateway
 
+  data:
+    redis:
+      host: ${REDIS_HOST:192.168.50.111}
+      port: ${REDIS_PORT:6379}
+      password: ${valkey_password}
+
   cloud:
     gateway:
       server:
@@ -45,6 +51,9 @@ spring:
               uri: ${SERVICE_URI_PAYMENT:http://192.168.50.111:8085}
               predicates:
                 - Path=/payments/**
+
+jwt:
+  secret: ${jwt_secret}
 
 # 기본 Resilience4j 설정 구조
 resilience4j:

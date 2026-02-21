@@ -60,7 +60,8 @@ class InternalPathBlockFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `public route should not be blocked - auth`() {
-        webTestClient.get()
+        // POST /auth/login은 공개 엔드포인트 (JWT 필터 스킵 → downstream 없어 5xx)
+        webTestClient.post()
             .uri("/auth/login")
             .exchange()
             .expectStatus().is5xxServerError
@@ -76,9 +77,11 @@ class InternalPathBlockFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `public route should not be blocked - queue`() {
+        // GET /queue/status는 인증 필요 엔드포인트 → JWT 필터가 401 반환
+        // 내부 경로 차단(404)이 아님을 검증
         webTestClient.get()
             .uri("/queue/status")
             .exchange()
-            .expectStatus().is5xxServerError
+            .expectStatus().isUnauthorized
     }
 }
