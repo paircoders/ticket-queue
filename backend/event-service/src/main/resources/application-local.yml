@@ -7,13 +7,13 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:postgresql://192.168.50.2:5432/ticket_queue?currentSchema=event_service,common
+    url: jdbc:postgresql://192.168.50.111:5432/ticket_queue?currentSchema=event_service,common
     username: event_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver
 
   kafka:
-    bootstrap-servers: 192.168.50.2:9092
+    bootstrap-servers: 192.168.50.111:9092
     consumer:
       group-id: event-service
       auto-offset-reset: earliest

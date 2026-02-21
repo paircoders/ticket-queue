@@ -6,7 +6,7 @@ spring:
       - "optional:aws-secretsmanager:common/secure-config"
   data:
     redis:
-      host: 192.168.50.2
+      host: 192.168.50.111
       port: 6379
       password: ${valkey_password}
 
