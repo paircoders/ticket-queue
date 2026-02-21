@@ -26,6 +26,12 @@ dependencies {
     // Context Propagation (Reactor Context ↔ MDC 자동 동기화)
     implementation(libs.micrometer.context.propagation)
 
+    // JWT
+    implementation(libs.bundles.jjwt)
+
+    // Redis Reactive (토큰 블랙리스트 조회)
+    implementation(libs.spring.boot.starter.data.redis.reactive)
+
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.reactor.test)
