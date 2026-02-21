@@ -53,4 +53,27 @@ class GatewayBasicConfigTest {
         assertThat(routeMap["reservation-service"]).contains("localhost:8084")
         assertThat(routeMap["payment-service"]).contains("localhost:8085")
     }
+
+    @Test
+    fun `queue-service와 payment-service 라우트에 커스텀 response-timeout 메타데이터가 설정되어야 한다`() {
+        // when
+        val routes = routeLocator.routes.collectList().block()!!
+        val metaMap = routes.associate { it.id to it.metadata }
+
+        // then — REQ-GW-008: queue 10s, payment 60s
+        assertThat(metaMap["queue-service"]!!["response-timeout"]).isEqualTo(10000)
+        assertThat(metaMap["payment-service"]!!["response-timeout"]).isEqualTo(60000)
+    }
+
+    @Test
+    fun `user-service event-service reservation-service 라우트에는 커스텀 response-timeout 메타데이터가 없어야 한다`() {
+        // when
+        val routes = routeLocator.routes.collectList().block()!!
+        val metaMap = routes.associate { it.id to it.metadata }
+
+        // then — 글로벌 타임아웃(30s)만 적용되는 서비스
+        assertThat(metaMap["user-service"]!!).doesNotContainKey("response-timeout")
+        assertThat(metaMap["event-service"]!!).doesNotContainKey("response-timeout")
+        assertThat(metaMap["reservation-service"]!!).doesNotContainKey("response-timeout")
+    }
 }

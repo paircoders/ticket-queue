@@ -24,26 +24,55 @@ spring:
               uri: http://localhost:8081
               predicates:
                 - Path=/auth/**,/users/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: userService
+                    fallbackUri: forward:/fallback/user
 
             - id: event-service
               uri: http://localhost:8082
               predicates:
                 - Path=/events/**,/venues/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: eventService
+                    fallbackUri: forward:/fallback/event
 
             - id: queue-service
               uri: http://localhost:8083
               predicates:
                 - Path=/queue/**
+              metadata:
+                response-timeout: 10000
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: queueService
+                    fallbackUri: forward:/fallback/queue
 
             - id: reservation-service
               uri: http://localhost:8084
               predicates:
                 - Path=/reservations/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: reservationService
+                    fallbackUri: forward:/fallback/reservation
 
             - id: payment-service
               uri: http://localhost:8085
               predicates:
                 - Path=/payments/**
+              metadata:
+                response-timeout: 60000
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentService
+                    fallbackUri: forward:/fallback/payment
 
           httpclient:
             connect-timeout: 1000
@@ -56,6 +85,50 @@ spring:
 
 jwt:
   secret: dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tdmVyaWZpY2F0aW9uLXRlc3Rpbmc=
+
+# 테스트 환경용 Resilience4j 설정 (빠른 검증을 위해 축소된 값 사용)
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 5
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      userService:
+        baseConfig: default
+      eventService:
+        baseConfig: default
+      queueService:
+        baseConfig: default
+      reservationService:
+        baseConfig: default
+      paymentService:
+        baseConfig: default
+
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+    instances:
+      userService:
+        baseConfig: default
+      eventService:
+        baseConfig: default
+      queueService:
+        baseConfig: default
+        timeoutDuration: 3s      # Production: 10s → 테스트 축소
+      reservationService:
+        baseConfig: default
+      paymentService:
+        baseConfig: default
+        timeoutDuration: 10s     # Production: 60s → 테스트 축소
 
 management:
   endpoints:

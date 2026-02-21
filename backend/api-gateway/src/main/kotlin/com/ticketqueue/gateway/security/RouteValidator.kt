@@ -34,6 +34,7 @@ class RouteValidator {
         RouteRule("/venues/*", HttpMethod.GET),
         RouteRule("/actuator/**", null), // ANY method
         RouteRule("/internal/**", null), // 게이트웨이 라우트(404)가 차단 담당
+        RouteRule("/fallback/**", null), // 서킷 브레이커 폴백 (내부 포워드 경로, 민감 데이터 없음)
     )
 
     /**
