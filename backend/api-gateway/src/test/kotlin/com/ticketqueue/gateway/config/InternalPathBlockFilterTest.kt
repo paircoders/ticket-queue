@@ -76,7 +76,7 @@ class InternalPathBlockFilterTest : BaseIntegrationTest() {
     }
 
     @Test
-    fun `public route should not be blocked - queue`() {
+    fun `non-internal route should not be blocked - queue`() {
         // GET /queue/status는 인증 필요 엔드포인트 → JWT 필터가 401 반환
         // 내부 경로 차단(404)이 아님을 검증
         webTestClient.get()

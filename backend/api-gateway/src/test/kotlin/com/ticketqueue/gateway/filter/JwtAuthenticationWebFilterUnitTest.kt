@@ -204,6 +204,23 @@ class JwtAuthenticationWebFilterUnitTest {
         body shouldContain "\"code\":\"INVALID_TOKEN\""
     }
 
+    @Test
+    fun `Redis 오류 시 fail-closed 전략으로 401 INVALID_TOKEN 반환`() {
+        val claims = JwtClaims(userId = "user-1", role = "USER", jti = "some-jti")
+        every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        every { tokenBlacklistService.isBlacklisted("some-jti") } returns
+            Mono.error(RuntimeException("Redis connection refused"))
+
+        val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
+
+        StepVerifier.create(filter.filter(exchange, passChain))
+            .verifyComplete()
+
+        exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
+        val body = responseBody(exchange)
+        body shouldContain "\"code\":\"INVALID_TOKEN\""
+    }
+
     // ─── 인가 실패 ─────────────────────────────────────────────────────
 
     @Test
@@ -280,7 +297,7 @@ class JwtAuthenticationWebFilterUnitTest {
             HttpMethod.POST -> MockServerHttpRequest.post(path)
             HttpMethod.PUT -> MockServerHttpRequest.put(path)
             HttpMethod.DELETE -> MockServerHttpRequest.delete(path)
-            else -> MockServerHttpRequest.get(path)
+            else -> error("Unsupported HTTP method: $method")
         }
         block(builder)
         return MockServerWebExchange.from(builder.build())

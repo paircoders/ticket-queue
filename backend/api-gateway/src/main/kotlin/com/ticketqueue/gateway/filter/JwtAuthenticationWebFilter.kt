@@ -91,6 +91,10 @@ class JwtAuthenticationWebFilter(
 
         // 4. 블랙리스트 확인 (Redis non-blocking)
         return tokenBlacklistService.isBlacklisted(claims.jti)
+            .onErrorResume { ex ->
+                log.error(ex) { "Redis blacklist check failed for jti=${claims.jti}" }
+                Mono.just(true)
+            }
             .flatMap { isBlacklisted ->
                 if (isBlacklisted) {
                     log.debug { "Blacklisted token jti=${claims.jti}" }

@@ -35,11 +35,12 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .parseSignedClaims(token)
             .payload
 
-        return JwtClaims(
-            userId = claims.subject,
-            role = claims["role"] as String,
-            jti = claims.id,
-        )
+        val userId = claims.subject ?: throw JwtException("Missing sub claim")
+        val role = claims.get("role", String::class.java)
+            ?: throw JwtException("Missing role claim")
+        val jti = claims.id ?: throw JwtException("Missing jti claim")
+
+        return JwtClaims(userId = userId, role = role, jti = jti)
     }
 }
 
