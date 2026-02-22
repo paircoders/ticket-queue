@@ -59,6 +59,8 @@ class JwtAuthenticationWebFilter(
         private const val CODE_EXPIRED_TOKEN = "EXPIRED_TOKEN"
         private const val CODE_FORBIDDEN = "FORBIDDEN"
 
+        private const val ROLE_ADMIN = "ADMIN"
+
         private val TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
     }
 
@@ -109,7 +111,7 @@ class JwtAuthenticationWebFilter(
                     writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
                 } else {
                     // 5. 관리자 전용 엔드포인트 인가 검사
-                    if (routeValidator.isAdminOnly(exchange) && claims.role != "ADMIN") {
+                    if (routeValidator.isAdminOnly(exchange) && claims.role != ROLE_ADMIN) {
                         log.debug { "Forbidden: role=${claims.role} path=${exchange.request.path}" }
                         return@flatMap writeErrorResponse(exchange, HttpStatus.FORBIDDEN, CODE_FORBIDDEN, "접근 권한이 없습니다.")
                     }

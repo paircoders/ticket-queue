@@ -29,10 +29,11 @@
 
 **관리자 전용 엔드포인트:**
 - `POST /events`, `PUT /events/{id}`, `DELETE /events/{id}`
-- `POST /venues`, `PUT /venues/{id}`
+- `POST /venues`, `PUT /venues/{id}`, `DELETE /venues/{id}`
+- `POST /venues/{venueId}/halls`, `PUT /venues/{venueId}/halls/{hallId}`, `DELETE /venues/{venueId}/halls/{hallId}`
 - `GET /queue/admin/stats`
 
-**관련 요구사항:** REQ-GW-001 (동적 라우팅), REQ-GW-003 (공개 엔드포인트), REQ-GW-020 (Admin 권한)
+**관련 요구사항:** REQ-GW-001 (동적 라우팅), REQ-GW-003 (공개 엔드포인트), REQ-GW-015 (Admin 권한)
 
 ### 1.2 주요 API 엔드포인트 목록
 
