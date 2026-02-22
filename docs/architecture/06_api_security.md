@@ -19,11 +19,12 @@
 **공개 엔드포인트 (인증 불필요):**
 - `POST /auth/signup`
 - `POST /auth/login`
+- `POST /auth/refresh`
 - `GET /events`, `GET /events/{id}`
 - `GET /venues`
 
 **인증 필수 엔드포인트:**
-- `/auth/logout`, `/auth/refresh`
+- `/auth/logout`
 - `/users/**`
 - `/queue/**`, `/reservations/**`, `/payments/**`
 
@@ -59,7 +60,13 @@
 | GET | `/events/{id}/seats` | 좌석 정보 조회 | 필수 | 200/분 (사용자) |
 | POST | `/events` | 공연 생성 | 관리자 | - |
 | PUT | `/events/{id}` | 공연 수정 | 관리자 | - |
+| DELETE | `/events/{id}` | 공연 삭제 | 관리자 | - |
 | POST | `/venues` | 공연장 생성 | 관리자 | - |
+| DELETE | `/venues/{id}` | 공연장 삭제 | 관리자 | - |
+| POST | `/venues/{venueId}/halls` | 홀 생성 | 관리자 | - |
+| PUT | `/venues/{venueId}/halls/{hallId}` | 홀 수정 | 관리자 | - |
+| DELETE | `/venues/{venueId}/halls/{hallId}` | 홀 삭제 | 관리자 | - |
+| GET | `/queue/admin/stats` | 대기열 통계 | 관리자 | - |
 | GET | `/internal/seats/status/{eventId}` | SOLD 좌석 ID 조회 (내부 전용) | 불필요 (내부) | - |
 
 **참고:** `/internal/**` 경로는 API Gateway를 거치지 않고 서비스 간 직접 호출
