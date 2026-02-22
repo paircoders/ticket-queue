@@ -19,6 +19,9 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            connect-timeout: 5000    # 5초 연결 타임아웃
+            response-timeout: 30s    # 30초 글로벌 응답 타임아웃 (REQ-GW-007)
           globalcors:
             cors-configurations:
               '[/**]':
@@ -50,12 +53,15 @@ spring:
                 - SetStatus=404
               order: -1
 
-            # 기본 라우트 구조 정의 (세부 필터는 향후 추가 예정)
             - id: user-service
               uri: ${SERVICE_URI_USER:http://192.168.50.111:8081}
               predicates:
                 - Path=/auth/**,/users/**
               filters:
+                - name: CircuitBreaker
+                  args:
+                    name: userService
+                    fallbackUri: forward:/fallback/user
                 - name: RequestSize
                   args:
                     maxSize: 10KB
@@ -64,31 +70,94 @@ spring:
               uri: ${SERVICE_URI_EVENT:http://192.168.50.111:8082}
               predicates:
                 - Path=/events/**,/venues/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: eventService
+                    fallbackUri: forward:/fallback/event
 
-            - id: queue-service
+            - id: queue-service                          # REQ-GW-008: 10초 타임아웃
               uri: ${SERVICE_URI_QUEUE:http://192.168.50.111:8083}
               predicates:
                 - Path=/queue/**
+              metadata:
+                response-timeout: 10000
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: queueService
+                    fallbackUri: forward:/fallback/queue
 
             - id: reservation-service
               uri: ${SERVICE_URI_RESERVATION:http://192.168.50.111:8084}
               predicates:
                 - Path=/reservations/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: reservationService
+                    fallbackUri: forward:/fallback/reservation
 
-            - id: payment-service
+            - id: payment-service                        # REQ-GW-008: 60초 타임아웃
               uri: ${SERVICE_URI_PAYMENT:http://192.168.50.111:8085}
               predicates:
                 - Path=/payments/**
+              metadata:
+                response-timeout: 60000
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: paymentService
+                    fallbackUri: forward:/fallback/payment
 
 jwt:
   secret: ${jwt_secret}
 
-# 기본 Resilience4j 설정 구조
+# Resilience4j Circuit Breaker + TimeLimiter 설정 (REQ-GW-006)
+# TimeLimiter 필수 이유: ReactiveResilience4JCircuitBreakerFactory가 내부적으로 TimeLimiter를 함께 감싸며,
+# 미설정 시 기본 1초로 모든 요청이 타임아웃됨.
 resilience4j:
   circuitbreaker:
     configs:
       default:
         registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 100
+        minimumNumberOfCalls: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 10
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      userService:
+        baseConfig: default
+      eventService:
+        baseConfig: default
+      queueService:
+        baseConfig: default
+      reservationService:
+        baseConfig: default
+      paymentService:
+        baseConfig: default
+
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 30s
+        cancelRunningFuture: true
+    instances:
+      userService:
+        baseConfig: default
+      eventService:
+        baseConfig: default
+      queueService:
+        baseConfig: default
+        timeoutDuration: 10s     # REQ-GW-008: Queue 10초
+      reservationService:
+        baseConfig: default
+      paymentService:
+        baseConfig: default
+        timeoutDuration: 60s     # REQ-GW-008: Payment 60초
 
 management:
   endpoints:
