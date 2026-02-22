@@ -6,6 +6,8 @@ import com.ticketqueue.gateway.security.JwtClaims
 import com.ticketqueue.gateway.security.JwtTokenProvider
 import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
 import com.ticketqueue.gateway.security.RouteValidator
+import com.ticketqueue.gateway.support.exchange
+import com.ticketqueue.gateway.support.responseBody
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import io.kotest.matchers.shouldBe
@@ -17,7 +19,6 @@ import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
@@ -287,32 +288,11 @@ class JwtAuthenticationWebFilterUnitTest {
 
     // ─── 헬퍼 ─────────────────────────────────────────────────────────
 
-    private fun exchange(
-        method: HttpMethod,
-        path: String,
-        block: MockServerHttpRequest.BaseBuilder<*>.() -> Unit = {},
-    ): MockServerWebExchange {
-        val builder = when (method) {
-            HttpMethod.GET -> MockServerHttpRequest.get(path)
-            HttpMethod.POST -> MockServerHttpRequest.post(path)
-            HttpMethod.PUT -> MockServerHttpRequest.put(path)
-            HttpMethod.DELETE -> MockServerHttpRequest.delete(path)
-            else -> error("Unsupported HTTP method: $method")
-        }
-        block(builder)
-        return MockServerWebExchange.from(builder.build())
-    }
-
     private fun exchangeWithBearer(
         method: HttpMethod,
         path: String,
         token: String,
     ): MockServerWebExchange = exchange(method, path) {
         header(HttpHeaders.AUTHORIZATION, "Bearer $token")
-    }
-
-    private fun responseBody(exchange: MockServerWebExchange): String {
-        val body = exchange.response.bodyAsString.block() ?: ""
-        return body
     }
 }

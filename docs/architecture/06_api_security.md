@@ -82,11 +82,15 @@
 ##### Layer 1: API Gateway (형식 검증)
 - X-Queue-Token 헤더 존재 여부 확인
 - 형식 검증: `qr_` prefix + UUID 형식
-- 없거나 형식 오류 시: 400 Bad Request
+- 없거나 형식 오류 시: 401 Unauthorized
 - 통과 시: 헤더 그대로 다운스트림 전달 (유효성 미검증)
 
 **적용 경로:**
+- GET /reservations/seats/{id} (qr_ 필수)
 - POST /reservations/hold (qr_ 필수)
+- PUT /reservations/hold/{id} (qr_ 필수)
+- POST /payments (qr_ 필수)
+- POST /payments/confirm (qr_ 필수)
 
 ##### Layer 2: Reservation/Payment Service (유효성 검증 - 필수)
 **방식 A (채택): Redis 직접 조회**
@@ -99,9 +103,9 @@
 
 | Method | Endpoint | 설명 | 인증 | Rate Limit |
 |--------|----------|------|------|-----------|
-| GET | `/reservations/seats/{eventId}` | 좌석 상태 조회 | 필수 | 200/분 (사용자) |
+| GET | `/reservations/seats/{eventId}` | 좌석 상태 조회 | 필수 + Queue Token | 200/분 (사용자) |
 | POST | `/reservations/hold` | 좌석 선점 | 필수 + Queue Token | 20/분 (사용자) |
-| PUT | `/reservations/hold/{id}` | 좌석 변경 | 필수 | 20/분 (사용자) |
+| PUT | `/reservations/hold/{id}` | 좌석 변경 | 필수 + Queue Token | 20/분 (사용자) |
 | GET | `/reservations` | 나의 예매 내역 | 필수 | 200/분 (사용자) |
 | DELETE | `/reservations/{id}` | 예매 취소 | 필수 | 20/분 (사용자) |
 
@@ -111,8 +115,8 @@
 
 | Method | Endpoint | 설명 | 인증 | Rate Limit |
 |--------|----------|------|------|-----------|
-| POST | `/payments` | 결제 요청 | 필수 | 20/분 (사용자) |
-| POST | `/payments/confirm` | 결제 확인 | 필수 | 20/분 (사용자) |
+| POST | `/payments` | 결제 요청 | 필수 + Queue Token | 20/분 (사용자) |
+| POST | `/payments/confirm` | 결제 확인 | 필수 + Queue Token | 20/분 (사용자) |
 | GET | `/payments/{id}` | 결제 조회 | 필수 | 200/분 (사용자) |
 | GET | `/payments` | 결제 내역 | 필수 | 200/분 (사용자) |
 
