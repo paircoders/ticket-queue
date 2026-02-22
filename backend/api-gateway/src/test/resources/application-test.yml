@@ -1,14 +1,38 @@
 server:
   port: 0
+  max-http-request-header-size: 16KB
 
 spring:
   application:
     name: api-gateway-test
 
+  codec:
+    max-in-memory-size: 1MB
+
   cloud:
     gateway:
       server:
         webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins:
+                  - "https://ticketing.vercel.app"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowed-headers:
+                  - Authorization
+                  - Content-Type
+                  - X-Queue-Token
+                exposed-headers:
+                  - X-Queue-Token
+                allow-credentials: true
+                max-age: 3600
+          max-request-size: 1MB
           routes:
             # /internal/** 차단 라우트 (테스트 환경)
             # 내부 API는 외부 접근 차단
@@ -29,6 +53,9 @@ spring:
                   args:
                     name: userService
                     fallbackUri: forward:/fallback/user
+                - name: RequestSize
+                  args:
+                    maxSize: 10KB
 
             - id: event-service
               uri: http://localhost:8082

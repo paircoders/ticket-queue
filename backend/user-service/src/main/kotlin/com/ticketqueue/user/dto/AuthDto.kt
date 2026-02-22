@@ -19,11 +19,8 @@ class AuthDto {
         @field:NotBlank(message = "전화번호는 필수입니다.")
         val phone: String,
 
-        @field:NotBlank(message = "CI 정보는 필수입니다.")
-        val ci: String,
-
-        @field:NotBlank(message = "DI 정보는 필수입니다.")
-        val di: String,
+        @field:NotBlank(message = "본인인증 ID는 필수입니다.")
+        val identityVerificationId: String,
 
         @field:NotBlank(message = "reCAPTCHA 토큰은 필수입니다.")
         val recaptchaToken: String

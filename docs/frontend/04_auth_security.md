@@ -200,10 +200,12 @@ sequenceDiagram
     reCAPTCHA-->>Frontend: 검증 토큰
     Frontend->>User: 3. 본인인증 요청
     User->>PortOne: PortOne 본인인증
-    PortOne-->>Frontend: CI/DI 반환
+    PortOne-->>Frontend: identityVerificationId 반환
     Frontend->>User: 4. 정보 입력 폼
     User->>Frontend: 이메일/비밀번호 입력
-    Frontend->>Backend: POST /auth/signup (모든 정보)
+    Frontend->>Backend: POST /auth/signup (identityVerificationId 포함)
+    Backend->>PortOne: identityVerificationId로 CI/DI 조회
+    PortOne-->>Backend: CI/DI 반환
     Backend-->>Frontend: 회원가입 완료
     Frontend->>User: 로그인 페이지 리디렉트
 ```
@@ -280,7 +282,7 @@ export default function CaptchaStep({ onNext }: { onNext: (token: string) => voi
 }
 ```
 
-**3단계: 본인인증 (PortOne CI/DI)**
+**3단계: 본인인증 (PortOne Identity Verification)**
 
 ```typescript
 // components/domain/auth/signup/VerifyStep.tsx
@@ -288,13 +290,14 @@ export default function CaptchaStep({ onNext }: { onNext: (token: string) => voi
 
 import { usePortOne } from '@/hooks/usePortOne'
 
-export default function VerifyStep({ onNext }: { onNext: (ci: string, di: string) => void }) {
+export default function VerifyStep({ onNext }: { onNext: (verificationId: string) => void }) {
   const { requestCertification } = usePortOne()
 
   const handleVerify = async () => {
     try {
       const result = await requestCertification()
-      onNext(result.ci, result.di)
+      // identityVerificationId만 다음 단계로 전달
+      onNext(result.identityVerificationId)
     } catch (error) {
       toast.error('본인인증에 실패했습니다.')
     }
@@ -341,12 +344,10 @@ type SignupFormData = z.infer<typeof signupSchema>
 
 export default function InfoStep({
   recaptchaToken,
-  ci,
-  di,
+  identityVerificationId,
 }: {
   recaptchaToken: string
-  ci: string
-  di: string
+  identityVerificationId: string
 }) {
   const { register, handleSubmit, formState: { errors } } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
@@ -357,8 +358,7 @@ export default function InfoStep({
     signupMutation.mutate({
       ...data,
       recaptchaToken,
-      ci,
-      di,
+      identityVerificationId,
     })
   }
 

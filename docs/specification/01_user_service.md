@@ -6,7 +6,7 @@ User Service는 회원 관리, 인증 및 프로필 관리를 담당
 ## 1. 인증 (Auth)
 
 ### 1.1 회원가입
-신규 회원 등록 (reCAPTCHA 토큰과 본인인증(CI/DI) 결과가 포함되어야 함)
+신규 회원 등록 (reCAPTCHA 토큰과 PortOne 본인인증 ID가 포함되어야 함. CI/DI는 서버에서 직접 조회함)
 
 - **URL:** `POST /auth/signup`
 - **Auth:** None
@@ -18,8 +18,7 @@ User Service는 회원 관리, 인증 및 프로필 관리를 담당
   "password": "strong_password123!",
   "name": "홍길동",
   "phone": "010-1234-5678",
-  "ci": "connecting_information_from_portone",
-  "di": "duplication_information_from_portone",
+  "identityVerificationId": "portone_identity_verification_id",
   "recaptchaToken": "recaptcha_response_token"
 }
 ```
@@ -35,7 +34,11 @@ User Service는 회원 관리, 인증 및 프로필 관리를 담당
 
 **Error Responses**
 - `400 Bad Request`: 필수 값 누락 또는 형식 오류
-- `409 Conflict`: 이미 존재하는 이메일 또는 CI (중복 가입)
+- `409 Conflict`: 이미 존재하는 이메일 (`ALREADY_EXISTS_EMAIL`)
+- `409 Conflict`: 이미 가입된 본인인증 정보 (`DUPLICATE_IDENTITY`)
+- `400 Bad Request`: 본인인증 정보 누락 (`PORTONE_MISSING_REQUIRED_INFO`)
+- `400 Bad Request`: 본인인증 실패/미완료 (`PORTONE_VERIFICATION_FAILED`, `PORTONE_VERIFICATION_TIMEOUT`)
+- `502 Bad Gateway`: PortOne API 연동 오류 (`PORTONE_API_ERROR`)
 
 ### 1.2 로그인
 이메일과 비밀번호로 로그인하고 JWT 토큰 발급

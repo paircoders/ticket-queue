@@ -9,6 +9,7 @@ import io.jsonwebtoken.JwtException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
@@ -34,10 +35,11 @@ private val log = KotlinLogging.logger {}
  *
  * REQ-GW-002 (JWT 검증), REQ-GW-003 (공개 엔드포인트), REQ-GW-015 (관리자 인가)
  *
- * @Order(HIGHEST_PRECEDENCE + 1): TraceIdWebFilter(HIGHEST_PRECEDENCE) 바로 다음 실행
+ * @Order(HIGHEST_PRECEDENCE + 2): TraceIdWebFilter(HIGHEST_PRECEDENCE),
+ * SecurityHeadersWebFilter(HIGHEST_PRECEDENCE + 1) 다음 실행
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 1)
+@Order(Ordered.HIGHEST_PRECEDENCE + 2)
 class JwtAuthenticationWebFilter(
     private val jwtTokenProvider: JwtTokenProvider,
     private val tokenBlacklistService: ReactiveTokenBlacklistService,
@@ -61,6 +63,12 @@ class JwtAuthenticationWebFilter(
     }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
+        // CORS preflight (OPTIONS) 요청은 JWT 검증 없이 통과
+        // globalcors가 라우팅 핸들러 레벨에서 처리하므로 WebFilter가 개입하지 않아야 함
+        if (exchange.request.method == HttpMethod.OPTIONS) {
+            return chain.filter(exchange)
+        }
+
         // 1. 공개 엔드포인트 통과
         if (routeValidator.isPublic(exchange)) {
             return chain.filter(exchange)
