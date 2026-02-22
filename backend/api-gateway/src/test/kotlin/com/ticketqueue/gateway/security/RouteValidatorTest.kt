@@ -1,10 +1,9 @@
 package com.ticketqueue.gateway.security
 
+import com.ticketqueue.gateway.support.exchange
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpMethod
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest
-import org.springframework.mock.web.server.MockServerWebExchange
 
 /**
  * RouteValidator 단위 테스트
@@ -15,18 +14,6 @@ import org.springframework.mock.web.server.MockServerWebExchange
 class RouteValidatorTest {
 
     private val routeValidator = RouteValidator()
-
-    private fun exchange(method: HttpMethod, path: String): MockServerWebExchange {
-        val builder = when (method) {
-            HttpMethod.GET -> MockServerHttpRequest.get(path)
-            HttpMethod.POST -> MockServerHttpRequest.post(path)
-            HttpMethod.PUT -> MockServerHttpRequest.put(path)
-            HttpMethod.DELETE -> MockServerHttpRequest.delete(path)
-            HttpMethod.OPTIONS -> MockServerHttpRequest.options(path)
-            else -> error("Unsupported HTTP method: $method")
-        }
-        return MockServerWebExchange.from(builder.build())
-    }
 
     // ─── isQueueTokenRequired: positive (5개 필수 경로 모두) ────────────
 

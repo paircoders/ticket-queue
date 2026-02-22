@@ -6,6 +6,7 @@ import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
 import com.ticketqueue.gateway.support.createValidToken
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
@@ -34,12 +35,15 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
     @Value("\${jwt.secret}")
     private lateinit var jwtSecret: String
 
+    @BeforeEach
+    fun setUp() {
+        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
+    }
+
     // ─── JWT 유효 + Queue Token 누락 ──────────────────────────────────
 
     @Test
     fun `JWT 유효하고 Queue Token 없으면 401 QUEUE_TOKEN_MISSING 반환`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
 
         val body = webTestClient.post()
@@ -58,8 +62,6 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `JWT 유효하고 Queue Token 형식 오류면 401 QUEUE_TOKEN_INVALID 반환`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
 
         val body = webTestClient.post()
@@ -79,8 +81,6 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `JWT 유효하고 유효한 Queue Token이면 downstream으로 전달 (5xx는 downstream 부재 때문)`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
         val queueToken = "qr_${UUID.randomUUID()}"
 
@@ -114,8 +114,6 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `Queue Token 불필요 경로는 Queue Token 없어도 downstream으로 전달 (5xx는 downstream 부재)`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
 
         webTestClient.get()
@@ -129,8 +127,6 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `JWT 유효하고 유효한 Queue Token으로 POST payments-confirm 요청 시 downstream 전달 (5xx는 downstream 부재)`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
         val queueToken = "qr_${UUID.randomUUID()}"
 
@@ -144,8 +140,6 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `JWT 유효하고 Queue Token 없으면 GET reservations-seats-id에서 401 QUEUE_TOKEN_MISSING 반환`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
 
         val body = webTestClient.get()
@@ -162,8 +156,6 @@ class QueueTokenWebFilterTest : BaseIntegrationTest() {
 
     @Test
     fun `JWT 유효하고 유효한 Queue Token으로 PUT reservations-hold-id 요청 시 downstream 전달 (5xx는 downstream 부재)`() {
-        every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
-
         val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
         val queueToken = "qr_${UUID.randomUUID()}"
 
