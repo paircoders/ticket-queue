@@ -19,7 +19,7 @@
 **공개 엔드포인트 (인증 불필요):**
 - `POST /auth/signup`
 - `POST /auth/login`
-- `POST /auth/refresh`
+- `POST /auth/refresh` *(JWT Authorization 헤더 불필요, Refresh Token은 request body로 전달)*
 - `GET /events`, `GET /events/{id}`
 - `GET /venues`
 
