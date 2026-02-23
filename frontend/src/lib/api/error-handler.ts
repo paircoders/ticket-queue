@@ -56,8 +56,11 @@ function handleConflictError(
     case 'MAX_SEATS_EXCEEDED':
       toast.error('최대 4장까지만 예매할 수 있습니다.')
       break
-    case 'DUPLICATE_EMAIL':
+    case 'ALREADY_EXISTS_EMAIL':
       toast.error('이미 사용 중인 이메일입니다.')
+      break
+    case 'DUPLICATE_IDENTITY':
+      toast.error('이미 가입된 본인인증 정보입니다.')
       break
     case 'DUPLICATE_PAYMENT':
       toast.error('이미 처리된 결제입니다.')
