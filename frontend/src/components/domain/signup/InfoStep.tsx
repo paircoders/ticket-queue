@@ -73,7 +73,7 @@ export function InfoStep({
           const message = data?.message
 
           if (status === 409) {
-            if (code === 'ALREADY_EXISTS_EMAIL' || code === 'DUPLICATE_EMAIL') {
+            if (code === 'ALREADY_EXISTS_EMAIL') {
               setError('email', {
                 message: '이미 사용 중인 이메일입니다.',
               })
@@ -101,6 +101,19 @@ export function InfoStep({
                   ? '본인인증 시간이 초과되었습니다. 다시 인증해주세요.'
                   : '본인인증 정보가 유효하지 않습니다. 다시 인증해주세요.',
               )
+              onBack()
+              return
+            }
+            if (code === 'PORTONE_MISSING_REQUIRED_INFO') {
+              toast.error('본인인증 정보가 누락되었습니다. 다시 인증해주세요.')
+              onBack()
+              return
+            }
+          }
+
+          if (status === 404) {
+            if (code === 'PORTONE_VERIFICATION_NOT_FOUND') {
+              toast.error('본인인증 기록을 찾을 수 없습니다. 다시 인증해주세요.')
               onBack()
               return
             }

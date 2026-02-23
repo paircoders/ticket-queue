@@ -90,11 +90,6 @@ describe('handleApiError', () => {
       expect(toast.error).toHaveBeenCalledWith('최대 4장까지만 예매할 수 있습니다.')
     })
 
-    it('shows specific message for DUPLICATE_EMAIL', () => {
-      handleApiError(createAxiosError(409, { code: 'DUPLICATE_EMAIL' }))
-      expect(toast.error).toHaveBeenCalledWith('이미 사용 중인 이메일입니다.')
-    })
-
     it('shows specific message for DUPLICATE_PAYMENT', () => {
       handleApiError(createAxiosError(409, { code: 'DUPLICATE_PAYMENT' }))
       expect(toast.error).toHaveBeenCalledWith('이미 처리된 결제입니다.')
