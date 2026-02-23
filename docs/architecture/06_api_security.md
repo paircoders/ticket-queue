@@ -86,7 +86,7 @@
 - 통과 시: 헤더 그대로 다운스트림 전달 (유효성 미검증)
 
 **적용 경로:**
-- GET /reservations/seats/{id} (qr_ 필수)
+- GET /reservations/seats/{scheduleId} (qr_ 필수)
 - POST /reservations/hold (qr_ 필수)
 - PUT /reservations/hold/{id} (qr_ 필수)
 - POST /payments (qr_ 필수)
@@ -103,7 +103,7 @@
 
 | Method | Endpoint | 설명 | 인증 | Rate Limit |
 |--------|----------|------|------|-----------|
-| GET | `/reservations/seats/{eventId}` | 좌석 상태 조회 | 필수 + Queue Token | 200/분 (사용자) |
+| GET | `/reservations/seats/{scheduleId}` | 좌석 상태 조회 | 필수 + Queue Token | 200/분 (사용자) |
 | POST | `/reservations/hold` | 좌석 선점 | 필수 + Queue Token | 20/분 (사용자) |
 | PUT | `/reservations/hold/{id}` | 좌석 변경 | 필수 + Queue Token | 20/분 (사용자) |
 | GET | `/reservations` | 나의 예매 내역 | 필수 | 200/분 (사용자) |
