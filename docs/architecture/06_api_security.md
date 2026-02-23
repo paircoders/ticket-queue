@@ -62,11 +62,11 @@
 | PUT | `/events/{id}` | 공연 수정 | 관리자 | - |
 | DELETE | `/events/{id}` | 공연 삭제 | 관리자 | - |
 | POST | `/venues` | 공연장 생성 | 관리자 | - |
+| PUT | `/venues/{id}` | 공연장 수정 | 관리자 | - |
 | DELETE | `/venues/{id}` | 공연장 삭제 | 관리자 | - |
 | POST | `/venues/{venueId}/halls` | 홀 생성 | 관리자 | - |
 | PUT | `/venues/{venueId}/halls/{hallId}` | 홀 수정 | 관리자 | - |
 | DELETE | `/venues/{venueId}/halls/{hallId}` | 홀 삭제 | 관리자 | - |
-| GET | `/queue/admin/stats` | 대기열 통계 | 관리자 | - |
 | GET | `/internal/seats/status/{eventId}` | SOLD 좌석 ID 조회 (내부 전용) | 불필요 (내부) | - |
 
 **참고:** `/internal/**` 경로는 API Gateway를 거치지 않고 서비스 간 직접 호출
@@ -80,6 +80,7 @@
 | POST | `/queue/enter` | 대기열 진입 | 필수 | 100/분 (사용자) |
 | GET | `/queue/status` | 대기열 상태 조회 | 필수 | 15/분 (사용자)   |
 | DELETE | `/queue/leave` | 대기열 이탈 | 필수 | 100/분 (사용자) |
+| GET | `/queue/admin/stats` | 대기열 통계 | 관리자 | - |
 
 **관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-002, REQ-QUEUE-008
 
