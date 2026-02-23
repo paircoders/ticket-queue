@@ -11,14 +11,11 @@ import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 private val log = KotlinLogging.logger {}
 
@@ -132,24 +129,5 @@ class JwtAuthenticationWebFilter(
         status: HttpStatus,
         code: String,
         message: String,
-    ): Mono<Void> {
-        val traceId = exchange.request.headers.getFirst(TraceIdWebFilter.TRACE_ID_HEADER)
-            ?: exchange.response.headers.getFirst(TraceIdWebFilter.TRACE_ID_HEADER)
-            ?: "unknown"
-
-        val body = mapOf(
-            "code" to code,
-            "message" to message,
-            "timestamp" to LocalDateTime.now().format(TIMESTAMP_FORMATTER),
-            "traceId" to traceId,
-        )
-
-        val bytes = objectMapper.writeValueAsBytes(body)
-        val buffer = exchange.response.bufferFactory().wrap(bytes)
-
-        exchange.response.statusCode = status
-        exchange.response.headers.contentType = MediaType.APPLICATION_JSON
-
-        return exchange.response.writeWith(Mono.just(buffer))
-    }
+    ): Mono<Void> = WebFilterErrorResponseWriter.write(exchange, objectMapper, status, code, message)
 }

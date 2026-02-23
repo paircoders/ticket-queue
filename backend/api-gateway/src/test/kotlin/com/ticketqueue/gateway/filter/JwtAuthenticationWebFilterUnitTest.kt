@@ -5,6 +5,8 @@ import com.ticketqueue.gateway.security.JwtClaims
 import com.ticketqueue.gateway.security.JwtTokenProvider
 import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
 import com.ticketqueue.gateway.security.RouteValidator
+import com.ticketqueue.gateway.support.exchange
+import com.ticketqueue.gateway.support.responseBody
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import io.kotest.matchers.shouldBe
@@ -19,7 +21,6 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
@@ -427,10 +428,5 @@ class JwtAuthenticationWebFilterUnitTest {
         token: String,
     ): MockServerWebExchange = exchange(method, path) {
         header(HttpHeaders.AUTHORIZATION, "Bearer $token")
-    }
-
-    private fun responseBody(exchange: MockServerWebExchange): String {
-        val body = exchange.response.bodyAsString.block() ?: ""
-        return body
     }
 }

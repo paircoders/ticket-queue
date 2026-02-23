@@ -4,8 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.ticketqueue.gateway.BaseIntegrationTest
 import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
-import io.jsonwebtoken.Jwts
-import io.jsonwebtoken.security.Keys
+import com.ticketqueue.gateway.support.createValidToken
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
@@ -17,9 +16,9 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.test.web.reactive.server.WebTestClient
 import reactor.core.publisher.Mono
-import java.util.Base64
-import java.util.Date
 import java.util.UUID
+
+private val VALID_QUEUE_TOKEN = "qr_${UUID.randomUUID()}"
 
 /**
  * JwtAuthenticationWebFilter 통합 테스트
@@ -129,13 +128,14 @@ class JwtAuthenticationWebFilterTest : BaseIntegrationTest() {
     fun `유효한 토큰으로 보호 엔드포인트 접근 시 downstream으로 전달 (5xx는 downstream 부재 때문)`() {
         every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
 
-        val token = createValidToken(userId = "user-1", role = "USER")
+        val token = createValidToken(jwtSecret, userId = "user-1", role = "USER")
 
         webTestClient.post()
             .uri("/reservations/hold")
             .header("Authorization", "Bearer $token")
+            .header(QueueTokenWebFilter.QUEUE_TOKEN_HEADER, VALID_QUEUE_TOKEN) // Queue Token 필수 경로
             .exchange()
-            .expectStatus().is5xxServerError // JWT 필터 통과 후 downstream 없어서 5xx
+            .expectStatus().is5xxServerError // JWT + Queue Token 필터 모두 통과, downstream 없어서 5xx
     }
 
     // --- 관리자 인가 ---

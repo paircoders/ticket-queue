@@ -38,6 +38,20 @@ class RouteValidator {
     )
 
     /**
+     * Queue Token(X-Queue-Token)이 필수인 엔드포인트 (토큰 없으면 401)
+     *
+     * REQ-GW-016 (Queue Token 헤더 전달), REQ-QUEUE-010 (Queue Token 검증)
+     * 출처: docs/specification/04_reservation_service.md, 05_payment_service.md
+     */
+    private val queueTokenRequiredRoutes: List<RouteRule> = listOf(
+        RouteRule("/reservations/seats/*", HttpMethod.GET),
+        RouteRule("/reservations/hold", HttpMethod.POST),
+        RouteRule("/reservations/hold/*", HttpMethod.PUT),
+        RouteRule("/payments", HttpMethod.POST),
+        RouteRule("/payments/confirm", HttpMethod.POST),
+    )
+
+    /**
      * ADMIN 권한만 접근 가능한 엔드포인트 (role=ADMIN 아니면 403)
      */
     private val adminOnlyRoutes: List<RouteRule> = listOf(
@@ -60,6 +74,15 @@ class RouteValidator {
         val path = exchange.request.path.value()
         val method = exchange.request.method
         return publicRoutes.any { it.matches(path, method, pathMatcher) }
+    }
+
+    /**
+     * Queue Token 필수 엔드포인트 여부 확인 (X-Queue-Token 검증 필요)
+     */
+    fun isQueueTokenRequired(exchange: ServerWebExchange): Boolean {
+        val path = exchange.request.path.value()
+        val method = exchange.request.method
+        return queueTokenRequiredRoutes.any { it.matches(path, method, pathMatcher) }
     }
 
     /**
