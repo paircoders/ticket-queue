@@ -16,6 +16,10 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.test.web.reactive.server.WebTestClient
 import reactor.core.publisher.Mono
+import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.security.Keys
+import java.util.Base64
+import java.util.Date
 import java.util.UUID
 
 private val VALID_QUEUE_TOKEN = "qr_${UUID.randomUUID()}"

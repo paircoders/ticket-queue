@@ -57,8 +57,6 @@ class JwtAuthenticationWebFilter(
         private const val CODE_FORBIDDEN = "FORBIDDEN"
 
         private const val ROLE_ADMIN = "ADMIN"
-
-        private val TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
     }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {

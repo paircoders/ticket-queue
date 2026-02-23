@@ -405,23 +405,6 @@ class JwtAuthenticationWebFilterUnitTest {
 
     // --- 헬퍼 ---
 
-    private fun exchange(
-        method: HttpMethod,
-        path: String,
-        block: MockServerHttpRequest.BaseBuilder<*>.() -> Unit = {},
-    ): MockServerWebExchange {
-        val builder = when (method) {
-            HttpMethod.GET -> MockServerHttpRequest.get(path)
-            HttpMethod.POST -> MockServerHttpRequest.post(path)
-            HttpMethod.PUT -> MockServerHttpRequest.put(path)
-            HttpMethod.DELETE -> MockServerHttpRequest.delete(path)
-            HttpMethod.OPTIONS -> MockServerHttpRequest.options(path)
-            else -> error("Unsupported HTTP method: $method")
-        }
-        block(builder)
-        return MockServerWebExchange.from(builder.build())
-    }
-
     private fun exchangeWithBearer(
         method: HttpMethod,
         path: String,

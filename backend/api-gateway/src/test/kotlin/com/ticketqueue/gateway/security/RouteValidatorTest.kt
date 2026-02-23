@@ -1,10 +1,5 @@
 package com.ticketqueue.gateway.security
 
-import io.kotest.matchers.shouldBe
-import org.junit.jupiter.api.Test
-import org.springframework.http.HttpMethod
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest
-import org.springframework.mock.web.server.MockServerWebExchange
 import com.ticketqueue.gateway.support.exchange
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -74,7 +69,7 @@ class RouteValidatorTest {
         routeValidator.isAdminOnly(exchange(HttpMethod.GET, "/queue/admin/stats")) shouldBe true
     }
 
-    // --- isAdminOnly() Negative: 비-admin 경로 (8개) ---
+    // --- isAdminOnly() Negative: 비-admin 경로 ---
 
     @Test
     fun `GET events는 관리자 전용이 아님`() {
@@ -116,6 +111,16 @@ class RouteValidatorTest {
         routeValidator.isAdminOnly(exchange(HttpMethod.GET, "/events/schedules/1/seats")) shouldBe false
     }
 
+    @Test
+    fun `GET reservations는 관리자 전용이 아님`() {
+        routeValidator.isAdminOnly(exchange(HttpMethod.GET, "/reservations")) shouldBe false
+    }
+
+    @Test
+    fun `POST auth-login은 관리자 전용이 아님`() {
+        routeValidator.isAdminOnly(exchange(HttpMethod.POST, "/auth/login")) shouldBe false
+    }
+
     // --- isAdminOnly() 경계 케이스 (4개) ---
 
     @Test
@@ -141,8 +146,6 @@ class RouteValidatorTest {
         // /queue/admin/** 과 무관한 일반 queue 경로
         routeValidator.isAdminOnly(exchange(HttpMethod.DELETE, "/queue/leave")) shouldBe false
     }
-
-    // --- isPublic() Positive: 공개 경로 (11개) ---
 
     // ─── isQueueTokenRequired: positive (5개 필수 경로 모두) ────────────
 
@@ -202,7 +205,7 @@ class RouteValidatorTest {
         routeValidator.isQueueTokenRequired(exchange(HttpMethod.POST, "/payments/confirm/extra")) shouldBe false
     }
 
-    // ─── isPublic: positive ────────────────────────────────────────────
+    // --- isPublic() Positive: 공개 경로 ---
 
     @Test
     fun `POST auth-login은 공개 엔드포인트`() {
@@ -212,11 +215,6 @@ class RouteValidatorTest {
     @Test
     fun `POST auth-signup은 공개 엔드포인트`() {
         routeValidator.isPublic(exchange(HttpMethod.POST, "/auth/signup")) shouldBe true
-    }
-
-    @Test
-    fun `POST auth-login은 공개 엔드포인트`() {
-        routeValidator.isPublic(exchange(HttpMethod.POST, "/auth/login")) shouldBe true
     }
 
     @Test
@@ -264,7 +262,7 @@ class RouteValidatorTest {
         routeValidator.isPublic(exchange(HttpMethod.GET, "/fallback/circuit-breaker")) shouldBe true
     }
 
-    // --- isPublic() Negative: 인증 필수 경로 (4개) ---
+    // --- isPublic() Negative: 인증 필수 경로 ---
 
     @Test
     fun `POST reservations-hold는 공개 엔드포인트가 아님`() {
@@ -284,6 +282,16 @@ class RouteValidatorTest {
     @Test
     fun `POST payments는 공개 엔드포인트가 아님`() {
         routeValidator.isPublic(exchange(HttpMethod.POST, "/payments")) shouldBe false
+    }
+
+    @Test
+    fun `GET reservations는 공개 엔드포인트가 아님`() {
+        routeValidator.isPublic(exchange(HttpMethod.GET, "/reservations")) shouldBe false
+    }
+
+    @Test
+    fun `POST auth-logout은 공개 엔드포인트가 아님`() {
+        routeValidator.isPublic(exchange(HttpMethod.POST, "/auth/logout")) shouldBe false
     }
 
     // --- isPublic() / isAdminOnly() 교차 검증 (2개) ---
@@ -321,86 +329,5 @@ class RouteValidatorTest {
     fun `PUT events-double-slash-id는 관리자 전용으로 처리됨 (Spring 경로 정규화로 admin 매칭)`() {
         // Spring이 /events//123 을 /events/123 으로 정규화하므로 /events/* 패턴에 매칭됨
         routeValidator.isAdminOnly(exchange(HttpMethod.PUT, "/events//123")) shouldBe true
-    }
-
-    // --- 헬퍼 ---
-
-    private fun exchange(method: HttpMethod, path: String): MockServerWebExchange {
-        val request = when (method) {
-            HttpMethod.GET -> MockServerHttpRequest.get(path).build()
-            HttpMethod.POST -> MockServerHttpRequest.post(path).build()
-            HttpMethod.PUT -> MockServerHttpRequest.put(path).build()
-            HttpMethod.DELETE -> MockServerHttpRequest.delete(path).build()
-            else -> error("Unsupported HTTP method: $method")
-        }
-        return MockServerWebExchange.from(request)
-    fun `GET actuator-health는 공개 엔드포인트`() {
-        routeValidator.isPublic(exchange(HttpMethod.GET, "/actuator/health")) shouldBe true
-    }
-
-    @Test
-    fun `GET internal 경로는 공개 엔드포인트 (Gateway 라우트가 404 차단 담당)`() {
-        routeValidator.isPublic(exchange(HttpMethod.GET, "/internal/seats/status/1")) shouldBe true
-    }
-
-    // ─── isPublic: negative ────────────────────────────────────────────
-
-    @Test
-    fun `GET reservations는 공개 엔드포인트 아님`() {
-        routeValidator.isPublic(exchange(HttpMethod.GET, "/reservations")) shouldBe false
-    }
-
-    @Test
-    fun `GET users-me는 공개 엔드포인트 아님`() {
-        routeValidator.isPublic(exchange(HttpMethod.GET, "/users/me")) shouldBe false
-    }
-
-    @Test
-    fun `POST auth-logout은 공개 엔드포인트 아님`() {
-        routeValidator.isPublic(exchange(HttpMethod.POST, "/auth/logout")) shouldBe false
-    }
-
-    // ─── isAdminOnly: positive ─────────────────────────────────────────
-
-    @Test
-    fun `POST events는 관리자 전용`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.POST, "/events")) shouldBe true
-    }
-
-    @Test
-    fun `PUT events-id는 관리자 전용`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.PUT, "/events/123")) shouldBe true
-    }
-
-    @Test
-    fun `DELETE events-id는 관리자 전용`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.DELETE, "/events/123")) shouldBe true
-    }
-
-    @Test
-    fun `POST venues는 관리자 전용`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.POST, "/venues")) shouldBe true
-    }
-
-    @Test
-    fun `GET queue-admin-stats는 관리자 전용`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.GET, "/queue/admin/stats")) shouldBe true
-    }
-
-    // ─── isAdminOnly: negative ─────────────────────────────────────────
-
-    @Test
-    fun `GET events는 관리자 전용 아님`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.GET, "/events")) shouldBe false
-    }
-
-    @Test
-    fun `GET reservations는 관리자 전용 아님`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.GET, "/reservations")) shouldBe false
-    }
-
-    @Test
-    fun `POST auth-login은 관리자 전용 아님`() {
-        routeValidator.isAdminOnly(exchange(HttpMethod.POST, "/auth/login")) shouldBe false
     }
 }
