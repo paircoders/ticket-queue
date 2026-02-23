@@ -3,8 +3,7 @@ export interface SignupRequest {
   password: string
   name: string
   phone: string
-  ci: string
-  di: string
+  identityVerificationId: string
   recaptchaToken: string
 }
 
