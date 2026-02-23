@@ -92,8 +92,15 @@ export function InfoStep({
               onGoToCaptcha()
               return
             }
-            if (code === 'PORTONE_VERIFICATION_FAILED') {
-              toast.error('본인인증 정보가 유효하지 않습니다. 다시 인증해주세요.')
+            if (
+              code === 'PORTONE_VERIFICATION_FAILED' ||
+              code === 'PORTONE_VERIFICATION_TIMEOUT'
+            ) {
+              toast.error(
+                code === 'PORTONE_VERIFICATION_TIMEOUT'
+                  ? '본인인증 시간이 초과되었습니다. 다시 인증해주세요.'
+                  : '본인인증 정보가 유효하지 않습니다. 다시 인증해주세요.',
+              )
               onBack()
               return
             }
