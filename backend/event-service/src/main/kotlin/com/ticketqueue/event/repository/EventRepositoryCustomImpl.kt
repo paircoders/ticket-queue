@@ -10,6 +10,7 @@ import com.ticketqueue.event.entity.QEventSchedule
 import com.ticketqueue.event.entity.QSeat
 import com.ticketqueue.event.entity.QVenue
 import com.ticketqueue.event.entity.SeatStatus
+import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -107,6 +108,15 @@ class EventRepositoryCustomImpl(
             .fetch()
             .filterNotNull()
             .toSet()
+    }
+
+    override fun findByIdForUpdate(eventId: UUID): Event? {
+        val event = QEvent.event
+        return queryFactory
+            .selectFrom(event)
+            .where(event.id.eq(eventId))
+            .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+            .fetchOne()
     }
 
     private fun buildPredicate(

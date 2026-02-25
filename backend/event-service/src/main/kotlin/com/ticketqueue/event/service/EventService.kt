@@ -226,8 +226,8 @@ class EventService(
      */
     @Transactional
     fun deleteEvent(eventId: UUID): EventDto.DeleteResponse {
-        val event = eventRepository.findById(eventId)
-            .orElseThrow { EventException(ErrorCode.EVENT_NOT_FOUND) }
+        val event = eventRepository.findByIdForUpdate(eventId)
+            ?: throw EventException(ErrorCode.EVENT_NOT_FOUND)
 
         if (event.deletedAt != null) {
             throw EventException(ErrorCode.EVENT_ALREADY_DELETED)

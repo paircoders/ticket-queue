@@ -589,7 +589,7 @@ class EventServiceTest {
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
 
-            every { eventRepository.findById(eventId) } returns Optional.of(event)
+            every { eventRepository.findByIdForUpdate(eventId) } returns event
             every { seatRepository.existsByEventIdAndStatus(eventId, SeatStatus.SOLD) } returns false
 
             val result = eventService.deleteEvent(eventId)
@@ -605,7 +605,7 @@ class EventServiceTest {
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
 
-            every { eventRepository.findById(eventId) } returns Optional.of(event)
+            every { eventRepository.findByIdForUpdate(eventId) } returns event
             every { seatRepository.existsByEventIdAndStatus(eventId, SeatStatus.SOLD) } returns true
 
             val exception = assertThrows<EventException> { eventService.deleteEvent(eventId) }
@@ -615,7 +615,7 @@ class EventServiceTest {
         @Test
         @DisplayName("존재하지 않는 공연 삭제 시 예외가 발생한다")
         fun notFound() {
-            every { eventRepository.findById(eventId) } returns Optional.empty()
+            every { eventRepository.findByIdForUpdate(eventId) } returns null
 
             val exception = assertThrows<EventException> { eventService.deleteEvent(eventId) }
             assertEquals(ErrorCode.EVENT_NOT_FOUND, exception.errorCode)
@@ -628,7 +628,7 @@ class EventServiceTest {
             val hall = createHall(venue)
             val deletedEvent = createEvent(venue, hall).apply { softDelete() }
 
-            every { eventRepository.findById(eventId) } returns Optional.of(deletedEvent)
+            every { eventRepository.findByIdForUpdate(eventId) } returns deletedEvent
 
             val exception = assertThrows<EventException> { eventService.deleteEvent(eventId) }
             assertEquals(ErrorCode.EVENT_ALREADY_DELETED, exception.errorCode)

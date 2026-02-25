@@ -36,4 +36,12 @@ interface EventRepositoryCustom {
      * 반환된 Set에 없는 scheduleId는 AVAILABLE 좌석이 없음 (isSoldOut = true).
      */
     fun findScheduleIdsWithAvailableSeats(scheduleIds: List<UUID>): Set<UUID>
+
+    /**
+     * 공연을 비관적 락(FOR UPDATE)으로 조회
+     *
+     * deleteEvent의 race condition 방지: SOLD 좌석 확인과 softDelete 사이의
+     * 동시 좌석 판매를 차단하여 데이터 정합성을 보장한다.
+     */
+    fun findByIdForUpdate(eventId: UUID): Event?
 }
