@@ -73,53 +73,66 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 - **URL:** `GET /events/{id}`
 - **Auth:** None
 
+> **구현 노트**: venue/hall은 평탄화 구조(`venueId`, `venueName`, `hallId`, `hallName`)로 반환한다.
+> `isSoldOut`은 회차(times) 레벨에 위치한다 (날짜 레벨보다 정확도 높음).
+> description을 `null`로 초기화하려면 빈 문자열(`""`)을 전달한다.
+
 **Response (200 OK)**
 ```json
 {
   "id": "event_uuid",
   "title": "2026 월드 투어 서울",
   "artist": "인기 가수",
-  "description": "...",
-  "venue": { "id": "venue_uuid", "name": "잠실 주경기장" },
-  "halls": { "id": "hall_uuid", "name": "메인 홀" },
+  "description": "최고의 공연입니다.",
+  "venueId": "venue_uuid",
+  "venueName": "잠실 주경기장",
+  "hallId": "hall_uuid",
+  "hallName": "메인 홀",
+  "status": "OPEN",
   "schedules": [
     {
       "date": "2026-06-01",
-      "isSoldOut": false,
       "times": [
         {
           "id": "schedule_uuid",
-          "sequence": 1,
-          "time": "19:00:00",
+          "playSequence": 1,
+          "eventStartAt": "2026-06-01T19:00:00",
+          "eventEndAt": "2026-06-01T22:00:00",
           "saleStartAt": "2026-05-01T20:00:00",
           "saleEndAt": "2026-05-31T23:59:59",
-          "status": "UPCOMING"
+          "status": "UPCOMING",
+          "isSoldOut": false
         },
         {
           "id": "schedule_uuid",
-          "sequence": 2,
-          "time": "21:00:00",
+          "playSequence": 2,
+          "eventStartAt": "2026-06-01T21:00:00",
+          "eventEndAt": "2026-06-01T23:00:00",
           "saleStartAt": "2026-05-01T20:00:00",
           "saleEndAt": "2026-05-31T23:59:59",
-          "status": "UPCOMING"
+          "status": "UPCOMING",
+          "isSoldOut": true
         }
       ]
     },
     {
       "date": "2026-06-02",
-      "isSoldOut": false,
       "times": [
         {
           "id": "schedule_uuid",
-          "sequence": 3,
-          "time": "17:00:00",
+          "playSequence": 3,
+          "eventStartAt": "2026-06-02T17:00:00",
+          "eventEndAt": "2026-06-02T20:00:00",
           "saleStartAt": "2026-05-02T20:00:00",
           "saleEndAt": "2026-06-01T23:59:59",
-          "status": "UPCOMING"
+          "status": "UPCOMING",
+          "isSoldOut": false
         }
       ]
     }
-  ]
+  ],
+  "createdAt": "2026-01-20T10:00:00",
+  "updatedAt": "2026-01-20T10:00:00"
 }
 ```
 
