@@ -64,5 +64,12 @@ enum class ErrorCode(
     HALL_NAME_DUPLICATE(HttpStatus.CONFLICT, "HALL_NAME_DUPLICATE", "동일 공연장 내 중복된 홀 이름입니다."),
     HALL_HAS_EVENTS(HttpStatus.CONFLICT, "HALL_HAS_EVENTS", "공연이 존재하는 홀은 삭제할 수 없습니다."),
     INVALID_SEAT_TEMPLATE(HttpStatus.INTERNAL_SERVER_ERROR, "SEAT_TEMPLATE_INVALID", "좌석 템플릿 데이터가 손상되었습니다."),
-    INVALID_SEAT_TEMPLATE_MAPPING(HttpStatus.BAD_REQUEST, "SEAT_TEMPLATE_MAPPING_INVALID", "좌석 템플릿의 행-등급 매핑이 올바르지 않습니다.")
+    INVALID_SEAT_TEMPLATE_MAPPING(HttpStatus.BAD_REQUEST, "SEAT_TEMPLATE_MAPPING_INVALID", "좌석 템플릿의 행-등급 매핑이 올바르지 않습니다."),
+    EVENT_HAS_RESERVATIONS(HttpStatus.CONFLICT, "EVENT_HAS_RESERVATIONS", "판매된 좌석이 있는 공연은 삭제할 수 없습니다."),
+    EVENT_ALREADY_DELETED(HttpStatus.CONFLICT, "EVENT_ALREADY_DELETED", "이미 삭제된 공연입니다."),
+    INVALID_EVENT_STATUS(HttpStatus.BAD_REQUEST, "INVALID_EVENT_STATUS", "유효하지 않은 상태 전환입니다."),
+    INVALID_SCHEDULE_TIME(HttpStatus.BAD_REQUEST, "INVALID_SCHEDULE_TIME", "회차 시간이 올바르지 않습니다."),
+    EVENT_NOT_MODIFIABLE(HttpStatus.CONFLICT, "EVENT_NOT_MODIFIABLE", "판매 시작 후에는 아티스트 정보를 수정할 수 없습니다."),
+    DUPLICATE_PLAY_SEQUENCE(HttpStatus.CONFLICT, "DUPLICATE_PLAY_SEQUENCE", "중복된 회차 순번입니다."),
+    HALL_NOT_IN_VENUE(HttpStatus.BAD_REQUEST, "HALL_NOT_IN_VENUE", "해당 홀은 선택한 공연장에 속하지 않습니다.")
 }

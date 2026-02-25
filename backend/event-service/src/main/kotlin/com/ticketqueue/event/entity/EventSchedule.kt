@@ -44,7 +44,7 @@ class EventSchedule(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val status: ScheduleStatus = ScheduleStatus.UPCOMING,
+    var status: ScheduleStatus = ScheduleStatus.UPCOMING,
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -54,6 +54,9 @@ class EventSchedule(
     @Column(name = "updated_at", nullable = false)
     val updatedAt: LocalDateTime? = null
 ) {
+    /** 티켓 판매가 시작된 회차인지 확인 */
+    fun hasSaleStarted(): Boolean = saleStartAt.isBefore(LocalDateTime.now())
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is EventSchedule) return false

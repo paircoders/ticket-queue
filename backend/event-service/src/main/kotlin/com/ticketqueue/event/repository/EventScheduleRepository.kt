@@ -6,4 +6,6 @@ import org.springframework.stereotype.Repository
 import java.util.UUID
 
 @Repository
-interface EventScheduleRepository : JpaRepository<EventSchedule, UUID>
+interface EventScheduleRepository : JpaRepository<EventSchedule, UUID> {
+    fun findByEventIdOrderByPlaySequence(eventId: UUID): List<EventSchedule>
+}
