@@ -4,27 +4,21 @@ server:
 spring:
   application:
     name: queue-service
-
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
-      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
-
-  data:
-    redis:
-      host: 192.168.50.111
-      port: 6379
+  config:
+    import:
+      - "optional:classpath:/application-common-${spring.profiles.active}.yml"
+      - "optional:aws-secretsmanager:queue-svc/secure-config"
+      - "optional:aws-secretsmanager:common/secure-config"
 
 queue:
   batch:
-    size: 10  # Approve 10 users per second
-    interval: 1000  # 1 second in milliseconds
+    size: 10
+    interval: 1000
   token:
-    ttl: 600  # 10 minutes in seconds
-  max-capacity: 50000  # Maximum users per schedule queue
+    ttl: 600
+  max-capacity: 50000
   active-user:
-    ttl: 600  # 10 minutes - prevent duplicate queue entry
+    ttl: 600
 
 management:
   endpoints:
