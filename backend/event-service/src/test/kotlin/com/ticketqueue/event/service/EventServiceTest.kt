@@ -586,11 +586,18 @@ class EventServiceTest {
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
             val scheduleId2 = UUID.randomUUID()
-            val scheduleEarly = createSchedule(event) // now.plusDays(30) 이른 시각
+            // 자정을 넘지 않도록 정오(12:00) 기준으로 고정 — 시간대 flakiness 방지
+            val baseTime = now.toLocalDate().atTime(12, 0).plusDays(30)
+            val scheduleEarly = EventSchedule(
+                id = scheduleId, event = event, playSequence = 1,
+                eventStartAt = baseTime, eventEndAt = baseTime.plusHours(2),
+                saleStartAt = now.plusDays(1), saleEndAt = now.plusDays(29),
+                createdAt = now, updatedAt = now
+            )
             val scheduleLate = EventSchedule(
                 id = scheduleId2, event = event, playSequence = 2,
-                eventStartAt = now.plusDays(30).plusHours(3), // 같은 날, 늦은 시각
-                eventEndAt = now.plusDays(30).plusHours(5),
+                eventStartAt = baseTime.plusHours(3), // 같은 날 15:00 — 자정 경계 없음
+                eventEndAt = baseTime.plusHours(5),
                 saleStartAt = now.plusDays(1), saleEndAt = now.plusDays(29),
                 createdAt = now, updatedAt = now
             )
@@ -654,7 +661,7 @@ class EventServiceTest {
             val event = createEvent(venue, hall)
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns false
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, any()) } returns false
 
             val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(title = "BTS 투어 2026", artist = "BTS 팀"))
 
@@ -670,7 +677,7 @@ class EventServiceTest {
             val event = createEvent(venue, hall)
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns true
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, any()) } returns true
 
             val exception = assertThrows<EventException> {
                 eventService.updateEvent(eventId, EventDto.UpdateRequest(artist = "변경된 아티스트"))
@@ -686,7 +693,7 @@ class EventServiceTest {
             val event = createEvent(venue, hall)
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns true
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, any()) } returns true
 
             val result = eventService.updateEvent(
                 eventId,
@@ -715,7 +722,7 @@ class EventServiceTest {
             val event = createEvent(venue, hall)
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns false
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, any()) } returns false
 
             val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(description = "새 설명"))
 
@@ -732,7 +739,7 @@ class EventServiceTest {
             val event = createEvent(venue, hall).apply { update(null, null, "기존 설명") }
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns false
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, any()) } returns false
 
             val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(description = ""))
 

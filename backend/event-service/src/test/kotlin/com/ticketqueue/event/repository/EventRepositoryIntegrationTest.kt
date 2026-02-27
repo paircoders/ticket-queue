@@ -385,24 +385,23 @@ class EventRepositoryIntegrationTest {
         }
 
         @Test
-        @DisplayName("소프트 삭제된 공연도 잠금 조회 대상에 포함된다 (deleteEvent 내부 검증용)")
-        fun deletedEventIsStillReturned() {
+        @DisplayName("소프트 삭제된 공연은 findByIdForUpdate에서 null을 반환한다")
+        fun deletedEventIsNotReturned() {
             val venue = saveVenue()
             val hall = saveHall(venue)
             val event = saveEvent(venue, hall, deleted = true)
 
-            // findByIdForUpdate는 deletedAt 필터 없이 단순 ID 조회 (서비스에서 직접 검증)
+            // findByIdForUpdate는 deletedAt IS NULL 필터를 포함하므로 soft-deleted 이벤트는 null 반환
             val result = eventRepository.findByIdForUpdate(event.id!!)
 
-            assertNotNull(result)
-            assertNotNull(result!!.deletedAt)
+            assertNull(result)
         }
     }
 
-    // ──────── existsByEventIdAndSaleStartAtBefore ────────
+    // ──────── existsByEventIdAndSaleStartAtLessThanEqual ────────
 
     @Nested
-    @DisplayName("existsByEventIdAndSaleStartAtBefore")
+    @DisplayName("existsByEventIdAndSaleStartAtLessThanEqual")
     @Transactional
     inner class ExistsByEventIdAndSaleStartAtBefore {
 
@@ -414,7 +413,7 @@ class EventRepositoryIntegrationTest {
             val event = saveEvent(venue, hall)
             saveSchedule(event, saleStartAt = now.minusHours(1)) // 1시간 전 판매 시작
 
-            val result = eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(event.id!!, now)
+            val result = eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(event.id!!, now)
 
             assertTrue(result)
         }
@@ -427,7 +426,7 @@ class EventRepositoryIntegrationTest {
             val event = saveEvent(venue, hall)
             saveSchedule(event, saleStartAt = now.plusDays(1)) // 내일 판매 시작
 
-            val result = eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(event.id!!, now)
+            val result = eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(event.id!!, now)
 
             assertFalse(result)
         }
@@ -440,7 +439,7 @@ class EventRepositoryIntegrationTest {
             val event = saveEvent(venue, hall)
             // 회차 없음
 
-            val result = eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(event.id!!, now)
+            val result = eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(event.id!!, now)
 
             assertFalse(result)
         }

@@ -79,7 +79,7 @@ CREATE TABLE event_service.events (
 
 -- 인덱스
 CREATE INDEX idx_events_status ON event_service.events(status);
-CREATE INDEX idx_events_not_deleted ON event_service.events(id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_events_not_deleted ON event_service.events(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_events_artist ON event_service.events(artist);
 CREATE INDEX idx_events_venue ON event_service.events(venue_id);
 

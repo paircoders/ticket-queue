@@ -68,10 +68,16 @@ class Event(
     }
 
     fun changeStatus(newStatus: EventStatus) {
+        if (!this.status.canTransitionTo(newStatus)) {
+            throw com.ticketqueue.event.exception.EventException(
+                com.ticketqueue.common.exception.ErrorCode.INVALID_EVENT_STATUS
+            )
+        }
         this.status = newStatus
     }
 
     fun softDelete() {
+        if (this.deletedAt != null) return
         this.deletedAt = LocalDateTime.now()
     }
 

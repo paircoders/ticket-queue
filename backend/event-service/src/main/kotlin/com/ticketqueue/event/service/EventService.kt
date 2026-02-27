@@ -213,7 +213,7 @@ class EventService(
     fun updateEvent(eventId: UUID, request: EventDto.UpdateRequest): EventDto.UpdateResponse {
         val event = findActiveEvent(eventId)
         // 전체 스케줄 로드 대신 EXISTS 쿼리 1개로 판매 시작 여부 확인 (N → 1 쿼리)
-        val hasSaleStarted = eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, LocalDateTime.now())
+        val hasSaleStarted = eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, LocalDateTime.now())
 
         if (hasSaleStarted && request.artist != null) {
             throw EventException(ErrorCode.EVENT_NOT_MODIFIABLE)

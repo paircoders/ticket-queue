@@ -53,7 +53,7 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   - `size` (int, default: 20): 페이지 크기
   - `status` (string, optional): 공연 상태 필터 (PREPARING, OPEN, ENDED, CANCELLED)
   - `city` (string, optional): 도시 필터
-  - `keyword` (string, optional): 제목/아티스트 키워드 검색 (PostgreSQL FTS)
+  - `keyword` (string, optional): 제목/아티스트 키워드 검색 (LIKE, 대소문자 무시)
 
 **Response (200 OK)**
 ```json
