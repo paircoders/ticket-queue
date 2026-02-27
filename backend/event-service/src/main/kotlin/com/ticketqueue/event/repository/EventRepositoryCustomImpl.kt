@@ -12,6 +12,7 @@ import com.ticketqueue.event.entity.QVenue
 import com.ticketqueue.event.entity.SeatStatus
 import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Page
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import java.time.LocalDateTime
@@ -27,6 +28,7 @@ import java.util.UUID
  * - GROUP BY로 회차별 MIN/MAX startDate 집계
  * - deleted_at IS NULL 조건 항상 포함
  */
+@Transactional(readOnly = true)
 class EventRepositoryCustomImpl(
     private val queryFactory: JPAQueryFactory
 ) : EventRepositoryCustom {
@@ -110,6 +112,7 @@ class EventRepositoryCustomImpl(
             .toSet()
     }
 
+    @Transactional
     override fun findByIdForUpdate(eventId: UUID): Event? {
         val event = QEvent.event
         return queryFactory

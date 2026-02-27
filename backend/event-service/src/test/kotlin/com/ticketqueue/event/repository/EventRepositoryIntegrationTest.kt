@@ -16,9 +16,11 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import javax.sql.DataSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
@@ -82,6 +84,7 @@ class EventRepositoryIntegrationTest {
             JPAQueryFactory(SharedEntityManagerCreator.createSharedEntityManager(emf))
     }
 
+    @Autowired private lateinit var dataSource: DataSource
     @Autowired private lateinit var eventRepository: EventRepository
     @Autowired private lateinit var venueRepository: VenueRepository
     @Autowired private lateinit var hallRepository: HallRepository
@@ -89,6 +92,26 @@ class EventRepositoryIntegrationTest {
     @Autowired private lateinit var seatRepository: SeatRepository
 
     private val now: LocalDateTime = LocalDateTime.now()
+
+    /**
+     * 각 테스트 메서드 실행 전 모든 테이블을 정리한다.
+     *
+     * @Nested 클래스에서 Spring TestContext의 @Transactional 롤백이 올바르게 동작하지 않을 수 있으므로,
+     * JUnit 5의 @BeforeEach 상속 + raw JDBC 자동 커밋으로 데이터 격리를 보장한다.
+     * dataSource.connection은 Spring의 트랜잭션 관리 외부에서 별도 연결을 획득하므로 즉시 커밋된다.
+     */
+    @BeforeEach
+    fun cleanAll() {
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { stmt ->
+                stmt.execute("DELETE FROM event_service.seats")
+                stmt.execute("DELETE FROM event_service.event_schedules")
+                stmt.execute("DELETE FROM event_service.events")
+                stmt.execute("DELETE FROM event_service.halls")
+                stmt.execute("DELETE FROM event_service.venues")
+            }
+        }
+    }
 
     // ──────── 테스트 데이터 헬퍼 ────────
 
@@ -147,6 +170,7 @@ class EventRepositoryIntegrationTest {
 
     @Nested
     @DisplayName("findEventList")
+    @Transactional
     inner class FindEventList {
 
         @Test
@@ -246,6 +270,7 @@ class EventRepositoryIntegrationTest {
 
     @Nested
     @DisplayName("findEventWithVenueAndHall")
+    @Transactional
     inner class FindEventWithVenueAndHall {
 
         @Test
@@ -287,6 +312,7 @@ class EventRepositoryIntegrationTest {
 
     @Nested
     @DisplayName("findScheduleIdsWithAvailableSeats")
+    @Transactional
     inner class FindScheduleIdsWithAvailableSeats {
 
         @Test
@@ -335,6 +361,7 @@ class EventRepositoryIntegrationTest {
 
     @Nested
     @DisplayName("findByIdForUpdate")
+    @Transactional
     inner class FindByIdForUpdate {
 
         @Test
@@ -376,6 +403,7 @@ class EventRepositoryIntegrationTest {
 
     @Nested
     @DisplayName("existsByEventIdAndSaleStartAtBefore")
+    @Transactional
     inner class ExistsByEventIdAndSaleStartAtBefore {
 
         @Test
