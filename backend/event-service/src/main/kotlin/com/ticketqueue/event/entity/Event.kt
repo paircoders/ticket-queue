@@ -63,7 +63,8 @@ class Event(
     fun update(title: String?, artist: String?, description: String?) {
         title?.let { this.title = it }
         artist?.let { this.artist = it }
-        description?.let { this.description = it }
+        // 빈 문자열("")은 description을 null로 초기화하는 신호 (스펙 노트 참조)
+        description?.let { this.description = it.ifEmpty { null } }
     }
 
     fun changeStatus(newStatus: EventStatus) {

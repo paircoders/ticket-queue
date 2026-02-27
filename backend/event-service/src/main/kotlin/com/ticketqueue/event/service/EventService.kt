@@ -22,6 +22,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.time.LocalDateTime
 import java.util.UUID
 
 /**
@@ -73,6 +74,14 @@ class EventService(
         // 회차 시간 유효성 검증
         request.schedules.forEach { s ->
             if (!s.eventStartAt.isBefore(s.eventEndAt) || !s.saleStartAt.isBefore(s.saleEndAt)) {
+                throw EventException(ErrorCode.INVALID_SCHEDULE_TIME)
+            }
+            // 판매 종료 시각은 공연 시작 이전이어야 함 (티켓 판매는 공연 전에 마감)
+            if (!s.saleEndAt.isBefore(s.eventStartAt)) {
+                throw EventException(ErrorCode.INVALID_SCHEDULE_TIME)
+            }
+            // 공연 시작 시각은 현재 시각 이후여야 함 (과거 날짜 공연 등록 방지)
+            if (!s.eventStartAt.isAfter(LocalDateTime.now())) {
                 throw EventException(ErrorCode.INVALID_SCHEDULE_TIME)
             }
         }
@@ -203,8 +212,8 @@ class EventService(
     @Transactional
     fun updateEvent(eventId: UUID, request: EventDto.UpdateRequest): EventDto.UpdateResponse {
         val event = findActiveEvent(eventId)
-        val hasSaleStarted = eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId)
-            .any { it.hasSaleStarted() }
+        // 전체 스케줄 로드 대신 EXISTS 쿼리 1개로 판매 시작 여부 확인 (N → 1 쿼리)
+        val hasSaleStarted = eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, LocalDateTime.now())
 
         if (hasSaleStarted && request.artist != null) {
             throw EventException(ErrorCode.EVENT_NOT_MODIFIABLE)
@@ -238,7 +247,7 @@ class EventService(
         }
 
         event.softDelete()
-        return EventDto.DeleteResponse(message = "공연이 삭제되었습니다.")
+        return EventDto.DeleteResponse(message = "Event deleted successfully")
     }
 
     private fun findActiveEvent(eventId: UUID): Event {

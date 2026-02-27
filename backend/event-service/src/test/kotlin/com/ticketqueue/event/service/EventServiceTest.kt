@@ -21,9 +21,11 @@ import com.ticketqueue.event.repository.SeatRepository
 import com.ticketqueue.event.repository.VenueRepository
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -349,6 +351,121 @@ class EventServiceTest {
             val exception = assertThrows<EventException> { eventService.createEvent(request) }
             assertEquals(ErrorCode.INVALID_SCHEDULE_TIME, exception.errorCode)
         }
+
+        @Test
+        @DisplayName("판매 종료 시각이 공연 시작 시각 이후이면 INVALID_SCHEDULE_TIME 예외가 발생한다")
+        fun saleEndAfterEventStart() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val invalidSchedule = scheduleRequest.copy(
+                saleEndAt = now.plusDays(31) // eventStartAt(+30일) 이후라 판매 마감 불가
+            )
+            val request = EventDto.CreateRequest(
+                title = "BTS World Tour", artist = "BTS",
+                venueId = venueId, hallId = hallId,
+                priceByGrade = priceByGrade, schedules = listOf(invalidSchedule)
+            )
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.findById(hallId) } returns Optional.of(hall)
+
+            val exception = assertThrows<EventException> { eventService.createEvent(request) }
+            assertEquals(ErrorCode.INVALID_SCHEDULE_TIME, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("공연 시작 시각이 현재보다 과거이면 INVALID_SCHEDULE_TIME 예외가 발생한다")
+        fun eventStartInPast() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val invalidSchedule = scheduleRequest.copy(
+                eventStartAt = now.minusDays(1),
+                eventEndAt = now.minusDays(1).plusHours(2),
+                saleStartAt = now.minusDays(30),
+                saleEndAt = now.minusDays(2) // saleEndAt < eventStartAt 조건 충족
+            )
+            val request = EventDto.CreateRequest(
+                title = "BTS World Tour", artist = "BTS",
+                venueId = venueId, hallId = hallId,
+                priceByGrade = priceByGrade, schedules = listOf(invalidSchedule)
+            )
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.findById(hallId) } returns Optional.of(hall)
+
+            val exception = assertThrows<EventException> { eventService.createEvent(request) }
+            assertEquals(ErrorCode.INVALID_SCHEDULE_TIME, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("다중 회차 생성 시 회차 수만큼 스케줄과 좌석이 저장된다")
+        fun multipleSchedules() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule1 = createSchedule(event)
+            val schedule2 = EventSchedule(
+                id = UUID.randomUUID(), event = event, playSequence = 2,
+                eventStartAt = now.plusDays(60), eventEndAt = now.plusDays(60).plusHours(2),
+                saleStartAt = now.plusDays(1), saleEndAt = now.plusDays(59),
+                createdAt = now, updatedAt = now
+            )
+            val request = EventDto.CreateRequest(
+                title = "BTS World Tour", artist = "BTS",
+                venueId = venueId, hallId = hallId,
+                priceByGrade = priceByGrade,
+                schedules = listOf(
+                    scheduleRequest,
+                    scheduleRequest.copy(
+                        playSequence = 2,
+                        eventStartAt = now.plusDays(60),
+                        eventEndAt = now.plusDays(60).plusHours(2),
+                        saleStartAt = now.plusDays(1),
+                        saleEndAt = now.plusDays(59)
+                    )
+                )
+            )
+
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.findById(hallId) } returns Optional.of(hall)
+            every { objectMapper.readValue(any<String>(), SeatTemplateDto::class.java) } returns seatTemplate
+            every { eventRepository.save(any()) } returns event
+            every { eventScheduleRepository.save(any()) } returnsMany listOf(schedule1, schedule2)
+            every { seatRepository.saveAll(any<List<Seat>>()) } returns emptyList()
+
+            eventService.createEvent(request)
+
+            verify(exactly = 2) { eventScheduleRepository.save(any()) }
+            verify(exactly = 2) { seatRepository.saveAll(any<List<Seat>>()) }
+        }
+
+        @Test
+        @DisplayName("생성된 좌석의 번호는 '행-순번' 형식이고 좌석 수는 템플릿과 일치한다")
+        fun seatCountAndNumberFormat() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+            val request = EventDto.CreateRequest(
+                title = "BTS World Tour", artist = "BTS",
+                venueId = venueId, hallId = hallId,
+                priceByGrade = priceByGrade, schedules = listOf(scheduleRequest)
+            )
+
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.findById(hallId) } returns Optional.of(hall)
+            every { objectMapper.readValue(any<String>(), SeatTemplateDto::class.java) } returns seatTemplate
+            every { eventRepository.save(any()) } returns event
+            every { eventScheduleRepository.save(any()) } returns schedule
+            val seatsSlot = slot<List<Seat>>()
+            every { seatRepository.saveAll(capture(seatsSlot)) } returns emptyList()
+
+            eventService.createEvent(request)
+
+            val savedSeats = seatsSlot.captured
+            assertEquals(2, savedSeats.size) // rows=["A"], seatsPerRow=2 → 2개
+            assertEquals("A-1", savedSeats[0].seatNumber)
+            assertEquals("A-2", savedSeats[1].seatNumber)
+            assertTrue(savedSeats.all { it.grade == SeatGrade.VIP })
+        }
     }
 
     @Nested
@@ -507,6 +624,22 @@ class EventServiceTest {
 
             assertTrue(result.schedules[0].times[0].isSoldOut)
         }
+
+        @Test
+        @DisplayName("회차가 없는 공연 상세 조회 시 빈 schedules 목록을 반환한다")
+        fun noSchedules() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findEventWithVenueAndHall(eventId) } returns event
+            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns emptyList()
+            every { eventRepository.findScheduleIdsWithAvailableSeats(emptyList()) } returns emptySet()
+
+            val result = eventService.getEvent(eventId)
+
+            assertTrue(result.schedules.isEmpty())
+        }
     }
 
     @Nested
@@ -519,10 +652,9 @@ class EventServiceTest {
             val venue = createVenue()
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
-            val schedule = createSchedule(event, saleStartAt = now.plusDays(1)) // 판매 시작 전
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule)
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns false
 
             val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(title = "BTS 투어 2026", artist = "BTS 팀"))
 
@@ -536,10 +668,9 @@ class EventServiceTest {
             val venue = createVenue()
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
-            val schedule = createSchedule(event, saleStartAt = now.minusDays(1)) // 판매 이미 시작됨
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule)
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns true
 
             val exception = assertThrows<EventException> {
                 eventService.updateEvent(eventId, EventDto.UpdateRequest(artist = "변경된 아티스트"))
@@ -553,10 +684,9 @@ class EventServiceTest {
             val venue = createVenue()
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
-            val schedule = createSchedule(event, saleStartAt = now.minusDays(1))
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
-            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule)
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns true
 
             val result = eventService.updateEvent(
                 eventId,
@@ -575,6 +705,38 @@ class EventServiceTest {
                 eventService.updateEvent(eventId, EventDto.UpdateRequest(title = "새 제목"))
             }
             assertEquals(ErrorCode.EVENT_NOT_FOUND, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("description만 수정해도 다른 필드는 변경되지 않는다")
+        fun descriptionOnly() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns false
+
+            val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(description = "새 설명"))
+
+            assertEquals("새 설명", result.description)
+            assertEquals("BTS World Tour", result.title) // 변경 없음
+            assertEquals("BTS", result.artist)           // 변경 없음
+        }
+
+        @Test
+        @DisplayName("description에 빈 문자열 전달 시 null로 초기화된다")
+        fun descriptionClearedWithEmptyString() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall).apply { update(null, null, "기존 설명") }
+
+            every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtBefore(eventId, any()) } returns false
+
+            val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(description = ""))
+
+            assertNull(result.description)
         }
     }
 
@@ -632,6 +794,24 @@ class EventServiceTest {
 
             val exception = assertThrows<EventException> { eventService.deleteEvent(eventId) }
             assertEquals(ErrorCode.EVENT_ALREADY_DELETED, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("Soft Delete 후 deletedAt 타임스탬프가 호출 시각에 근사하다")
+        fun softDeleteTimestamp() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findByIdForUpdate(eventId) } returns event
+            every { seatRepository.existsByEventIdAndStatus(eventId, SeatStatus.SOLD) } returns false
+
+            val before = LocalDateTime.now()
+            eventService.deleteEvent(eventId)
+            val after = LocalDateTime.now()
+
+            val deletedAt = event.deletedAt!!
+            assertTrue(!deletedAt.isBefore(before) && !deletedAt.isAfter(after))
         }
     }
 }

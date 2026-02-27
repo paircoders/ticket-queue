@@ -6,6 +6,7 @@ import com.ticketqueue.event.entity.EventStatus
 import com.ticketqueue.event.entity.ScheduleStatus
 import com.ticketqueue.event.entity.SeatGrade
 import jakarta.validation.Valid
+import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
@@ -49,9 +50,10 @@ class EventDto {
         val hallId: UUID,
 
         @field:NotEmpty(message = "등급별 가격 정보는 필수입니다.")
-        val priceByGrade: Map<SeatGrade, BigDecimal>,
+        val priceByGrade: Map<SeatGrade, @DecimalMin(value = "0", message = "가격은 0 이상이어야 합니다.") BigDecimal>,
 
         @field:NotEmpty(message = "회차 정보는 필수입니다.")
+        @field:Size(max = 50, message = "회차는 최대 50개까지 등록 가능합니다.")
         @field:Valid
         val schedules: List<ScheduleRequest>
     )

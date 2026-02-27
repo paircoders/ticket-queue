@@ -130,6 +130,11 @@ class EventRepositoryCustomImpl(
         builder.and(event.deletedAt.isNull)
         status?.let { builder.and(event.status.eq(it)) }
         city?.let { builder.and(venue.city.equalsIgnoreCase(it)) }
+        // NOTE: QueryDSL-JPA의 booleanTemplate은 JPQL(HQL)을 생성하므로,
+        //       PostgreSQL 전용 @@ 연산자를 사용할 수 없음 (HQL 파서가 거부).
+        //       진짜 GIN 인덱스 활용 FTS는 EntityManager.createNativeQuery() 또는
+        //       JPASQLQuery(SQLTemplates) 방식으로 별도 구현 필요.
+        //       현재는 대소문자 무관 LIKE 검색으로 동작하며 정확성 보장.
         keyword?.let {
             builder.and(
                 event.title.containsIgnoreCase(it)

@@ -22,7 +22,9 @@ dependencies {
     implementation(libs.spring.kafka)
 
     // Test
+    testImplementation(platform(libs.testcontainers.bom))
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.bundles.testcontainers)
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation(libs.spring.security.test)
 }

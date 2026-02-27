@@ -17,6 +17,11 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   "description": "최고의 공연입니다.",
   "venueId": "venue_uuid",
   "hallId": "hall_uuid",
+  "priceByGrade": {
+    "VIP": 150000,
+    "S": 120000,
+    "A": 99000
+  },
   "schedules": [
     {
       "playSequence": 1,
@@ -35,7 +40,7 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   "id": "event_uuid",
   "title": "2026 월드 투어 서울",
   "artist": "인기 가수",
-  "status": "DRAFT",
+  "status": "PREPARING",
   "createdAt": "2026-01-20T10:00:00"
 }
 ```
@@ -46,8 +51,9 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 - **Query Parameters:**
   - `page` (int, default: 0): 페이지 번호
   - `size` (int, default: 20): 페이지 크기
-  - `status` (string, optional): 공연 상태 필터 (OPEN, CLOSED, UPCOMING)
+  - `status` (string, optional): 공연 상태 필터 (PREPARING, OPEN, ENDED, CANCELLED)
   - `city` (string, optional): 도시 필터
+  - `keyword` (string, optional): 제목/아티스트 키워드 검색 (PostgreSQL FTS)
 
 **Response (200 OK)**
 ```json
@@ -163,8 +169,11 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 ```
 
 ### 1.5 공연 수정 (관리자)
-- **URL:** `PUT /events/{id}`
+- **URL:** `PATCH /events/{id}`
 - **Headers:** `Authorization: Bearer {adminToken}`
+
+> **구현 노트**: null 필드는 변경하지 않는다 (PATCH 시맨틱). description을 `null`로 초기화하려면 빈 문자열(`""`)을 전달한다.
+> 판매 시작 후에는 `artist` 수정이 불가하며, 시도 시 409 Conflict를 반환한다.
 
 **Request Body**
 ```json
@@ -179,7 +188,9 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 {
   "id": "event_uuid",
   "title": "수정된 공연 제목",
+  "artist": "인기 가수",
   "description": "수정된 설명",
+  "status": "OPEN",
   "updatedAt": "2026-01-20T11:00:00"
 }
 ```
