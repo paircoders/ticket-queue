@@ -17,6 +17,11 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   "description": "최고의 공연입니다.",
   "venueId": "venue_uuid",
   "hallId": "hall_uuid",
+  "priceByGrade": {
+    "VIP": 150000,
+    "S": 120000,
+    "A": 99000
+  },
   "schedules": [
     {
       "playSequence": 1,
@@ -35,7 +40,7 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
   "id": "event_uuid",
   "title": "2026 월드 투어 서울",
   "artist": "인기 가수",
-  "status": "DRAFT",
+  "status": "PREPARING",
   "createdAt": "2026-01-20T10:00:00"
 }
 ```
@@ -46,8 +51,9 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 - **Query Parameters:**
   - `page` (int, default: 0): 페이지 번호
   - `size` (int, default: 20): 페이지 크기
-  - `status` (string, optional): 공연 상태 필터 (OPEN, CLOSED, UPCOMING)
+  - `status` (string, optional): 공연 상태 필터 (PREPARING, OPEN, ENDED, CANCELLED)
   - `city` (string, optional): 도시 필터
+  - `keyword` (string, optional): 제목/아티스트 키워드 검색 (PostgreSQL FTS)
 
 **Response (200 OK)**
 ```json
@@ -73,53 +79,66 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 - **URL:** `GET /events/{id}`
 - **Auth:** None
 
+> **구현 노트**: venue/hall은 평탄화 구조(`venueId`, `venueName`, `hallId`, `hallName`)로 반환한다.
+> `isSoldOut`은 회차(times) 레벨에 위치한다 (날짜 레벨보다 정확도 높음).
+> description을 `null`로 초기화하려면 빈 문자열(`""`)을 전달한다.
+
 **Response (200 OK)**
 ```json
 {
   "id": "event_uuid",
   "title": "2026 월드 투어 서울",
   "artist": "인기 가수",
-  "description": "...",
-  "venue": { "id": "venue_uuid", "name": "잠실 주경기장" },
-  "halls": { "id": "hall_uuid", "name": "메인 홀" },
+  "description": "최고의 공연입니다.",
+  "venueId": "venue_uuid",
+  "venueName": "잠실 주경기장",
+  "hallId": "hall_uuid",
+  "hallName": "메인 홀",
+  "status": "OPEN",
   "schedules": [
     {
       "date": "2026-06-01",
-      "isSoldOut": false,
       "times": [
         {
           "id": "schedule_uuid",
-          "sequence": 1,
-          "time": "19:00:00",
+          "playSequence": 1,
+          "eventStartAt": "2026-06-01T19:00:00",
+          "eventEndAt": "2026-06-01T22:00:00",
           "saleStartAt": "2026-05-01T20:00:00",
           "saleEndAt": "2026-05-31T23:59:59",
-          "status": "UPCOMING"
+          "status": "UPCOMING",
+          "isSoldOut": false
         },
         {
           "id": "schedule_uuid",
-          "sequence": 2,
-          "time": "21:00:00",
+          "playSequence": 2,
+          "eventStartAt": "2026-06-01T21:00:00",
+          "eventEndAt": "2026-06-01T23:00:00",
           "saleStartAt": "2026-05-01T20:00:00",
           "saleEndAt": "2026-05-31T23:59:59",
-          "status": "UPCOMING"
+          "status": "UPCOMING",
+          "isSoldOut": true
         }
       ]
     },
     {
       "date": "2026-06-02",
-      "isSoldOut": false,
       "times": [
         {
           "id": "schedule_uuid",
-          "sequence": 3,
-          "time": "17:00:00",
+          "playSequence": 3,
+          "eventStartAt": "2026-06-02T17:00:00",
+          "eventEndAt": "2026-06-02T20:00:00",
           "saleStartAt": "2026-05-02T20:00:00",
           "saleEndAt": "2026-06-01T23:59:59",
-          "status": "UPCOMING"
+          "status": "UPCOMING",
+          "isSoldOut": false
         }
       ]
     }
-  ]
+  ],
+  "createdAt": "2026-01-20T10:00:00",
+  "updatedAt": "2026-01-20T10:00:00"
 }
 ```
 
@@ -150,8 +169,11 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 ```
 
 ### 1.5 공연 수정 (관리자)
-- **URL:** `PUT /events/{id}`
+- **URL:** `PATCH /events/{id}`
 - **Headers:** `Authorization: Bearer {adminToken}`
+
+> **구현 노트**: null 필드는 변경하지 않는다 (PATCH 시맨틱). description을 `null`로 초기화하려면 빈 문자열(`""`)을 전달한다.
+> 판매 시작 후에는 `artist` 수정이 불가하며, 시도 시 409 Conflict를 반환한다.
 
 **Request Body**
 ```json
@@ -166,7 +188,9 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 {
   "id": "event_uuid",
   "title": "수정된 공연 제목",
+  "artist": "인기 가수",
   "description": "수정된 설명",
+  "status": "OPEN",
   "updatedAt": "2026-01-20T11:00:00"
 }
 ```

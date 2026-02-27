@@ -70,6 +70,7 @@ CREATE TABLE event_service.events (
     venue_id UUID NOT NULL REFERENCES event_service.venues(id) ON DELETE RESTRICT,
     hall_id UUID NOT NULL REFERENCES event_service.halls(id) ON DELETE RESTRICT,
     status VARCHAR(20) NOT NULL DEFAULT 'PREPARING',
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
 
@@ -78,6 +79,7 @@ CREATE TABLE event_service.events (
 
 -- 인덱스
 CREATE INDEX idx_events_status ON event_service.events(status);
+CREATE INDEX idx_events_not_deleted ON event_service.events(id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_events_artist ON event_service.events(artist);
 CREATE INDEX idx_events_venue ON event_service.events(venue_id);
 
