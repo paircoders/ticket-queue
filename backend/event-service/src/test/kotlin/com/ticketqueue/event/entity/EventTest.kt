@@ -1,9 +1,11 @@
 package com.ticketqueue.event.entity
 
+import com.ticketqueue.event.exception.EventException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -113,7 +115,7 @@ class EventTest {
         }
 
         @Test
-        @DisplayName("softDelete를 두 번 호출해도 deletedAt이 덮어씌워진다")
+        @DisplayName("softDelete를 두 번 호출해도 원본 삭제 시각이 보존된다")
         fun canBeCalledTwice() {
             val venue = createVenue()
             val hall = createHall(venue)
@@ -124,9 +126,8 @@ class EventTest {
 
             event.softDelete()
 
-            // 두 번째 호출로 덮어씌워짐 (서비스 레이어에서 중복 호출 방지)
-            assertNotNull(event.deletedAt)
-            assertTrue(!event.deletedAt!!.isBefore(firstDeletedAt))
+            // 두 번째 호출은 무시되어 원본 삭제 시각이 보존됨
+            assertEquals(firstDeletedAt, event.deletedAt)
         }
     }
 
@@ -168,6 +169,39 @@ class EventTest {
             event.changeStatus(EventStatus.CANCELLED)
 
             assertEquals(EventStatus.CANCELLED, event.status)
+        }
+
+        @Test
+        @DisplayName("ENDED → OPEN 전이 시 INVALID_EVENT_STATUS 예외가 발생한다")
+        fun endedToOpenThrows() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall).apply {
+                changeStatus(EventStatus.OPEN)
+                changeStatus(EventStatus.ENDED)
+            }
+
+            assertThrows(EventException::class.java) { event.changeStatus(EventStatus.OPEN) }
+        }
+
+        @Test
+        @DisplayName("CANCELLED → OPEN 전이 시 예외가 발생한다")
+        fun cancelledToOpenThrows() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall).apply { changeStatus(EventStatus.CANCELLED) }
+
+            assertThrows(EventException::class.java) { event.changeStatus(EventStatus.OPEN) }
+        }
+
+        @Test
+        @DisplayName("PREPARING → ENDED 전이 시 예외가 발생한다 (OPEN 건너뛰기 불가)")
+        fun preparingToEndedThrows() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            assertThrows(EventException::class.java) { event.changeStatus(EventStatus.ENDED) }
         }
     }
 
