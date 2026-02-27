@@ -15,4 +15,10 @@ interface EventScheduleRepository : JpaRepository<EventSchedule, UUID> {
      * updateEvent의 hasSaleStarted 체크를 위해 전체 목록 로드 대신 EXISTS 쿼리 1개로 처리한다.
      */
     fun existsByEventIdAndSaleStartAtLessThanEqual(eventId: UUID, dateTime: LocalDateTime): Boolean
+
+    /**
+     * 동일 공연에 동일 회차 순번이 이미 존재하는지 확인한다.
+     * createSchedule의 중복 순번 방지를 위해 사용한다.
+     */
+    fun existsByEventIdAndPlaySequence(eventId: UUID, playSequence: Int): Boolean
 }
