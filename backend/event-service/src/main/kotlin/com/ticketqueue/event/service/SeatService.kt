@@ -8,6 +8,7 @@ import com.ticketqueue.event.repository.EventScheduleRepository
 import com.ticketqueue.event.repository.SeatRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.dao.DataAccessException
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -40,8 +41,8 @@ class SeatService(
      * 회차별 좌석 목록을 등급 그룹핑하여 반환한다 (REQ-EVT-006, P95 < 300ms)
      *
      * Cache-Aside 전략:
-     * 1. Redis 캐시 조회 → Hit 시 즉시 반환
-     * 2. Miss 시 → DB 조회 → 등급별 그룹핑 (VIP → S → A → B 순) → 캐시 저장
+     * 1. Redis Hash 캐시 조회 (등급별 필드) → Hit 시 즉시 반환
+     * 2. Miss 시 → DB 조회 → 등급별 그룹핑 (VIP → S → A → B 순) → Hash 필드로 캐시 저장
      *
      * Redis 장애 시 DB fallback으로 정상 응답을 보장한다.
      */
@@ -49,12 +50,18 @@ class SeatService(
         val cacheKey = "$cacheKeyPrefix$scheduleId"
 
         try {
-            val cached = redisTemplate.opsForValue().get(cacheKey)
-            if (cached != null) {
-                return objectMapper.convertValue(cached, SeatDto.SeatsResponse::class.java)
+            val hashEntries = redisTemplate.opsForHash<String, Any>().entries(cacheKey)
+            if (hashEntries.isNotEmpty()) {
+                val grades = hashEntries.values
+                    .map { objectMapper.convertValue(it, SeatDto.GradeGroup::class.java) }
+                    .sortedBy { it.grade.ordinal }
+                return SeatDto.SeatsResponse(scheduleId = scheduleId, grades = grades)
             }
-        } catch (e: Exception) {
+        } catch (e: DataAccessException) {
             log.warn("Redis cache read failed for key: $cacheKey", e)
+        } catch (e: IllegalArgumentException) {
+            log.warn("Redis cache deserialization failed for key: $cacheKey, deleting corrupted cache", e)
+            redisTemplate.delete(cacheKey)
         }
 
         if (!eventScheduleRepository.existsById(scheduleId)) {
@@ -78,8 +85,10 @@ class SeatService(
         val response = SeatDto.SeatsResponse(scheduleId = scheduleId, grades = grades)
 
         try {
-            redisTemplate.opsForValue().set(cacheKey, response, Duration.ofSeconds(seatsCacheTtl))
-        } catch (e: Exception) {
+            val gradeMap = response.grades.associate { gradeGroup -> gradeGroup.grade.name to gradeGroup }
+            redisTemplate.opsForHash<String, Any>().putAll(cacheKey, gradeMap)
+            redisTemplate.expire(cacheKey, Duration.ofSeconds(seatsCacheTtl))
+        } catch (e: DataAccessException) {
             log.warn("Redis cache write failed for key: $cacheKey", e)
         }
 

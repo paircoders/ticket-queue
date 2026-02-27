@@ -323,7 +323,7 @@ class EventControllerTest {
                 grades = listOf(
                     SeatDto.GradeGroup(
                         grade = SeatGrade.VIP,
-                        price = java.math.BigDecimal("150000"),
+                        price = BigDecimal("150000"),
                         seats = listOf(
                             SeatDto.SeatInfo(
                                 id = UUID.randomUUID(),
