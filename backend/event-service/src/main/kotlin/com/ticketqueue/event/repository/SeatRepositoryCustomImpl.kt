@@ -43,4 +43,32 @@ class SeatRepositoryCustomImpl(
             .fetch()
             .filterNotNull()
     }
+
+    override fun updateStatusToSold(scheduleId: UUID, seatIds: List<UUID>): Long {
+        if (seatIds.isEmpty()) return 0L
+        val seat = QSeat.seat
+        return queryFactory
+            .update(seat)
+            .set(seat.status, SeatStatus.SOLD)
+            .where(
+                seat.eventSchedule.id.eq(scheduleId),
+                seat.id.`in`(seatIds),
+                seat.status.ne(SeatStatus.SOLD)
+            )
+            .execute()
+    }
+
+    override fun updateStatusToAvailable(scheduleId: UUID, seatIds: List<UUID>): Long {
+        if (seatIds.isEmpty()) return 0L
+        val seat = QSeat.seat
+        return queryFactory
+            .update(seat)
+            .set(seat.status, SeatStatus.AVAILABLE)
+            .where(
+                seat.eventSchedule.id.eq(scheduleId),
+                seat.id.`in`(seatIds),
+                seat.status.ne(SeatStatus.AVAILABLE)
+            )
+            .execute()
+    }
 }

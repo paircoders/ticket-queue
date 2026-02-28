@@ -13,7 +13,9 @@ data class PaymentSuccessEvent(
     val reservationId: UUID,
     val paymentKey: String,
     val amount: BigDecimal,
-    val paidAt: LocalDateTime
+    val paidAt: LocalDateTime,
+    val scheduleId: UUID,
+    val seatIds: List<UUID>
 ) : BaseEvent(
     eventId = eventId,
     eventType = "PaymentSuccess",
