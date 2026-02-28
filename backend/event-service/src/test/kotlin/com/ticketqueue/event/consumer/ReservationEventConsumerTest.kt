@@ -48,7 +48,7 @@ class ReservationEventConsumerTest {
     inner class ReservationConfirmed {
 
         @Test
-        @DisplayName("ReservationConfirmedEvent 수신 시 markSeatsAsSold를 위임한다")
+        @DisplayName("ReservationConfirmedEvent 수신 시 좌석 상태를 변경하지 않는다")
         fun delegatesToMarkSeatsAsSold() {
             val event = ReservationConfirmedEvent(
                 aggregateId = UUID.randomUUID(),
@@ -67,7 +67,7 @@ class ReservationEventConsumerTest {
 
             consumer.consume(record(json), ack)
 
-            verify { seatService.markSeatsAsSold(scheduleId, seatIds) }
+            verify(exactly = 0) { seatService.markSeatsAsSold(any(), any()) }
         }
 
         @Test

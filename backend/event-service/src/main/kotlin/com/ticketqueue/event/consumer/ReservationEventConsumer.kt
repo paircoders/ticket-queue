@@ -15,8 +15,8 @@ import org.springframework.stereotype.Component
  * reservation.events 토픽 Consumer
  *
  * SAGA 패턴에서 예매 상태 변경에 따른 좌석 상태를 동기화한다.
- * - ReservationConfirmed → 좌석 SOLD 처리 (markSeatsAsSold)
- * - ReservationCancelled → Redis hold_seats 선점 해제 (releaseHoldSeats)
+ * - ReservationConfirmed → no-op (SOLD 처리는 PaymentSuccess 이벤트에서 수행)
+ * - ReservationCancelled → DB AVAILABLE 복원 + Redis hold_seats 선점 해제 (releaseHoldSeats)
  *
  * IdempotentConsumerTemplate으로 중복 이벤트를 방지한다.
  * Consumer Group: event-reservation-consumer
@@ -43,7 +43,7 @@ class ReservationEventConsumer(
             "ReservationConfirmed" -> {
                 val event = objectMapper.readValue(rawJson, ReservationConfirmedEvent::class.java)
                 idempotentConsumerTemplate.process(event, CONSUMER_SERVICE, ack) { e ->
-                    seatService.markSeatsAsSold(e.scheduleId, e.seatIds)
+                    log.info("ReservationConfirmed: reservationId=${e.aggregateId}, scheduleId=${e.scheduleId} (SOLD 처리는 PaymentSuccess에서 수행)")
                 }
             }
             "ReservationCancelled" -> {

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.kafka.IdempotentConsumerTemplate
+import com.ticketqueue.event.service.SeatService
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -23,6 +24,7 @@ import java.util.UUID
 class PaymentEventConsumerTest {
 
     private lateinit var idempotentConsumerTemplate: IdempotentConsumerTemplate
+    private lateinit var seatService: SeatService
     private lateinit var consumer: PaymentEventConsumer
 
     private val objectMapper = jacksonObjectMapper().apply {
@@ -34,7 +36,8 @@ class PaymentEventConsumerTest {
     @BeforeEach
     fun setUp() {
         idempotentConsumerTemplate = mockk()
-        consumer = PaymentEventConsumer(idempotentConsumerTemplate, objectMapper)
+        seatService = mockk(relaxed = true)
+        consumer = PaymentEventConsumer(idempotentConsumerTemplate, seatService, objectMapper)
     }
 
     private fun record(json: String) =
@@ -45,20 +48,27 @@ class PaymentEventConsumerTest {
     inner class PaymentSuccess {
 
         @Test
-        @DisplayName("PaymentSuccessEvent 수신 시 멱등성 처리를 수행한다")
+        @DisplayName("PaymentSuccessEvent 수신 시 SOLD 처리 및 멱등성 처리를 수행한다")
         fun processesWithIdempotency() {
+            val scheduleId = UUID.randomUUID()
+            val seatIds = listOf(UUID.randomUUID(), UUID.randomUUID())
             val event = PaymentSuccessEvent(
                 aggregateId = UUID.randomUUID(),
                 reservationId = UUID.randomUUID(),
                 paymentKey = "pay_key_123",
                 amount = BigDecimal("100000"),
-                paidAt = LocalDateTime.now()
+                paidAt = LocalDateTime.now(),
+                scheduleId = scheduleId,
+                seatIds = seatIds
             )
             val json = objectMapper.writeValueAsString(event)
 
             every {
                 idempotentConsumerTemplate.process(any<PaymentSuccessEvent>(), any(), any(), any())
-            } just runs
+            } answers {
+                val businessLogic = arg<(PaymentSuccessEvent) -> Unit>(3)
+                businessLogic(firstArg())
+            }
 
             consumer.consume(record(json), ack)
 
@@ -70,6 +80,7 @@ class PaymentEventConsumerTest {
                     any()
                 )
             }
+            verify { seatService.markSeatsAsSold(scheduleId, seatIds) }
         }
     }
 
@@ -78,7 +89,7 @@ class PaymentEventConsumerTest {
     inner class PaymentFailed {
 
         @Test
-        @DisplayName("PaymentFailedEvent 수신 시 멱등성 처리를 수행한다")
+        @DisplayName("PaymentFailedEvent 수신 시 멱등성 처리를 수행하고 SOLD 처리는 하지 않는다")
         fun processesWithIdempotency() {
             val event = PaymentFailedEvent(
                 aggregateId = UUID.randomUUID(),
@@ -101,6 +112,7 @@ class PaymentEventConsumerTest {
                     any()
                 )
             }
+            verify(exactly = 0) { seatService.markSeatsAsSold(any(), any()) }
         }
     }
 

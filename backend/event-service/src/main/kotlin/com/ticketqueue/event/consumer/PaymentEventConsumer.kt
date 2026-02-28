@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.kafka.IdempotentConsumerTemplate
+import com.ticketqueue.event.service.SeatService
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
@@ -13,15 +14,15 @@ import org.springframework.stereotype.Component
 /**
  * payment.events 토픽 Consumer
  *
- * Issue #39 체크리스트 충족을 위해 구독하되, 좌석 상태 변경은 수행하지 않는다.
- * (SOLD 처리는 ReservationConfirmed 이벤트 기반으로 수행)
+ * - PaymentSuccess → 좌석 SOLD 처리 (markSeatsAsSold)
+ * - PaymentFailed  → 멱등성 기록 + 로깅 (보상 트랜잭션은 ReservationCancelled 흐름에서 처리)
  *
- * 멱등성 기록 + 로깅만 수행한다.
  * Consumer Group: event-payment-consumer
  */
 @Component
 class PaymentEventConsumer(
     private val idempotentConsumerTemplate: IdempotentConsumerTemplate,
+    private val seatService: SeatService,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -40,6 +41,7 @@ class PaymentEventConsumer(
             "PaymentSuccess" -> {
                 val event = objectMapper.readValue(rawJson, PaymentSuccessEvent::class.java)
                 idempotentConsumerTemplate.process(event, CONSUMER_SERVICE, ack) { e ->
+                    seatService.markSeatsAsSold(e.scheduleId, e.seatIds)
                     log.info("PaymentSuccess: paymentId=${e.aggregateId}, reservationId=${e.reservationId}")
                 }
             }

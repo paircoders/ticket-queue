@@ -56,4 +56,17 @@ class SeatRepositoryCustomImpl(
             )
             .execute()
     }
+
+    override fun updateStatusToAvailable(scheduleId: UUID, seatIds: List<UUID>): Long {
+        val seat = QSeat.seat
+        return queryFactory
+            .update(seat)
+            .set(seat.status, SeatStatus.AVAILABLE)
+            .where(
+                seat.eventSchedule.id.eq(scheduleId),
+                seat.id.`in`(seatIds),
+                seat.status.ne(SeatStatus.AVAILABLE)
+            )
+            .execute()
+    }
 }
