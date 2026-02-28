@@ -1,8 +1,10 @@
 package com.ticketqueue.event.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.HallDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.Hall
@@ -21,6 +23,10 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.RedisConnectionFailureException
+import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.data.redis.core.ValueOperations
+import java.time.Duration
 import java.time.LocalDateTime
 import java.util.Optional
 import java.util.UUID
@@ -31,8 +37,11 @@ class HallServiceTest {
     private lateinit var venueRepository: VenueRepository
     private lateinit var eventRepository: EventRepository
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var redisTemplate: RedisTemplate<String, Any>
+    private lateinit var valueOps: ValueOperations<String, Any>
     private lateinit var hallService: HallService
 
+    private val cacheProperties = CacheProperties()
     private val venueId = UUID.randomUUID()
     private val hallId = UUID.randomUUID()
     private val now = LocalDateTime.now()
@@ -73,8 +82,18 @@ class HallServiceTest {
         hallRepository = mockk()
         venueRepository = mockk()
         eventRepository = mockk()
-        objectMapper = jacksonObjectMapper()
-        hallService = HallService(hallRepository, venueRepository, eventRepository, objectMapper)
+        objectMapper = jacksonObjectMapper().apply { registerModule(JavaTimeModule()) }
+        redisTemplate = mockk()
+        valueOps = mockk(relaxed = true)
+
+        every { redisTemplate.opsForValue() } returns valueOps
+        every { valueOps.get(any<String>()) } returns null
+        every { redisTemplate.delete(any<String>()) } returns true
+
+        hallService = HallService(
+            hallRepository, venueRepository, eventRepository,
+            objectMapper, redisTemplate, cacheProperties
+        )
     }
 
     @Nested
@@ -272,6 +291,45 @@ class HallServiceTest {
             }
             assertEquals(ErrorCode.INVALID_SEAT_TEMPLATE, exception.errorCode)
         }
+
+        @Test
+        @DisplayName("캐시 Hit - DB 조회 없이 캐시에서 즉시 반환한다")
+        fun cacheHit() {
+            val hall = createHall()
+            val detailResponse = HallDto.DetailResponse.from(hall, seatTemplateDto)
+            val cacheKey = "cache:layout:$hallId"
+            val cachedJson = objectMapper.writeValueAsString(detailResponse)
+
+            every { valueOps.get(cacheKey) } returns cachedJson
+
+            val result = hallService.getHall(venueId, hallId)
+
+            assertEquals(hallId, result.id)
+            verify(exactly = 0) { hallRepository.findByVenueIdAndId(any(), any()) }
+        }
+
+        @Test
+        @DisplayName("캐시 Miss - DB 조회 후 캐시에 저장한다")
+        fun cacheMissWritesToCache() {
+            val hall = createHall()
+            every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
+
+            hallService.getHall(venueId, hallId)
+
+            verify { valueOps.set("cache:layout:$hallId", any(), any<Duration>()) }
+        }
+
+        @Test
+        @DisplayName("Redis 장애 시 DB fallback으로 정상 응답한다")
+        fun redisFallback() {
+            val hall = createHall()
+            every { valueOps.get(any<String>()) } throws RedisConnectionFailureException("connection failed")
+            every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
+
+            val result = hallService.getHall(venueId, hallId)
+
+            assertEquals(hallId, result.id)
+        }
     }
 
     @Nested
@@ -339,6 +397,18 @@ class HallServiceTest {
             }
             assertEquals(ErrorCode.HALL_NAME_DUPLICATE, exception.errorCode)
         }
+
+        @Test
+        @DisplayName("수정 성공 시 좌석 배치도 캐시를 무효화한다")
+        fun cacheInvalidationOnUpdate() {
+            val hall = createHall()
+            val request = HallDto.UpdateRequest(capacity = 20000)
+            every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
+
+            hallService.updateHall(venueId, hallId, request)
+
+            verify { redisTemplate.delete("cache:layout:$hallId") }
+        }
     }
 
     @Nested
@@ -381,6 +451,19 @@ class HallServiceTest {
                 hallService.deleteHall(venueId, hallId)
             }
             assertEquals(ErrorCode.HALL_HAS_EVENTS, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("삭제 성공 시 좌석 배치도 캐시를 무효화한다")
+        fun cacheInvalidationOnDelete() {
+            val hall = createHall()
+            every { hallRepository.findByVenueIdAndId(venueId, hallId) } returns hall
+            every { eventRepository.existsByHallId(hallId) } returns false
+            every { hallRepository.delete(hall) } returns Unit
+
+            hallService.deleteHall(venueId, hallId)
+
+            verify { redisTemplate.delete("cache:layout:$hallId") }
         }
     }
 }

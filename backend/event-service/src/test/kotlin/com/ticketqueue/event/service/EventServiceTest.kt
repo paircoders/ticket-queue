@@ -3,6 +3,7 @@ package com.ticketqueue.event.service
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.EventDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.Event
@@ -32,9 +33,17 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.dao.DataAccessException
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.redis.RedisConnectionFailureException
+import org.springframework.data.redis.core.RedisCallback
+import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.math.BigDecimal
+import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.Optional
 import java.util.UUID
@@ -47,8 +56,12 @@ class EventServiceTest {
     private lateinit var venueRepository: VenueRepository
     private lateinit var hallRepository: HallRepository
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var redisTemplate: RedisTemplate<String, Any>
+    private lateinit var valueOps: ValueOperations<String, Any>
+    private lateinit var stampedeLockScript: DefaultRedisScript<Long>
     private lateinit var eventService: EventService
 
+    private val cacheProperties = CacheProperties()
     private val venueId = UUID.randomUUID()
     private val hallId = UUID.randomUUID()
     private val eventId = UUID.randomUUID()
@@ -107,9 +120,26 @@ class EventServiceTest {
         venueRepository = mockk()
         hallRepository = mockk()
         objectMapper = mockk()
+        redisTemplate = mockk()
+        valueOps = mockk(relaxed = true)
+        stampedeLockScript = mockk()
+
+        // Redis 기본 동작: 캐시 Miss, 락 획득 성공, 조용한 삭제
+        every { redisTemplate.opsForValue() } returns valueOps
+        every { valueOps.get(any<String>()) } returns null
+        every {
+            redisTemplate.execute(any<DefaultRedisScript<Long>>(), any<List<String>>(), any<String>())
+        } returns 1L
+        every { redisTemplate.execute(any<RedisCallback<Any?>>()) } returns null
+        every { redisTemplate.delete(any<String>()) } returns true
+        every { redisTemplate.delete(any<Collection<String>>()) } returns 0L
+        // ObjectMapper 기본: 직렬화 성공 (캐시 저장용)
+        every { objectMapper.writeValueAsString(any()) } returns "{}"
+
         eventService = EventService(
             eventRepository, eventScheduleRepository, seatRepository,
-            venueRepository, hallRepository, objectMapper
+            venueRepository, hallRepository, objectMapper,
+            redisTemplate, cacheProperties, stampedeLockScript
         )
     }
 
@@ -159,6 +189,7 @@ class EventServiceTest {
             assertEquals(eventId, result.id)
             assertEquals("BTS World Tour", result.title)
             verify { seatRepository.saveAll(any<List<Seat>>()) }
+            verify { redisTemplate.execute(any<RedisCallback<Any?>>()) }  // list cache 무효화 SCAN 수행
         }
 
         @Test
@@ -194,7 +225,7 @@ class EventServiceTest {
                 priceByGrade = priceByGrade,
                 schedules = listOf(
                     scheduleRequest,
-                    scheduleRequest.copy(eventStartAt = now.plusDays(60)) // playSequence 중복
+                    scheduleRequest.copy(eventStartAt = now.plusDays(60))
                 )
             )
 
@@ -212,7 +243,7 @@ class EventServiceTest {
             val hall = createHall(venue)
             val invalidSchedule = scheduleRequest.copy(
                 eventStartAt = now.plusDays(30).plusHours(3),
-                eventEndAt = now.plusDays(30) // 종료가 시작보다 앞섬
+                eventEndAt = now.plusDays(30)
             )
             val request = EventDto.CreateRequest(
                 title = "BTS World Tour", artist = "BTS",
@@ -286,7 +317,7 @@ class EventServiceTest {
             val templateWithMissingGrade = SeatTemplateDto(
                 rows = listOf("A", "B"),
                 seatsPerRow = 1,
-                gradeMapping = mapOf("A" to "VIP") // B 행 매핑 없음
+                gradeMapping = mapOf("A" to "VIP")
             )
             val request = EventDto.CreateRequest(
                 title = "BTS World Tour", artist = "BTS",
@@ -313,12 +344,12 @@ class EventServiceTest {
             val templateWithSGrade = SeatTemplateDto(
                 rows = listOf("A"),
                 seatsPerRow = 1,
-                gradeMapping = mapOf("A" to "S") // S 등급인데 가격 없음
+                gradeMapping = mapOf("A" to "S")
             )
             val request = EventDto.CreateRequest(
                 title = "BTS World Tour", artist = "BTS",
                 venueId = venueId, hallId = hallId,
-                priceByGrade = mapOf(SeatGrade.VIP to BigDecimal("100000")), // S 가격 없음
+                priceByGrade = mapOf(SeatGrade.VIP to BigDecimal("100000")),
                 schedules = listOf(scheduleRequest)
             )
             every { venueRepository.findById(venueId) } returns Optional.of(venue)
@@ -338,7 +369,7 @@ class EventServiceTest {
             val hall = createHall(venue)
             val invalidSchedule = scheduleRequest.copy(
                 saleStartAt = now.plusDays(29),
-                saleEndAt = now.plusDays(1) // saleEnd < saleStart
+                saleEndAt = now.plusDays(1)
             )
             val request = EventDto.CreateRequest(
                 title = "BTS World Tour", artist = "BTS",
@@ -358,7 +389,7 @@ class EventServiceTest {
             val venue = createVenue()
             val hall = createHall(venue)
             val invalidSchedule = scheduleRequest.copy(
-                saleEndAt = now.plusDays(31) // eventStartAt(+30일) 이후라 판매 마감 불가
+                saleEndAt = now.plusDays(31)
             )
             val request = EventDto.CreateRequest(
                 title = "BTS World Tour", artist = "BTS",
@@ -381,7 +412,7 @@ class EventServiceTest {
                 eventStartAt = now.minusDays(1),
                 eventEndAt = now.minusDays(1).plusHours(2),
                 saleStartAt = now.minusDays(30),
-                saleEndAt = now.minusDays(2) // saleEndAt < eventStartAt 조건 충족
+                saleEndAt = now.minusDays(2)
             )
             val request = EventDto.CreateRequest(
                 title = "BTS World Tour", artist = "BTS",
@@ -461,7 +492,7 @@ class EventServiceTest {
             eventService.createEvent(request)
 
             val savedSeats = seatsSlot.captured
-            assertEquals(2, savedSeats.size) // rows=["A"], seatsPerRow=2 → 2개
+            assertEquals(2, savedSeats.size)
             assertEquals("A-1", savedSeats[0].seatNumber)
             assertEquals("A-2", savedSeats[1].seatNumber)
             assertTrue(savedSeats.all { it.grade == SeatGrade.VIP })
@@ -517,6 +548,56 @@ class EventServiceTest {
             eventService.getEvents(-1, 200, null, null, null)
 
             verify { eventRepository.findEventList(match { it.pageNumber == 0 && it.pageSize == 100 }, null, null, null) }
+        }
+
+        @Test
+        @DisplayName("캐시 Hit - DB 조회 없이 캐시에서 즉시 반환한다")
+        fun cacheHit() {
+            val cachedContent = listOf(
+                EventDto.ListResponse(
+                    id = eventId, title = "BTS World Tour", artist = "BTS",
+                    venueName = "올림픽공원", startDate = now.plusDays(30),
+                    endDate = now.plusDays(31), status = EventStatus.OPEN
+                )
+            )
+            val cachedList = CachedEventList(content = cachedContent, page = 0, size = 20, totalElements = 1L)
+            val cacheKey = "cache:event:list:0:20:all"
+            val cachedJson = "{\"cached\":\"list\"}"
+
+            every { valueOps.get(cacheKey) } returns cachedJson
+            every { objectMapper.readValue(cachedJson, CachedEventList::class.java) } returns cachedList
+
+            val result = eventService.getEvents(0, 20, null, null, null)
+
+            assertEquals(1, result.totalElements)
+            assertEquals("BTS World Tour", result.content[0].title)
+            verify(exactly = 0) { eventRepository.findEventList(any(), any(), any(), any()) }
+        }
+
+        @Test
+        @DisplayName("캐시 Miss - DB 조회 후 캐시에 저장한다")
+        fun cacheMissWritesToCache() {
+            val pageable = PageRequest.of(0, 20)
+            val page = PageImpl(emptyList<EventDto.ListResponse>(), pageable, 0)
+            every { eventRepository.findEventList(any(), null, null, null) } returns page
+
+            eventService.getEvents(0, 20, null, null, null)
+
+            verify { objectMapper.writeValueAsString(any<CachedEventList>()) }
+            verify { valueOps.set(any<String>(), any(), any<Duration>()) }
+        }
+
+        @Test
+        @DisplayName("Redis 장애 시 DB fallback으로 정상 응답한다")
+        fun redisFallback() {
+            val pageable = PageRequest.of(0, 20)
+            val page = PageImpl(emptyList<EventDto.ListResponse>(), pageable, 0)
+            every { valueOps.get(any<String>()) } throws RedisConnectionFailureException("connection failed")
+            every { eventRepository.findEventList(any(), null, null, null) } returns page
+
+            val result = eventService.getEvents(0, 20, null, null, null)
+
+            assertEquals(0, result.totalElements)
         }
     }
 
@@ -586,7 +667,6 @@ class EventServiceTest {
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
             val scheduleId2 = UUID.randomUUID()
-            // 자정을 넘지 않도록 정오(12:00) 기준으로 고정 — 시간대 flakiness 방지
             val baseTime = now.toLocalDate().atTime(12, 0).plusDays(30)
             val scheduleEarly = EventSchedule(
                 id = scheduleId, event = event, playSequence = 1,
@@ -596,7 +676,7 @@ class EventServiceTest {
             )
             val scheduleLate = EventSchedule(
                 id = scheduleId2, event = event, playSequence = 2,
-                eventStartAt = baseTime.plusHours(3), // 같은 날 15:00 — 자정 경계 없음
+                eventStartAt = baseTime.plusHours(3),
                 eventEndAt = baseTime.plusHours(5),
                 saleStartAt = now.plusDays(1), saleEndAt = now.plusDays(29),
                 createdAt = now, updatedAt = now
@@ -646,6 +726,67 @@ class EventServiceTest {
             val result = eventService.getEvent(eventId)
 
             assertTrue(result.schedules.isEmpty())
+        }
+
+        @Test
+        @DisplayName("캐시 Hit - DB 조회 없이 캐시에서 즉시 반환한다")
+        fun cacheHit() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+            val detailResponse = EventDto.DetailResponse(
+                id = eventId, title = "BTS World Tour", artist = "BTS",
+                description = null, venueId = venueId, venueName = "올림픽공원",
+                hallId = hallId, hallName = "KSPO DOME", status = EventStatus.PREPARING,
+                schedules = emptyList(), createdAt = now, updatedAt = now
+            )
+            val cacheKey = "cache:event:$eventId"
+            val cachedJson = "{\"cached\":\"event\"}"
+
+            every { valueOps.get(cacheKey) } returns cachedJson
+            every { objectMapper.readValue(cachedJson, EventDto.DetailResponse::class.java) } returns detailResponse
+
+            val result = eventService.getEvent(eventId)
+
+            assertEquals(eventId, result.id)
+            verify(exactly = 0) { eventRepository.findEventWithVenueAndHall(any()) }
+        }
+
+        @Test
+        @DisplayName("캐시 Miss - DB 조회 후 캐시에 저장한다")
+        fun cacheMissWritesToCache() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+
+            every { eventRepository.findEventWithVenueAndHall(eventId) } returns event
+            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule)
+            every { eventRepository.findScheduleIdsWithAvailableSeats(any()) } returns setOf(scheduleId)
+
+            eventService.getEvent(eventId)
+
+            verify { objectMapper.writeValueAsString(any<EventDto.DetailResponse>()) }
+            verify { valueOps.set("cache:event:$eventId", any(), any<Duration>()) }
+        }
+
+        @Test
+        @DisplayName("Redis 장애 시 DB fallback으로 정상 응답한다")
+        fun redisFallback() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+
+            every { valueOps.get(any<String>()) } throws RedisConnectionFailureException("connection failed")
+            every { eventRepository.findEventWithVenueAndHall(eventId) } returns event
+            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule)
+            every { eventRepository.findScheduleIdsWithAvailableSeats(any()) } returns setOf(scheduleId)
+
+            val result = eventService.getEvent(eventId)
+
+            assertEquals(eventId, result.id)
         }
     }
 
@@ -727,8 +868,8 @@ class EventServiceTest {
             val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(description = "새 설명"))
 
             assertEquals("새 설명", result.description)
-            assertEquals("BTS World Tour", result.title) // 변경 없음
-            assertEquals("BTS", result.artist)           // 변경 없음
+            assertEquals("BTS World Tour", result.title)
+            assertEquals("BTS", result.artist)
         }
 
         @Test
@@ -744,6 +885,22 @@ class EventServiceTest {
             val result = eventService.updateEvent(eventId, EventDto.UpdateRequest(description = ""))
 
             assertNull(result.description)
+        }
+
+        @Test
+        @DisplayName("수정 성공 시 상세 캐시와 목록 캐시를 모두 무효화한다")
+        fun cacheInvalidationOnUpdate() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
+            every { eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, any()) } returns false
+
+            eventService.updateEvent(eventId, EventDto.UpdateRequest(title = "새 제목"))
+
+            verify { redisTemplate.delete("cache:event:$eventId") }
+            verify { redisTemplate.execute(any<RedisCallback<Any?>>()) }  // list cache SCAN
         }
     }
 
@@ -764,7 +921,7 @@ class EventServiceTest {
             val result = eventService.deleteEvent(eventId)
 
             assertNotNull(result.message)
-            assertNotNull(event.deletedAt) // soft delete로 deletedAt이 채워졌는지 확인
+            assertNotNull(event.deletedAt)
         }
 
         @Test
@@ -819,6 +976,22 @@ class EventServiceTest {
 
             val deletedAt = event.deletedAt!!
             assertTrue(!deletedAt.isBefore(before) && !deletedAt.isAfter(after))
+        }
+
+        @Test
+        @DisplayName("삭제 성공 시 상세 캐시와 목록 캐시를 모두 무효화한다")
+        fun cacheInvalidationOnDelete() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findByIdForUpdate(eventId) } returns event
+            every { seatRepository.existsByEventIdAndStatus(eventId, SeatStatus.SOLD) } returns false
+
+            eventService.deleteEvent(eventId)
+
+            verify { redisTemplate.delete("cache:event:$eventId") }
+            verify { redisTemplate.execute(any<RedisCallback<Any?>>()) }  // list cache SCAN
         }
     }
 }

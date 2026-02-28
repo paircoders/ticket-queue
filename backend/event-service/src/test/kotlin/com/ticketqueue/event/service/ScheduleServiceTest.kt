@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
 import org.springframework.dao.DataIntegrityViolationException
+import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.ScheduleDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.Event
@@ -18,7 +19,9 @@ import com.ticketqueue.event.repository.EventRepository
 import com.ticketqueue.event.repository.EventScheduleRepository
 import com.ticketqueue.event.repository.SeatRepository
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -28,7 +31,12 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.RedisConnectionFailureException
+import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.LocalDateTime
 import java.util.Optional
 import java.util.UUID
@@ -39,8 +47,13 @@ class ScheduleServiceTest {
     private lateinit var eventScheduleRepository: EventScheduleRepository
     private lateinit var seatRepository: SeatRepository
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var redisTemplate: RedisTemplate<String, Any>
+    private lateinit var valueOps: ValueOperations<String, Any>
+    private lateinit var stampedeLockScript: DefaultRedisScript<Long>
+    private lateinit var eventService: EventService
     private lateinit var scheduleService: ScheduleService
 
+    private val cacheProperties = CacheProperties()
     private val venueId = UUID.randomUUID()
     private val hallId = UUID.randomUUID()
     private val eventId = UUID.randomUUID()
@@ -98,7 +111,26 @@ class ScheduleServiceTest {
         eventScheduleRepository = mockk()
         seatRepository = mockk()
         objectMapper = mockk()
-        scheduleService = ScheduleService(eventRepository, eventScheduleRepository, seatRepository, objectMapper)
+        redisTemplate = mockk()
+        valueOps = mockk(relaxed = true)
+        stampedeLockScript = mockk()
+        eventService = mockk()
+
+        every { redisTemplate.opsForValue() } returns valueOps
+        every { valueOps.get(any<String>()) } returns null
+        every {
+            redisTemplate.execute(any<DefaultRedisScript<Long>>(), any<List<String>>(), any<String>())
+        } returns 1L
+        every { redisTemplate.delete(any<String>()) } returns true
+        every { objectMapper.writeValueAsString(any()) } returns "{}"
+        // EventService 캐시 무효화 메서드 기본 동작
+        every { eventService.invalidateEventDetailCache(any()) } just runs
+        every { eventService.invalidateEventListCaches() } just runs
+
+        scheduleService = ScheduleService(
+            eventRepository, eventScheduleRepository, seatRepository,
+            objectMapper, redisTemplate, cacheProperties, stampedeLockScript, eventService
+        )
     }
 
     @Nested
@@ -125,6 +157,26 @@ class ScheduleServiceTest {
             assertEquals(eventId, result.eventId)
             assertEquals(1, result.playSequence)
             verify { seatRepository.saveAll(any<List<Seat>>()) }
+        }
+
+        @Test
+        @DisplayName("생성 성공 시 부모 공연 상세 캐시와 목록 캐시를 무효화한다")
+        fun cacheInvalidationOnCreate() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+
+            every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
+            every { eventScheduleRepository.existsByEventIdAndPlaySequence(eventId, 1) } returns false
+            every { objectMapper.readValue(any<String>(), SeatTemplateDto::class.java) } returns seatTemplate
+            every { eventScheduleRepository.save(any()) } returns schedule
+            every { seatRepository.saveAll(any<List<Seat>>()) } returns emptyList()
+
+            scheduleService.createSchedule(eventId, validCreateRequest())
+
+            verify { eventService.invalidateEventDetailCache(eventId) }
+            verify { eventService.invalidateEventListCaches() }
         }
 
         @Test
@@ -174,7 +226,7 @@ class ScheduleServiceTest {
             val event = createEvent(venue, hall)
             val request = validCreateRequest().copy(
                 eventStartAt = now.plusDays(30).plusHours(3),
-                eventEndAt = now.plusDays(30) // 종료 < 시작
+                eventEndAt = now.plusDays(30)
             )
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
@@ -192,7 +244,7 @@ class ScheduleServiceTest {
             val event = createEvent(venue, hall)
             val request = validCreateRequest().copy(
                 saleStartAt = now.plusDays(29),
-                saleEndAt = now.plusDays(1) // saleEnd < saleStart
+                saleEndAt = now.plusDays(1)
             )
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
@@ -209,7 +261,7 @@ class ScheduleServiceTest {
             val hall = createHall(venue)
             val event = createEvent(venue, hall)
             val request = validCreateRequest().copy(
-                saleEndAt = now.plusDays(31) // eventStartAt(+30일) 이후
+                saleEndAt = now.plusDays(31)
             )
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
@@ -265,7 +317,7 @@ class ScheduleServiceTest {
             val templateWithMissingGrade = SeatTemplateDto(
                 rows = listOf("A", "B"),
                 seatsPerRow = 1,
-                gradeMapping = mapOf("A" to "VIP") // B 행 매핑 없음
+                gradeMapping = mapOf("A" to "VIP")
             )
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
@@ -287,7 +339,7 @@ class ScheduleServiceTest {
             val templateWithSGrade = SeatTemplateDto(
                 rows = listOf("A"),
                 seatsPerRow = 1,
-                gradeMapping = mapOf("A" to "S") // S 등급인데 VIP 가격만 있음
+                gradeMapping = mapOf("A" to "S")
             )
             val requestWithoutSPrice = validCreateRequest().copy(
                 priceByGrade = mapOf(SeatGrade.VIP to BigDecimal("100000"))
@@ -324,13 +376,13 @@ class ScheduleServiceTest {
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
             every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule1, schedule2)
-            every { eventRepository.findScheduleIdsWithAvailableSeats(any()) } returns setOf(scheduleId) // schedule1만 AVAILABLE
+            every { eventRepository.findScheduleIdsWithAvailableSeats(any()) } returns setOf(scheduleId)
 
             val result = scheduleService.getSchedules(eventId)
 
             assertEquals(2, result.size)
-            assertFalse(result[0].isSoldOut) // schedule1: AVAILABLE 있음
-            assertTrue(result[1].isSoldOut)  // schedule2: AVAILABLE 없음
+            assertFalse(result[0].isSoldOut)
+            assertTrue(result[1].isSoldOut)
         }
 
         @Test
@@ -384,6 +436,7 @@ class ScheduleServiceTest {
         @Test
         @DisplayName("존재하지 않는 회차 조회 시 SCHEDULE_NOT_FOUND 예외가 발생한다")
         fun notFound() {
+            every { valueOps.get(any<String>()) } returns null
             every { eventScheduleRepository.findById(scheduleId) } returns Optional.empty()
 
             val ex = assertThrows<EventException> { scheduleService.getSchedule(scheduleId) }
@@ -404,6 +457,60 @@ class ScheduleServiceTest {
             val result = scheduleService.getSchedule(scheduleId)
 
             assertTrue(result.isSoldOut)
+        }
+
+        @Test
+        @DisplayName("캐시 Hit - DB 조회 없이 캐시에서 즉시 반환한다")
+        fun cacheHit() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+            val detailResponse = ScheduleDto.DetailResponse.from(schedule, isSoldOut = false)
+            val cacheKey = "cache:schedule:$scheduleId"
+            val cachedJson = "{\"cached\":\"schedule\"}"
+
+            every { valueOps.get(cacheKey) } returns cachedJson
+            every { objectMapper.readValue(cachedJson, ScheduleDto.DetailResponse::class.java) } returns detailResponse
+
+            val result = scheduleService.getSchedule(scheduleId)
+
+            assertEquals(scheduleId, result.id)
+            verify(exactly = 0) { eventScheduleRepository.findById(any()) }
+        }
+
+        @Test
+        @DisplayName("캐시 Miss - DB 조회 후 캐시에 저장한다")
+        fun cacheMissWritesToCache() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+
+            every { eventScheduleRepository.findById(scheduleId) } returns Optional.of(schedule)
+            every { eventRepository.findScheduleIdsWithAvailableSeats(listOf(scheduleId)) } returns setOf(scheduleId)
+
+            scheduleService.getSchedule(scheduleId)
+
+            verify { objectMapper.writeValueAsString(any<ScheduleDto.DetailResponse>()) }
+            verify { valueOps.set("cache:schedule:$scheduleId", any(), any<Duration>()) }
+        }
+
+        @Test
+        @DisplayName("Redis 장애 시 DB fallback으로 정상 응답한다")
+        fun redisFallback() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+
+            every { valueOps.get(any<String>()) } throws RedisConnectionFailureException("connection failed")
+            every { eventScheduleRepository.findById(scheduleId) } returns Optional.of(schedule)
+            every { eventRepository.findScheduleIdsWithAvailableSeats(listOf(scheduleId)) } returns setOf(scheduleId)
+
+            val result = scheduleService.getSchedule(scheduleId)
+
+            assertEquals(scheduleId, result.id)
         }
     }
 
@@ -453,6 +560,24 @@ class ScheduleServiceTest {
                 scheduleService.changeScheduleStatus(scheduleId, ScheduleDto.ChangeStatusRequest(ScheduleStatus.ONGOING))
             }
             assertEquals(ErrorCode.SCHEDULE_NOT_FOUND, ex.errorCode)
+        }
+
+        @Test
+        @DisplayName("상태 변경 성공 시 회차 상세, 공연 상세, 목록 캐시를 모두 무효화한다")
+        fun cacheInvalidationOnStatusChange() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event, ScheduleStatus.UPCOMING)
+            val request = ScheduleDto.ChangeStatusRequest(status = ScheduleStatus.ONGOING)
+
+            every { eventScheduleRepository.findById(scheduleId) } returns Optional.of(schedule)
+
+            scheduleService.changeScheduleStatus(scheduleId, request)
+
+            verify { redisTemplate.delete("cache:schedule:$scheduleId") }
+            verify { eventService.invalidateEventDetailCache(eventId) }
+            verify { eventService.invalidateEventListCaches() }
         }
     }
 }
