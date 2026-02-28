@@ -150,10 +150,23 @@
 
 #### 1.6.1 적용 위치
 - **API Gateway**: 다운스트림 서비스 호출 시
-- **Payment Service**: PortOne API 호출 시
+- **User Service**: reCAPTCHA, PortOne 본인인증 API 호출 시
+- **Payment Service**: PortOne 결제 API 호출 시
 - **Reservation Service**: Feign 클라이언트로 Queue Service 호출 시
 
-#### 1.6.2 Resilience4j 설정 예시
+#### 1.6.2 예외 분류 및 서킷 상태 관리 정책
+시스템의 가용성을 높이기 위해 예외의 성격에 따라 서킷 브레이커의 카운트 여부를 결정합니다.
+
+1. **실패로 기록하는 예외 (Record Exceptions)**: 서킷을 열어야 하는 시스템 장애
+   - `ExternalSystemException`: 외부 서비스의 5xx 에러 또는 정의되지 않은 응답
+   - `ConnectException`, `TimeoutException`: 네트워크 및 타임아웃 장애
+   - `RetryableException`: Feign 재시도 가능 예외
+
+2. **무시하는 예외 (Ignore Exceptions)**: 시스템 장애가 아닌 비즈니스 로직 에러
+   - `UserException`: 400(Bad Request), 404(Not Found) 등 사용자 실수나 유효성 검증 실패
+   - 이러한 예외는 폴백(Fallback) 로직은 수행할 수 있으나, 서킷 브레이커의 실패율 통계에는 합산되지 않음
+
+#### 1.6.3 Resilience4j 설정 예시
 ```yaml
 resilience4j.circuitbreaker:
   configs:

@@ -140,7 +140,7 @@ erDiagram
 
     login_history {
         uuid id PK
-        uuid user_id FK
+        uuid user_id FK "Optional (NULL if unknown or pre-auth failure)"
         varchar ip_address
         varchar user_agent
         varchar login_method "EMAIL/KAKAO/NAVER/GOOGLE"
@@ -289,7 +289,7 @@ COMMENT ON COLUMN user_service.refresh_tokens.revoked_at IS '토큰 무효화 �
 -- login_history 테이블
 CREATE TABLE user_service.login_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES user_service.users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES user_service.users(id) ON DELETE SET NULL, -- Optional (NULL if failed auth)
     ip_address VARCHAR(45),  -- IPv6 지원 (최대 45자)
     user_agent TEXT,
     login_method VARCHAR(20) NOT NULL,

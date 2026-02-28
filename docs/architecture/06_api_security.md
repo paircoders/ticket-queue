@@ -169,7 +169,15 @@ INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-44665544000
 
 **관련 요구사항:** REQ-GW-006, REQ-QUEUE-008
 
-#### 1.4.1 API Gateway 필터 구현
+#### 1.4.1 Client IP 식별 정책 (Trusted Proxy)
+
+정확한 Rate Limiting 및 보안 감사를 위해 프록시(ALB, Nginx 등) 환경에서도 클라이언트의 실제 IP를 식별합니다.
+
+- **로직**: `X-Forwarded-For` 헤더의 첫 번째 IP를 추출하되, 호출자가 `trusted-proxy-ips`에 설정된 신뢰할 수 있는 IP인 경우에만 헤더 값을 신뢰합니다.
+- **설정**: `security.trusted-proxy-ips` (예: `127.0.0.1, 10.0.0.0/8`)
+- **미적용 시**: L4/L7 장비의 IP가 클라이언트 IP로 오인되어 전체 서비스 가용성에 영향을 줄 수 있습니다.
+
+#### 1.4.2 API Gateway 필터 구현
 
 ---
 
