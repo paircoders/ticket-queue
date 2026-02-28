@@ -3,13 +3,10 @@ package com.ticketqueue.user.service
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.AuthDto
-import com.ticketqueue.user.entity.LoginHistory
-import com.ticketqueue.user.entity.LoginMethod
 import com.ticketqueue.user.entity.RefreshToken
 import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.entity.UserStatus
 import com.ticketqueue.user.exception.UserException
-import com.ticketqueue.user.repository.LoginHistoryRepository
 import com.ticketqueue.user.repository.RefreshTokenRepository
 import com.ticketqueue.user.repository.UserRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -29,7 +26,7 @@ class AuthService(
     private val portoneService: PortoneService,
     private val jwtTokenProvider: JwtTokenProvider,
     private val refreshTokenRepository: RefreshTokenRepository,
-    private val loginHistoryRepository: LoginHistoryRepository,
+    private val loginHistoryRecorder: LoginHistoryRecorder,
     private val jwtProperties: JwtProperties,
 ) {
     private val logger = KotlinLogging.logger {}
@@ -64,8 +61,8 @@ class AuthService(
     @Transactional
     fun login(
         request: AuthDto.LoginRequest,
-        ipAddress: String? = null,
-        userAgent: String? = null,
+        ipAddress: String = "",
+        userAgent: String = "",
     ): AuthDto.LoginResponse {
 
         // 1. reCAPTCHA 검증
@@ -76,19 +73,36 @@ class AuthService(
         val user = userRepository.findByEmailHash(emailHash)
             ?: throw UserException(ErrorCode.INVALID_CREDENTIALS)
 
-        validateUserStatus(user)
+        if (user.status == UserStatus.DELETED) {
+            logger.error { "Login attempt for deleted user: id=${user.id}" }
+            loginHistoryRecorder.recordFailure(user, ipAddress, userAgent, "ACCOUNT_DELETED")
+            throw UserException(ErrorCode.INVALID_CREDENTIALS)
+        }
+
+        if (user.status == UserStatus.DORMANT) {
+            logger.error { "Login attempt for dormant user: id=${user.id}" }
+            loginHistoryRecorder.recordFailure(user, ipAddress, userAgent, "ACCOUNT_DORMANT")
+            throw UserException(ErrorCode.INVALID_CREDENTIALS)
+        }
 
         // 3. 비밀번호 검증
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
-            logger.warn { "Login failed: Invalid password for user id=${user.id}" }
+            logger.error { "Login failed: Invalid password for user id=${user.id}" }
+            loginHistoryRecorder.recordFailure(user, ipAddress, userAgent, "INVALID_PASSWORD")
             throw UserException(ErrorCode.INVALID_CREDENTIALS)
         }
 
         // 4. 토큰 발급 (Access & Refresh with RTR)
-        val (accessToken, refreshToken) = issueTokens(user)
+        val (accessToken, refreshToken) = try {
+            issueTokens(user, request.email)
+        } catch (e: IllegalStateException) {
+            logger.error(e) { "JWT secret 설정 오류로 토큰 발급 실패: userId=${user.id}, 원인: ${e.message}" }
+            loginHistoryRecorder.recordFailure(user, ipAddress, userAgent, "JWT_CONFIG_ERROR")
+            throw UserException(ErrorCode.JWT_CONFIGURATION_ERROR, cause = e)
+        }
 
         // 5. 로그인 이력 및 접속 시점 갱신
-        recordLogin(user, ipAddress, userAgent)
+        loginHistoryRecorder.recordSuccess(user, ipAddress, userAgent)
 
         logger.info { "User logged in successfully: id=${user.id}" }
 
@@ -101,21 +115,21 @@ class AuthService(
 
     private fun verifyRecaptcha(token: String) {
         if (!recaptchaService.verify(token)) {
-            logger.warn { "reCAPTCHA verification failed" }
+            logger.error { "reCAPTCHA verification failed" }
             throw UserException(ErrorCode.RECAPTCHA_FAILED)
         }
     }
 
     private fun validateDuplicateEmail(emailHash: String) {
         if (userRepository.existsByEmailHash(emailHash)) {
-            logger.warn { "Signup failed: Email already exists" }
+            logger.error { "Signup failed: Email already exists" }
             throw UserException(ErrorCode.ALREADY_EXISTS_EMAIL)
         }
     }
 
     private fun validateDuplicateIdentity(ciHash: String) {
         if (userRepository.existsByCiHash(ciHash)) {
-            logger.warn { "Signup failed: Identity (CI) already exists" }
+            logger.error { "Signup failed: Identity (CI) already exists" }
             throw UserException(ErrorCode.DUPLICATE_IDENTITY)
         }
     }
@@ -148,15 +162,8 @@ class AuthService(
         )
     }
 
-    private fun validateUserStatus(user: User) {
-        if (user.status == UserStatus.DELETED || user.status == UserStatus.DORMANT) {
-            logger.warn { "Login attempt for restricted user: id=${user.id}, status=${user.status}" }
-            throw UserException(ErrorCode.INVALID_CREDENTIALS)
-        }
-    }
-
-    private fun issueTokens(user: User): Pair<String, String> {
-        val (accessToken, accessTokenJti) = jwtTokenProvider.generateAccessToken(user.id!!, user.role)
+    private fun issueTokens(user: User, email: String): Pair<String, String> {
+        val (accessToken, accessTokenJti) = jwtTokenProvider.generateAccessToken(user.id!!, user.role, email)
         val (refreshToken, _) = jwtTokenProvider.generateRefreshToken(user.id)
 
         val refreshTokenEntity = RefreshToken(
@@ -171,16 +178,5 @@ class AuthService(
         return Pair(accessToken, refreshToken)
     }
 
-    private fun recordLogin(user: User, ipAddress: String?, userAgent: String?) {
-        user.lastLoginAt = LocalDateTime.now()
-        loginHistoryRepository.save(
-            LoginHistory(
-                user = user,
-                loginMethod = LoginMethod.EMAIL,
-                success = true,
-                ipAddress = ipAddress,
-                userAgent = userAgent,
-            )
-        )
-    }
+
 }

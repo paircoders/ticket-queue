@@ -3,9 +3,7 @@ package com.ticketqueue.user.dto
 import com.ticketqueue.user.entity.User
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
-import java.time.Duration
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 class AuthDto {
     data class SignupRequest(

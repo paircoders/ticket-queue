@@ -8,13 +8,14 @@ import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.entity.UserRole
 import com.ticketqueue.user.entity.UserStatus
 import com.ticketqueue.user.exception.UserException
-import com.ticketqueue.user.repository.LoginHistoryRepository
 import com.ticketqueue.user.repository.RefreshTokenRepository
 import com.ticketqueue.user.repository.UserRepository
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.Runs
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
@@ -34,7 +35,7 @@ class AuthServiceTest {
     private lateinit var portoneService: PortoneService
     private lateinit var jwtTokenProvider: JwtTokenProvider
     private lateinit var refreshTokenRepository: RefreshTokenRepository
-    private lateinit var loginHistoryRepository: LoginHistoryRepository
+    private lateinit var loginHistoryRecorder: LoginHistoryRecorder
     private lateinit var authService: AuthService
 
     private val jwtProperties = JwtProperties(
@@ -52,10 +53,10 @@ class AuthServiceTest {
         portoneService = mockk()
         jwtTokenProvider = mockk()
         refreshTokenRepository = mockk()
-        loginHistoryRepository = mockk()
+        loginHistoryRecorder = mockk()
         authService = AuthService(
             userRepository, passwordEncoder, recaptchaService, encryptionService, portoneService,
-            jwtTokenProvider, refreshTokenRepository, loginHistoryRepository, jwtProperties
+            jwtTokenProvider, refreshTokenRepository, loginHistoryRecorder, jwtProperties
         )
     }
 
@@ -481,11 +482,12 @@ class AuthServiceTest {
         every { encryptionService.hash(request.email) } returns "email-hash"
         every { userRepository.findByEmailHash("email-hash") } returns user
         every { passwordEncoder.matches(request.password, user.passwordHash) } returns passwordMatches
+        every { loginHistoryRecorder.recordFailure(any(), any(), any(), any()) } just Runs
+        every { loginHistoryRecorder.recordSuccess(any(), any(), any()) } just Runs
         if (passwordMatches) {
-            every { jwtTokenProvider.generateAccessToken(user.id!!, user.role) } returns Pair("access-token", "access-jti")
+            every { jwtTokenProvider.generateAccessToken(user.id!!, user.role, request.email) } returns Pair("access-token", "access-jti")
             every { jwtTokenProvider.generateRefreshToken(user.id!!) } returns Pair("refresh-token", "refresh-jti")
             every { refreshTokenRepository.save(any()) } returns mockk()
-            every { loginHistoryRepository.save(any()) } returns mockk()
         }
     }
 
@@ -579,6 +581,7 @@ class AuthServiceTest {
             every { recaptchaService.verify(request.recaptchaToken) } returns true
             every { encryptionService.hash(request.email) } returns "email-hash"
             every { userRepository.findByEmailHash("email-hash") } returns user
+            every { loginHistoryRecorder.recordFailure(any(), any(), any(), any()) } just Runs
 
             // when & then
             val exception = assertThrows<UserException> {
@@ -597,6 +600,7 @@ class AuthServiceTest {
             every { recaptchaService.verify(request.recaptchaToken) } returns true
             every { encryptionService.hash(request.email) } returns "email-hash"
             every { userRepository.findByEmailHash("email-hash") } returns user
+            every { loginHistoryRecorder.recordFailure(any(), any(), any(), any()) } just Runs
 
             // when & then
             val exception = assertThrows<UserException> {
@@ -605,6 +609,28 @@ class AuthServiceTest {
 
             exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
             verify(exactly = 0) { passwordEncoder.matches(any(), any()) }
+        }
+
+        @Test
+        fun `JWT secret 설정 오류 시 JWT_CONFIGURATION_ERROR 예외 및 실패 이력 기록`() {
+            // given
+            val user = createActiveUser()
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "email-hash"
+            every { userRepository.findByEmailHash("email-hash") } returns user
+            every { passwordEncoder.matches(request.password, user.passwordHash) } returns true
+            every { jwtTokenProvider.generateAccessToken(user.id!!, user.role, request.email) } throws
+                IllegalStateException("JWT secret은 유효한 Base64 형식이어야 합니다.")
+            every { loginHistoryRecorder.recordFailure(any(), any(), any(), any()) } just Runs
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.JWT_CONFIGURATION_ERROR
+            verify(exactly = 1) { loginHistoryRecorder.recordFailure(any(), any(), any(), eq("JWT_CONFIG_ERROR")) }
         }
     }
 }

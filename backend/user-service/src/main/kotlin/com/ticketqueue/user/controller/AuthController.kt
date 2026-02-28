@@ -38,7 +38,7 @@ class AuthController(
         val ipAddress = httpRequest.getHeader("X-Forwarded-For")
             ?.split(",")?.firstOrNull()?.trim()
             ?: httpRequest.remoteAddr
-        val userAgent = httpRequest.getHeader("User-Agent")
+        val userAgent = httpRequest.getHeader("User-Agent") ?: ""
         return ResponseEntity.ok(authService.login(request, ipAddress, userAgent))
     }
 }

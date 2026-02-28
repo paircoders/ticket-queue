@@ -21,7 +21,16 @@ import java.util.UUID
 class JwtTokenProvider(private val jwtProperties: JwtProperties) {
 
     private val secretKey by lazy {
-        val decoded = Base64.getDecoder().decode(jwtProperties.secret)
+        val decoded = try {
+            Base64.getDecoder().decode(jwtProperties.secret)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalStateException("JWT secret은 유효한 Base64 형식이어야 합니다.", e)
+        }
+        if (decoded.size < 32) {
+            throw IllegalStateException(
+                "JWT secret은 최소 256비트(32바이트) 이상이어야 합니다. 현재: ${decoded.size}바이트"
+            )
+        }
         Keys.hmacShaKeyFor(decoded)
     }
 
@@ -29,7 +38,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
      * Access Token 생성
      * @return Pair(token, jti) - jti는 블랙리스트 키로 사용
      */
-    fun generateAccessToken(userId: UUID, role: UserRole): Pair<String, String> {
+    fun generateAccessToken(userId: UUID, role: UserRole, email: String): Pair<String, String> {
         val jti = UUID.randomUUID().toString()
         val now = Date()
         val expiry = Date(now.time + jwtProperties.accessTokenExpiry)
@@ -38,6 +47,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .subject(userId.toString())
             .id(jti)
             .claim("role", role.name)
+            .claim("email", email)
             .issuedAt(now)
             .expiration(expiry)
             .signWith(secretKey)
