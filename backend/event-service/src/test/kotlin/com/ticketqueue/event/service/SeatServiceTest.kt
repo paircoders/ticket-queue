@@ -3,6 +3,7 @@ package com.ticketqueue.event.service
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.SeatDto
 import com.ticketqueue.event.entity.EventSchedule
 import com.ticketqueue.event.entity.Seat
@@ -36,11 +37,13 @@ class SeatServiceTest {
     private lateinit var seatRepository: SeatRepository
     private lateinit var redisTemplate: RedisTemplate<String, Any>
     private lateinit var hashOps: HashOperations<String, String, Any>
+    private lateinit var cacheHelper: CacheHelper
     private lateinit var seatService: SeatService
 
     private val objectMapper = jacksonObjectMapper().apply {
         registerModule(JavaTimeModule())
     }
+    private val cacheProperties = CacheProperties()
 
     private val scheduleId = UUID.randomUUID()
 
@@ -67,13 +70,17 @@ class SeatServiceTest {
         seatRepository = mockk()
         redisTemplate = mockk()
         hashOps = mockk()
+        cacheHelper = mockk()
         every { redisTemplate.opsForHash<String, Any>() } returns hashOps
+        // Stampede Lock: 기본적으로 락 획득 성공 (DB 조회 + 캐시 저장 허용)
+        every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns true
         seatService = SeatService(
             eventScheduleRepository = eventScheduleRepository,
             seatRepository = seatRepository,
             redisTemplate = redisTemplate,
             objectMapper = objectMapper,
-            seatsCacheTtl = 300L
+            cacheProperties = cacheProperties,
+            cacheHelper = cacheHelper
         )
     }
 
@@ -198,6 +205,24 @@ class SeatServiceTest {
 
             assertEquals(scheduleId, response.scheduleId)
             assertEquals(1, response.grades.size)
+        }
+
+        @Test
+        @DisplayName("Stampede Lock 미획득 시 캐시 저장을 건너뛰고 정상 응답한다")
+        fun stampedeLockNotAcquired() {
+            val seats = listOf(createSeat(SeatGrade.VIP, "A-1", BigDecimal("150000")))
+            every { hashOps.entries(any<String>()) } returns emptyMap()
+            every { eventScheduleRepository.existsById(scheduleId) } returns true
+            every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
+            // 락 미획득 (다른 요청이 이미 처리 중)
+            every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns false
+
+            val response = seatService.getSeats(scheduleId)
+
+            assertEquals(scheduleId, response.scheduleId)
+            assertEquals(1, response.grades.size)
+            // 락 미획득 시 캐시 저장 미수행
+            verify(exactly = 0) { hashOps.putAll(any(), any()) }
         }
     }
 

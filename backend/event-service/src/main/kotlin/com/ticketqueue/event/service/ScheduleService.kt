@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.util.DateTimeUtils
+import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.ScheduleDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.EventSchedule
@@ -13,10 +14,14 @@ import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.repository.EventRepository
 import com.ticketqueue.event.repository.EventScheduleRepository
 import com.ticketqueue.event.repository.SeatRepository
+import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -27,6 +32,11 @@ import java.util.UUID
  * - 회차 생성 시 Hall seatTemplate 기반 좌석 자동 초기화 (EventService와 동일 로직)
  * - 상태 전이: UPCOMING → ONGOING/CANCELLED, ONGOING → ENDED/CANCELLED (도메인 메서드 위임)
  * - REQ-EVT-001, REQ-EVT-007
+ *
+ * Cache-Aside 전략 (REQ-EVT-017):
+ * - 회차 상세: `cache:schedule:{scheduleId}` (String JSON, TTL 5분)
+ * - Cache Stampede 방지: Lua 스크립트 락 (REQ-EVT-021)
+ * - 캐시 무효화: 회차 생성/상태 변경 시 관련 캐시 제거 (REQ-EVT-019)
  */
 @Service
 @Transactional(readOnly = true)
@@ -34,17 +44,25 @@ class ScheduleService(
     private val eventRepository: EventRepository,
     private val eventScheduleRepository: EventScheduleRepository,
     private val seatRepository: SeatRepository,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val redisTemplate: RedisTemplate<String, Any>,
+    private val cacheProperties: CacheProperties,
+    private val cacheHelper: CacheHelper,
+    private val eventService: EventService
 ) {
+
+    private val log = LoggerFactory.getLogger(ScheduleService::class.java)
+
+    private companion object {
+        const val SCHEDULE_DETAIL_PREFIX = "cache:schedule:"
+        const val SCHEDULE_LOCK_PREFIX = "cache:lock:schedule:"
+        const val STAMPEDE_LOCK_TTL = 10L
+    }
 
     /**
      * 특정 공연에 회차를 추가한다 (좌석 자동 초기화 포함)
      *
-     * 1. Event 존재 및 softDelete 여부 확인
-     * 2. playSequence 중복 검증
-     * 3. 시간 유효성 검증 (4가지 규칙)
-     * 4. seatTemplate 파싱 (fail-fast)
-     * 5. EventSchedule 저장 → 좌석 일괄 초기화
+     * 생성 성공 후 부모 공연 상세 캐시와 목록 캐시를 무효화한다.
      */
     @Transactional
     fun createSchedule(eventId: UUID, request: ScheduleDto.CreateRequest): ScheduleDto.CreateResponse {
@@ -81,7 +99,11 @@ class ScheduleService(
         val seats = initializeSeats(schedule, seatTemplate, request.priceByGrade)
         seatRepository.saveAll(seats)
 
-        return ScheduleDto.CreateResponse.from(schedule)
+        val response = ScheduleDto.CreateResponse.from(schedule)
+        // 부모 공연 상세 캐시 및 목록 캐시 무효화
+        eventService.invalidateEventDetailCache(eventId)
+        eventService.invalidateEventListCaches()
+        return response
     }
 
     /**
@@ -105,23 +127,59 @@ class ScheduleService(
     }
 
     /**
-     * 회차 상세를 조회한다
+     * 회차 상세를 조회한다 - Cache-Aside 적용
      *
-     * LAZY event 접근으로 추가 쿼리 1회 발생 (단건 조회라 허용)
+     * Cache-Aside 전략:
+     * 1. String JSON 캐시 조회 → hit 시 즉시 반환
+     * 2. miss 시 → Stampede Lock 시도 → DB 조회 → 캐시 저장
      */
     fun getSchedule(scheduleId: UUID): ScheduleDto.DetailResponse {
+        val cacheKey = "$SCHEDULE_DETAIL_PREFIX$scheduleId"
+
+        // 1. Cache read
+        try {
+            val cached = redisTemplate.opsForValue().get(cacheKey) as? String
+            if (cached != null) {
+                return objectMapper.readValue(cached, ScheduleDto.DetailResponse::class.java)
+            }
+        } catch (e: DataAccessException) {
+            log.warn("Redis cache read failed for key: $cacheKey", e)
+        } catch (e: JsonProcessingException) {
+            log.warn("Redis cache deserialization failed for key: $cacheKey, skipping cache", e)
+            try { redisTemplate.delete(cacheKey) } catch (ignored: DataAccessException) {}
+        }
+
+        // 2. Stampede Lock
+        val lockKey = "$SCHEDULE_LOCK_PREFIX$scheduleId"
+        val lockAcquired = cacheHelper.tryAcquireStampedeLock(lockKey, STAMPEDE_LOCK_TTL)
+
+        // 3. DB query
         val schedule = eventScheduleRepository.findById(scheduleId)
             .orElseThrow { EventException(ErrorCode.SCHEDULE_NOT_FOUND) }
 
         val availableScheduleIds = eventRepository.findScheduleIdsWithAvailableSeats(listOf(scheduleId))
         val isSoldOut = scheduleId !in availableScheduleIds
+        val detailResponse = ScheduleDto.DetailResponse.from(schedule, isSoldOut)
 
-        return ScheduleDto.DetailResponse.from(schedule, isSoldOut)
+        // 4. Cache write (락 획득 성공 시에만)
+        if (lockAcquired) {
+            try {
+                val json = objectMapper.writeValueAsString(detailResponse)
+                redisTemplate.opsForValue().set(cacheKey, json, Duration.ofSeconds(cacheProperties.schedule.ttl))
+            } catch (e: DataAccessException) {
+                log.warn("Redis cache write failed for key: $cacheKey", e)
+            } catch (e: JsonProcessingException) {
+                log.warn("Redis cache serialization failed for key: $cacheKey", e)
+            }
+        }
+
+        return detailResponse
     }
 
     /**
      * 회차 상태를 변경한다
      *
+     * 상태 변경 성공 후 회차 상세, 부모 공연 상세, 공연 목록 캐시를 무효화한다.
      * 유효하지 않은 전이 시 EventSchedule.changeStatus()에서 INVALID_SCHEDULE_STATUS 예외 발생
      */
     @Transactional
@@ -132,6 +190,11 @@ class ScheduleService(
         val previousStatus = schedule.status
         schedule.changeStatus(request.status)
 
+        val eventId = schedule.event.id!!
+        invalidateScheduleDetailCache(scheduleId)
+        eventService.invalidateEventDetailCache(eventId)
+        eventService.invalidateEventListCaches()
+
         return ScheduleDto.ChangeStatusResponse(
             id = schedule.id!!,
             previousStatus = previousStatus,
@@ -139,6 +202,8 @@ class ScheduleService(
             updatedAt = schedule.updatedAt!!
         )
     }
+
+    // ===== Private Helper Methods =====
 
     private fun validateScheduleTime(
         eventStartAt: LocalDateTime,
@@ -175,6 +240,14 @@ class ScheduleService(
             (1..seatTemplate.seatsPerRow).map { seatIndex ->
                 Seat(eventSchedule = schedule, seatNumber = "${row}-${seatIndex}", grade = grade, price = price)
             }
+        }
+    }
+
+    internal fun invalidateScheduleDetailCache(scheduleId: UUID) {
+        try {
+            redisTemplate.delete("$SCHEDULE_DETAIL_PREFIX$scheduleId")
+        } catch (e: DataAccessException) {
+            log.warn("Redis schedule cache invalidation failed for scheduleId: $scheduleId", e)
         }
     }
 }
