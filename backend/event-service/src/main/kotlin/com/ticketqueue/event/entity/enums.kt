@@ -16,6 +16,20 @@ enum class EventStatus {
         allowedTransitions[this]?.contains(target) ?: false
 }
 
-enum class ScheduleStatus { UPCOMING, ONGOING, ENDED, CANCELLED }
+enum class ScheduleStatus {
+    UPCOMING, ONGOING, ENDED, CANCELLED;
+
+    private companion object {
+        val allowedTransitions = mapOf(
+            UPCOMING to setOf(ONGOING, CANCELLED),
+            ONGOING to setOf(ENDED, CANCELLED),
+            ENDED to emptySet<ScheduleStatus>(),
+            CANCELLED to emptySet<ScheduleStatus>()
+        )
+    }
+
+    fun canTransitionTo(target: ScheduleStatus): Boolean =
+        allowedTransitions[this]?.contains(target) ?: false
+}
 enum class SeatGrade { VIP, S, A, B }
 enum class SeatStatus { AVAILABLE, SOLD }

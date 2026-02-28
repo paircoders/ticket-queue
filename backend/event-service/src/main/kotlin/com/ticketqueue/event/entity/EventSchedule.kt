@@ -57,6 +57,15 @@ class EventSchedule(
     /** 티켓 판매가 시작된 회차인지 확인 */
     fun hasSaleStarted(): Boolean = saleStartAt.isBefore(LocalDateTime.now())
 
+    fun changeStatus(newStatus: ScheduleStatus) {
+        if (!this.status.canTransitionTo(newStatus)) {
+            throw com.ticketqueue.event.exception.EventException(
+                com.ticketqueue.common.exception.ErrorCode.INVALID_SCHEDULE_STATUS
+            )
+        }
+        this.status = newStatus
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is EventSchedule) return false
