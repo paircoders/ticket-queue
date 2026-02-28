@@ -14,6 +14,20 @@ class LoginHistoryRecorder(
     private val loginHistoryRepository: LoginHistoryRepository,
 ) {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    fun recordFailureWithoutUser(ipAddress: String, userAgent: String, reason: String) {
+        loginHistoryRepository.save(
+            LoginHistory(
+                user = null,
+                loginMethod = LoginMethod.EMAIL,
+                success = false,
+                failureReason = reason,
+                ipAddress = ipAddress.ifEmpty { null },
+                userAgent = userAgent.ifEmpty { null },
+            )
+        )
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun recordFailure(user: User, ipAddress: String, userAgent: String, reason: String) {
         loginHistoryRepository.save(
             LoginHistory(
