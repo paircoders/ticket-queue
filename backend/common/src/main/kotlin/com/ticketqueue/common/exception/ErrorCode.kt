@@ -48,6 +48,7 @@ enum class ErrorCode(
     PORTONE_VERIFICATION_TIMEOUT(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_TIMEOUT", "본인인증 시간이 초과되었거나 완료되지 않았습니다."),
     PORTONE_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_FAILED", "본인인증에 실패했습니다."),
     PORTONE_API_ERROR(HttpStatus.BAD_GATEWAY, "PORTONE_API_ERROR", "인증 서비스 서버와의 통신 중 오류가 발생했습니다."),
+    RECAPTCHA_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "RECAPTCHA_SERVICE_ERROR", "reCAPTCHA 서비스와의 통신 중 오류가 발생했습니다."),
     PORTONE_MISSING_REQUIRED_INFO(HttpStatus.BAD_REQUEST, "PORTONE_MISSING_REQUIRED_INFO", "본인인증 응답에 필수 정보(CI/DI)가 누락되었습니다."),
 
     // Internal API

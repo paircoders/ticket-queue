@@ -26,6 +26,14 @@ class GlobalExceptionHandler {
             .body(ErrorResponse.of(ex.errorCode, ex.message))
     }
 
+    @ExceptionHandler(ExternalSystemException::class)
+    fun handleExternalSystemException(ex: ExternalSystemException): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "[EXTERNAL_SYSTEM_ERROR] ${ex.message}" }
+        return ResponseEntity
+            .status(ex.errorCode.status)
+            .body(ErrorResponse.of(ex.errorCode, ex.message))
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleMethodArgumentNotValid(ex: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
         val fieldErrors = ex.bindingResult.fieldErrors
