@@ -23,8 +23,8 @@ class LoginHistory(
     val id: UUID? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    val user: User,
+    @JoinColumn(name = "user_id", nullable = true)
+    val user: User?,
 
     @Column(name = "ip_address", length = 45)
     val ipAddress: String? = null,

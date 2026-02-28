@@ -13,3 +13,6 @@ jwt:
   secret: ${jwt_secret}
   accessTokenExpiry: 3600000
   refreshTokenExpiry: 604800000
+
+security:
+  trusted-proxy-ips: "127.0.0.1,::1"

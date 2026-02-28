@@ -93,7 +93,7 @@ COMMENT ON COLUMN user_service.refresh_tokens.revoked_at IS '토큰 무효화 �
 -- 3. login_history Table
 CREATE TABLE user_service.login_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES user_service.users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES user_service.users(id) ON DELETE SET NULL,
     ip_address VARCHAR(45),
     user_agent TEXT,
     login_method VARCHAR(20) NOT NULL,
