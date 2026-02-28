@@ -2,22 +2,27 @@ package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.external.portone.PortoneIdentityV2Response
+import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.entity.UserRole
 import com.ticketqueue.user.entity.UserStatus
 import com.ticketqueue.user.exception.UserException
+import com.ticketqueue.user.repository.LoginHistoryRepository
+import com.ticketqueue.user.repository.RefreshTokenRepository
 import com.ticketqueue.user.repository.UserRepository
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.security.crypto.password.PasswordEncoder
+import java.util.Base64
 import java.util.UUID
 
 class AuthServiceTest {
@@ -27,7 +32,16 @@ class AuthServiceTest {
     private lateinit var recaptchaService: RecaptchaService
     private lateinit var encryptionService: EncryptionService
     private lateinit var portoneService: PortoneService
+    private lateinit var jwtTokenProvider: JwtTokenProvider
+    private lateinit var refreshTokenRepository: RefreshTokenRepository
+    private lateinit var loginHistoryRepository: LoginHistoryRepository
     private lateinit var authService: AuthService
+
+    private val jwtProperties = JwtProperties(
+        secret = Base64.getEncoder().encodeToString("test-secret-key-at-least-32-bytes-long!!".toByteArray()),
+        accessTokenExpiry = 3600000L,
+        refreshTokenExpiry = 604800000L,
+    )
 
     @BeforeEach
     fun setUp() {
@@ -36,8 +50,16 @@ class AuthServiceTest {
         recaptchaService = mockk()
         encryptionService = mockk()
         portoneService = mockk()
-        authService = AuthService(userRepository, passwordEncoder, recaptchaService, encryptionService, portoneService)
+        jwtTokenProvider = mockk()
+        refreshTokenRepository = mockk()
+        loginHistoryRepository = mockk()
+        authService = AuthService(
+            userRepository, passwordEncoder, recaptchaService, encryptionService, portoneService,
+            jwtTokenProvider, refreshTokenRepository, loginHistoryRepository, jwtProperties
+        )
     }
+
+    // ─── Signup 테스트 ────────────────────────────────────────────────────────────
 
     private fun createSignupRequest(
         email: String = "test@example.com",
@@ -94,10 +116,10 @@ class AuthServiceTest {
         val response = authService.signup(request)
 
         // then
-        assertThat(response).isNotNull
-        assertThat(response.id).isEqualTo(userId)
-        assertThat(response.email).isEqualTo(request.email)
-        assertThat(response.name).isEqualTo(request.name)
+        response.shouldNotBeNull()
+        response.id shouldBe userId
+        response.email shouldBe request.email
+        response.name shouldBe request.name
     }
 
     @Test
@@ -129,14 +151,14 @@ class AuthServiceTest {
 
         // then
         val capturedUser = userSlot.captured
-        assertThat(capturedUser.email).isEqualTo("encrypted-email")
-        assertThat(capturedUser.emailHash).isEqualTo("email-hash")
-        assertThat(capturedUser.name).isEqualTo("encrypted-name")
-        assertThat(capturedUser.phone).isEqualTo("encrypted-phone")
-        assertThat(capturedUser.phoneHash).isEqualTo("phone-hash")
-        assertThat(capturedUser.ci).isEqualTo("encrypted-ci")
-        assertThat(capturedUser.ciHash).isEqualTo("ci-hash")
-        assertThat(capturedUser.di).isEqualTo(verifiedCustomer.di)
+        capturedUser.email shouldBe "encrypted-email"
+        capturedUser.emailHash shouldBe "email-hash"
+        capturedUser.name shouldBe "encrypted-name"
+        capturedUser.phone shouldBe "encrypted-phone"
+        capturedUser.phoneHash shouldBe "phone-hash"
+        capturedUser.ci shouldBe "encrypted-ci"
+        capturedUser.ciHash shouldBe "ci-hash"
+        capturedUser.di shouldBe verifiedCustomer.di
     }
 
     private fun mockSignupDependencies(
@@ -149,11 +171,11 @@ class AuthServiceTest {
         every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
         every { encryptionService.hash(request.email) } returns "email-hash"
         every { userRepository.existsByEmailHash("email-hash") } returns emailExists
-        
+
         if (!emailExists) {
             every { encryptionService.hash(verifiedCustomer.ci!!) } returns "ci-hash"
             every { userRepository.existsByCiHash("ci-hash") } returns ciExists
-            
+
             if (!ciExists) {
                 every { encryptionService.encrypt(request.email) } returns "encrypted-email"
                 every { encryptionService.encrypt(request.name) } returns "encrypted-name"
@@ -194,7 +216,7 @@ class AuthServiceTest {
 
         // then
         val capturedUser = userSlot.captured
-        assertThat(capturedUser.passwordHash).isEqualTo("bcrypt-password-hash")
+        capturedUser.passwordHash shouldBe "bcrypt-password-hash"
         verify { passwordEncoder.encode(request.password) }
     }
 
@@ -209,7 +231,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.RECAPTCHA_FAILED)
+        exception.errorCode shouldBe ErrorCode.RECAPTCHA_FAILED
     }
 
     @Test
@@ -226,7 +248,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
+        exception.errorCode shouldBe ErrorCode.PORTONE_MISSING_REQUIRED_INFO
     }
 
     @Test
@@ -242,7 +264,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.ALREADY_EXISTS_EMAIL)
+        exception.errorCode shouldBe ErrorCode.ALREADY_EXISTS_EMAIL
     }
 
     @Test
@@ -258,7 +280,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.DUPLICATE_IDENTITY)
+        exception.errorCode shouldBe ErrorCode.DUPLICATE_IDENTITY
     }
 
     @Test
@@ -281,7 +303,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(callOrder).containsExactly("recaptcha")
+        callOrder shouldBe listOf("recaptcha")
         verify(exactly = 0) { portoneService.verifyIdentity(any()) }
     }
 
@@ -307,7 +329,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(callOrder).containsExactly("portone")
+        callOrder shouldBe listOf("portone")
         verify(exactly = 0) { encryptionService.hash(request.email) }
     }
 
@@ -338,7 +360,7 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(callOrder).containsExactly("emailHash", "emailCheck")
+        callOrder shouldBe listOf("emailHash", "emailCheck")
         verify(exactly = 0) { encryptionService.hash(verifiedCustomer.ci!!) }
     }
 
@@ -388,7 +410,7 @@ class AuthServiceTest {
 
         // then
         val capturedUser = userSlot.captured
-        assertThat(capturedUser.phoneHash).isEqualTo("phone-hash")
+        capturedUser.phoneHash shouldBe "phone-hash"
         verify { encryptionService.hash(request.phone) }
     }
 
@@ -420,5 +442,169 @@ class AuthServiceTest {
         }
 
         verify(exactly = 0) { userRepository.save(any()) }
+    }
+
+    // ─── Login 테스트 ─────────────────────────────────────────────────────────────
+
+    private fun createLoginRequest(
+        email: String = "test@example.com",
+        password: String = "password123!",
+        recaptchaToken: String = "valid-recaptcha-token"
+    ) = AuthDto.LoginRequest(
+        email = email,
+        password = password,
+        recaptchaToken = recaptchaToken
+    )
+
+    private fun createActiveUser(
+        id: UUID = UUID.randomUUID(),
+        status: UserStatus = UserStatus.ACTIVE,
+        role: UserRole = UserRole.USER
+    ) = User(
+        id = id,
+        email = "encrypted-email",
+        emailHash = "email-hash",
+        passwordHash = "bcrypt-hash",
+        name = "encrypted-name",
+        phone = "encrypted-phone",
+        phoneHash = "phone-hash",
+        status = status,
+        role = role,
+    )
+
+    private fun mockLoginDependencies(
+        request: AuthDto.LoginRequest,
+        user: User,
+        passwordMatches: Boolean = true
+    ) {
+        every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { encryptionService.hash(request.email) } returns "email-hash"
+        every { userRepository.findByEmailHash("email-hash") } returns user
+        every { passwordEncoder.matches(request.password, user.passwordHash) } returns passwordMatches
+        if (passwordMatches) {
+            every { jwtTokenProvider.generateAccessToken(user.id!!, user.role) } returns Pair("access-token", "access-jti")
+            every { jwtTokenProvider.generateRefreshToken(user.id!!) } returns Pair("refresh-token", "refresh-jti")
+            every { refreshTokenRepository.save(any()) } returns mockk()
+            every { loginHistoryRepository.save(any()) } returns mockk()
+        }
+    }
+
+    @Nested
+    inner class LoginTest {
+
+        @Test
+        fun `정상 로그인 - LoginResponse 반환`() {
+            // given
+            val userId = UUID.randomUUID()
+            val user = createActiveUser(id = userId)
+            val request = createLoginRequest()
+            mockLoginDependencies(request, user)
+
+            // when
+            val response = authService.login(request)
+
+            // then
+            response.accessToken shouldBe "access-token"
+            response.refreshToken shouldBe "refresh-token"
+            response.expiresIn shouldBe 3600L
+            response.tokenType shouldBe "Bearer"
+        }
+
+        @Test
+        fun `정상 로그인 - RefreshToken DB 저장`() {
+            // given
+            val userId = UUID.randomUUID()
+            val user = createActiveUser(id = userId)
+            val request = createLoginRequest()
+            mockLoginDependencies(request, user)
+
+            // when
+            authService.login(request)
+
+            // then
+            verify(exactly = 1) { refreshTokenRepository.save(any()) }
+        }
+
+        @Test
+        fun `reCAPTCHA 실패 - RECAPTCHA_FAILED 예외`() {
+            // given
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns false
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.RECAPTCHA_FAILED
+            verify(exactly = 0) { userRepository.findByEmailHash(any()) }
+        }
+
+        @Test
+        fun `존재하지 않는 이메일 - INVALID_CREDENTIALS 예외`() {
+            // given
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "email-hash"
+            every { userRepository.findByEmailHash("email-hash") } returns null
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+        }
+
+        @Test
+        fun `비밀번호 불일치 - INVALID_CREDENTIALS 예외`() {
+            // given
+            val user = createActiveUser()
+            val request = createLoginRequest()
+            mockLoginDependencies(request, user, passwordMatches = false)
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+        }
+
+        @Test
+        fun `DELETED 계정 로그인 - INVALID_CREDENTIALS 예외`() {
+            // given
+            val user = createActiveUser(status = UserStatus.DELETED)
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "email-hash"
+            every { userRepository.findByEmailHash("email-hash") } returns user
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+            verify(exactly = 0) { passwordEncoder.matches(any(), any()) }
+        }
+
+        @Test
+        fun `DORMANT 계정 로그인 - INVALID_CREDENTIALS 예외`() {
+            // given
+            val user = createActiveUser(status = UserStatus.DORMANT)
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "email-hash"
+            every { userRepository.findByEmailHash("email-hash") } returns user
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+            verify(exactly = 0) { passwordEncoder.matches(any(), any()) }
+        }
     }
 }

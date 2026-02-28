@@ -8,3 +8,8 @@ spring:
     username: user_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver
+
+jwt:
+  secret: ${jwt_secret}
+  accessTokenExpiry: 3600000
+  refreshTokenExpiry: 604800000
