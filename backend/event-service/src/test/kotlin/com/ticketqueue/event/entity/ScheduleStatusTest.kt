@@ -210,9 +210,10 @@ class ScheduleStatusTest {
             val event = createEvent(venue, hall)
             val schedule = createSchedule(event, ScheduleStatus.UPCOMING)
 
-            assertThrows(EventException::class.java) {
+            val ex = assertThrows(EventException::class.java) {
                 schedule.changeStatus(ScheduleStatus.ENDED)
             }
+            assertEquals(ErrorCode.INVALID_SCHEDULE_STATUS, ex.errorCode)
         }
     }
 }

@@ -3,6 +3,7 @@ package com.ticketqueue.event.service
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
+import org.springframework.dao.DataIntegrityViolationException
 import com.ticketqueue.event.dto.ScheduleDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.Event
@@ -144,6 +145,22 @@ class ScheduleServiceTest {
 
             every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
             every { eventScheduleRepository.existsByEventIdAndPlaySequence(eventId, 1) } returns true
+
+            val ex = assertThrows<EventException> { scheduleService.createSchedule(eventId, validCreateRequest()) }
+            assertEquals(ErrorCode.DUPLICATE_PLAY_SEQUENCE, ex.errorCode)
+        }
+
+        @Test
+        @DisplayName("save() 시 DataIntegrityViolationException 발생하면 DUPLICATE_PLAY_SEQUENCE 예외로 변환된다 (race condition 방어)")
+        fun duplicatePlaySequenceOnSave() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findByIdAndDeletedAtIsNull(eventId) } returns event
+            every { eventScheduleRepository.existsByEventIdAndPlaySequence(eventId, 1) } returns false
+            every { objectMapper.readValue(any<String>(), SeatTemplateDto::class.java) } returns seatTemplate
+            every { eventScheduleRepository.save(any()) } throws DataIntegrityViolationException("duplicate key")
 
             val ex = assertThrows<EventException> { scheduleService.createSchedule(eventId, validCreateRequest()) }
             assertEquals(ErrorCode.DUPLICATE_PLAY_SEQUENCE, ex.errorCode)

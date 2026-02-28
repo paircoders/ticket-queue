@@ -3,6 +3,7 @@ package com.ticketqueue.event.service
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.util.DateTimeUtils
 import com.ticketqueue.event.dto.ScheduleDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.EventSchedule
@@ -12,6 +13,7 @@ import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.repository.EventRepository
 import com.ticketqueue.event.repository.EventScheduleRepository
 import com.ticketqueue.event.repository.SeatRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -61,16 +63,20 @@ class ScheduleService(
             throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE, cause = e)
         }
 
-        val schedule = eventScheduleRepository.save(
-            EventSchedule(
-                event = event,
-                playSequence = request.playSequence,
-                eventStartAt = request.eventStartAt,
-                eventEndAt = request.eventEndAt,
-                saleStartAt = request.saleStartAt,
-                saleEndAt = request.saleEndAt
+        val schedule = try {
+            eventScheduleRepository.save(
+                EventSchedule(
+                    event = event,
+                    playSequence = request.playSequence,
+                    eventStartAt = request.eventStartAt,
+                    eventEndAt = request.eventEndAt,
+                    saleStartAt = request.saleStartAt,
+                    saleEndAt = request.saleEndAt
+                )
             )
-        )
+        } catch (e: DataIntegrityViolationException) {
+            throw EventException(ErrorCode.DUPLICATE_PLAY_SEQUENCE, cause = e)
+        }
 
         val seats = initializeSeats(schedule, seatTemplate, request.priceByGrade)
         seatRepository.saveAll(seats)
@@ -146,7 +152,7 @@ class ScheduleService(
         if (!saleEndAt.isBefore(eventStartAt)) {
             throw EventException(ErrorCode.INVALID_SCHEDULE_TIME)
         }
-        if (!eventStartAt.isAfter(LocalDateTime.now())) {
+        if (!eventStartAt.isAfter(DateTimeUtils.now())) {
             throw EventException(ErrorCode.INVALID_SCHEDULE_TIME)
         }
     }
@@ -162,7 +168,7 @@ class ScheduleService(
             val grade = try {
                 SeatGrade.valueOf(gradeStr)
             } catch (e: IllegalArgumentException) {
-                throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING)
+                throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING, cause = e)
             }
             val price = priceByGrade[grade]
                 ?: throw EventException(ErrorCode.INVALID_INPUT)
