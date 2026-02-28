@@ -16,11 +16,13 @@ import java.time.Duration
 import java.util.UUID
 
 /**
- * 좌석(Seat) 조회 서비스
+ * 좌석(Seat) 서비스
  *
  * EventService와 분리하여 SRP를 준수한다.
  * - [getSeats]: 회차별 좌석 등급 그룹핑 조회 + Redis Cache-Aside (TTL 5분) - REQ-EVT-006
  * - [getSoldSeatIds]: SOLD 좌석 ID 조회 (캐싱 없음 - 실시간 정확도 우선)
+ * - [markSeatsAsSold]: Kafka Consumer용 - 좌석 상태 SOLD 벌크 업데이트
+ * - [releaseHoldSeats]: Kafka Consumer용 - DB AVAILABLE 복원 + Redis hold_seats 선점 해제
  *
  * Redis 장애 시 try-catch로 무시하고 DB fallback을 수행하여 서비스 가용성을 유지한다.
  * Cache Stampede 방지: Lua 스크립트로 원자적 락 획득 (REQ-EVT-021)
@@ -119,4 +121,52 @@ class SeatService(
         return SeatDto.SoldSeatsResponse(scheduleId = scheduleId, soldSeatIds = soldSeatIds)
     }
 
+    /**
+     * 좌석 상태를 SOLD로 벌크 업데이트한다 (Kafka Consumer - PaymentSuccess 처리)
+     *
+     * QueryDSL 벌크 UPDATE로 처리하며, seat.status.ne(SOLD) 조건으로 멱등성을 보장한다.
+     * 업데이트 후 캐시를 무효화하여 다음 조회 시 최신 상태를 반영한다.
+     */
+    @Transactional
+    fun markSeatsAsSold(scheduleId: UUID, seatIds: List<UUID>) {
+        val updatedCount = seatRepository.updateStatusToSold(scheduleId, seatIds)
+        log.info("Marked $updatedCount seats as SOLD: scheduleId=$scheduleId, requested=${seatIds.size}")
+        evictSeatsCache(scheduleId)
+    }
+
+    /**
+     * 좌석을 AVAILABLE로 복원하고 Redis hold_seats Set에서 선점 해제된 좌석을 제거한다 (Kafka Consumer - ReservationCancelled 처리)
+     *
+     * DB AVAILABLE 복원이 트랜잭션 내에서 우선 보장되고, Redis는 best-effort로 정리한다.
+     * TTL 10분 자동 만료로 Redis 장애 시에도 안전하다.
+     * 캐시도 무효화하여 다음 조회 시 최신 상태를 반영한다.
+     */
+    @Transactional
+    fun releaseHoldSeats(scheduleId: UUID, seatIds: List<UUID>) {
+        val updatedCount = seatRepository.updateStatusToAvailable(scheduleId, seatIds)
+        log.info("좌석 AVAILABLE 복원: scheduleId=$scheduleId, updated=$updatedCount/${seatIds.size}")
+        removeFromHoldSeatsRedis(scheduleId, seatIds)
+        evictSeatsCache(scheduleId)
+    }
+
+    private fun evictSeatsCache(scheduleId: UUID) {
+        val cacheKey = "$cacheKeyPrefix$scheduleId"
+        try {
+            redisTemplate.delete(cacheKey)
+            log.debug("Evicted seats cache: key=$cacheKey")
+        } catch (e: DataAccessException) {
+            log.warn("Failed to evict seats cache: key=$cacheKey", e)
+        }
+    }
+
+    private fun removeFromHoldSeatsRedis(scheduleId: UUID, seatIds: List<UUID>) {
+        val holdKey = "hold_seats:$scheduleId"
+        try {
+            val members = seatIds.map { it.toString() }.toTypedArray<Any>()
+            redisTemplate.opsForSet().remove(holdKey, *members)
+            log.debug("Removed ${seatIds.size} seats from hold set: key=$holdKey")
+        } catch (e: DataAccessException) {
+            log.warn("Failed to remove seats from hold set: key=$holdKey. TTL will expire automatically.", e)
+        }
+    }
 }

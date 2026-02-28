@@ -27,6 +27,7 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.HashOperations
 import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.data.redis.core.SetOperations
 import java.math.BigDecimal
 import java.time.Duration
 import java.util.UUID
@@ -37,6 +38,7 @@ class SeatServiceTest {
     private lateinit var seatRepository: SeatRepository
     private lateinit var redisTemplate: RedisTemplate<String, Any>
     private lateinit var hashOps: HashOperations<String, String, Any>
+    private lateinit var setOps: SetOperations<String, Any>
     private lateinit var cacheHelper: CacheHelper
     private lateinit var seatService: SeatService
 
@@ -70,8 +72,10 @@ class SeatServiceTest {
         seatRepository = mockk()
         redisTemplate = mockk()
         hashOps = mockk()
+        setOps = mockk()
         cacheHelper = mockk()
         every { redisTemplate.opsForHash<String, Any>() } returns hashOps
+        every { redisTemplate.opsForSet() } returns setOps
         // Stampede Lock: 기본적으로 락 획득 성공 (DB 조회 + 캐시 저장 허용)
         every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns true
         seatService = SeatService(
@@ -265,6 +269,67 @@ class SeatServiceTest {
             }
 
             assertEquals(ErrorCode.SCHEDULE_NOT_FOUND, exception.errorCode)
+        }
+    }
+
+    @Nested
+    @DisplayName("markSeatsAsSold")
+    inner class MarkSeatsAsSold {
+
+        private val seatIds = listOf(UUID.randomUUID(), UUID.randomUUID())
+
+        @Test
+        @DisplayName("DB를 bulk update하고 캐시를 무효화한다")
+        fun updatesDbAndEvictsCache() {
+            every { seatRepository.updateStatusToSold(scheduleId, seatIds) } returns 2L
+            every { redisTemplate.delete(any<String>()) } returns true
+
+            seatService.markSeatsAsSold(scheduleId, seatIds)
+
+            verify { seatRepository.updateStatusToSold(scheduleId, seatIds) }
+            verify { redisTemplate.delete("cache:seats:$scheduleId") }
+        }
+
+        @Test
+        @DisplayName("Redis 장애 시 캐시 삭제 실패해도 예외를 전파하지 않는다")
+        fun doesNotPropagateRedisFailureOnCacheEviction() {
+            every { seatRepository.updateStatusToSold(scheduleId, seatIds) } returns 2L
+            every { redisTemplate.delete(any<String>()) } throws RedisConnectionFailureException("connection failed")
+
+            seatService.markSeatsAsSold(scheduleId, seatIds)
+
+            verify { seatRepository.updateStatusToSold(scheduleId, seatIds) }
+        }
+    }
+
+    @Nested
+    @DisplayName("releaseHoldSeats")
+    inner class ReleaseHoldSeats {
+
+        private val seatIds = listOf(UUID.randomUUID(), UUID.randomUUID())
+
+        @Test
+        @DisplayName("DB를 AVAILABLE로 복원하고 Redis hold_seats에서 좌석을 제거하며 캐시를 무효화한다")
+        fun removesFromHoldSeatsAndEvictsCache() {
+            every { seatRepository.updateStatusToAvailable(scheduleId, seatIds) } returns 2L
+            every { setOps.remove(any<String>(), *anyVararg()) } returns 2L
+            every { redisTemplate.delete(any<String>()) } returns true
+
+            seatService.releaseHoldSeats(scheduleId, seatIds)
+
+            verify { seatRepository.updateStatusToAvailable(scheduleId, seatIds) }
+            verify { setOps.remove("hold_seats:$scheduleId", *anyVararg()) }
+            verify { redisTemplate.delete("cache:seats:$scheduleId") }
+        }
+
+        @Test
+        @DisplayName("Redis 장애 시 예외를 전파하지 않는다")
+        fun doesNotPropagateRedisFailure() {
+            every { seatRepository.updateStatusToAvailable(scheduleId, seatIds) } returns 2L
+            every { setOps.remove(any<String>(), *anyVararg()) } throws RedisConnectionFailureException("connection failed")
+            every { redisTemplate.delete(any<String>()) } returns true
+
+            seatService.releaseHoldSeats(scheduleId, seatIds)
         }
     }
 }

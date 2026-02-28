@@ -43,4 +43,17 @@ class SeatRepositoryCustomImpl(
             .fetch()
             .filterNotNull()
     }
+
+    override fun updateStatusToSold(scheduleId: UUID, seatIds: List<UUID>): Long {
+        val seat = QSeat.seat
+        return queryFactory
+            .update(seat)
+            .set(seat.status, SeatStatus.SOLD)
+            .where(
+                seat.eventSchedule.id.eq(scheduleId),
+                seat.id.`in`(seatIds),
+                seat.status.ne(SeatStatus.SOLD)
+            )
+            .execute()
+    }
 }

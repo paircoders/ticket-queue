@@ -40,7 +40,7 @@ class Seat(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val status: SeatStatus = SeatStatus.AVAILABLE,
+    var status: SeatStatus = SeatStatus.AVAILABLE,
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -50,6 +50,12 @@ class Seat(
     @Column(name = "updated_at", nullable = false)
     val updatedAt: LocalDateTime? = null
 ) {
+    fun markSold() {
+        if (status != SeatStatus.SOLD) {
+            status = SeatStatus.SOLD
+        }
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is Seat) return false
