@@ -10,7 +10,6 @@ import com.ticketqueue.event.repository.SeatRepository
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.data.redis.core.RedisTemplate
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
@@ -34,7 +33,7 @@ class SeatService(
     private val redisTemplate: RedisTemplate<String, Any>,
     private val objectMapper: ObjectMapper,
     private val cacheProperties: CacheProperties,
-    private val cacheStampedeLockScript: DefaultRedisScript<Long>
+    private val cacheHelper: CacheHelper
 ) {
 
     private val log = LoggerFactory.getLogger(SeatService::class.java)
@@ -91,7 +90,7 @@ class SeatService(
 
         // Stampede Lock 획득 성공 시에만 캐시 저장
         val lockKey = "$lockKeyPrefix$scheduleId"
-        val lockAcquired = tryAcquireStampedeLock(lockKey)
+        val lockAcquired = cacheHelper.tryAcquireStampedeLock(lockKey, stampedeLockTtl)
 
         if (lockAcquired) {
             try {
@@ -120,13 +119,4 @@ class SeatService(
         return SeatDto.SoldSeatsResponse(scheduleId = scheduleId, soldSeatIds = soldSeatIds)
     }
 
-    private fun tryAcquireStampedeLock(lockKey: String): Boolean {
-        return try {
-            val result = redisTemplate.execute(cacheStampedeLockScript, listOf(lockKey), stampedeLockTtl.toString())
-            result == 1L
-        } catch (e: Exception) {
-            log.warn("Stampede lock execution failed for key: $lockKey, treating as acquired", e)
-            true
-        }
-    }
 }

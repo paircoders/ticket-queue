@@ -34,7 +34,6 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.core.ValueOperations
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.LocalDateTime
@@ -49,7 +48,7 @@ class ScheduleServiceTest {
     private lateinit var objectMapper: ObjectMapper
     private lateinit var redisTemplate: RedisTemplate<String, Any>
     private lateinit var valueOps: ValueOperations<String, Any>
-    private lateinit var stampedeLockScript: DefaultRedisScript<Long>
+    private lateinit var cacheHelper: CacheHelper
     private lateinit var eventService: EventService
     private lateinit var scheduleService: ScheduleService
 
@@ -113,14 +112,12 @@ class ScheduleServiceTest {
         objectMapper = mockk()
         redisTemplate = mockk()
         valueOps = mockk(relaxed = true)
-        stampedeLockScript = mockk()
+        cacheHelper = mockk()
         eventService = mockk()
 
         every { redisTemplate.opsForValue() } returns valueOps
         every { valueOps.get(any<String>()) } returns null
-        every {
-            redisTemplate.execute(any<DefaultRedisScript<Long>>(), any<List<String>>(), any<String>())
-        } returns 1L
+        every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns true
         every { redisTemplate.delete(any<String>()) } returns true
         every { objectMapper.writeValueAsString(any()) } returns "{}"
         // EventService 캐시 무효화 메서드 기본 동작
@@ -129,7 +126,7 @@ class ScheduleServiceTest {
 
         scheduleService = ScheduleService(
             eventRepository, eventScheduleRepository, seatRepository,
-            objectMapper, redisTemplate, cacheProperties, stampedeLockScript, eventService
+            objectMapper, redisTemplate, cacheProperties, cacheHelper, eventService
         )
     }
 

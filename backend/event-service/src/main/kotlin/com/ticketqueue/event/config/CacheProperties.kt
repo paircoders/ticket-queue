@@ -18,5 +18,9 @@ data class CacheProperties(
     val seats: CacheTtl = CacheTtl(),
     val layout: CacheTtl = CacheTtl(ttl = 86400L)
 ) {
-    data class CacheTtl(val ttl: Long = 300L)
+    data class CacheTtl(val ttl: Long = 300L) {
+        init {
+            require(ttl > 0) { "Cache TTL must be positive, but was $ttl" }
+        }
+    }
 }

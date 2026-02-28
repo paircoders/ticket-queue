@@ -27,7 +27,6 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.HashOperations
 import org.springframework.data.redis.core.RedisTemplate
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.math.BigDecimal
 import java.time.Duration
 import java.util.UUID
@@ -38,7 +37,7 @@ class SeatServiceTest {
     private lateinit var seatRepository: SeatRepository
     private lateinit var redisTemplate: RedisTemplate<String, Any>
     private lateinit var hashOps: HashOperations<String, String, Any>
-    private lateinit var cacheStampedeLockScript: DefaultRedisScript<Long>
+    private lateinit var cacheHelper: CacheHelper
     private lateinit var seatService: SeatService
 
     private val objectMapper = jacksonObjectMapper().apply {
@@ -71,19 +70,17 @@ class SeatServiceTest {
         seatRepository = mockk()
         redisTemplate = mockk()
         hashOps = mockk()
-        cacheStampedeLockScript = mockk()
+        cacheHelper = mockk()
         every { redisTemplate.opsForHash<String, Any>() } returns hashOps
         // Stampede Lock: 기본적으로 락 획득 성공 (DB 조회 + 캐시 저장 허용)
-        every {
-            redisTemplate.execute(any<DefaultRedisScript<Long>>(), any<List<String>>(), any<String>())
-        } returns 1L
+        every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns true
         seatService = SeatService(
             eventScheduleRepository = eventScheduleRepository,
             seatRepository = seatRepository,
             redisTemplate = redisTemplate,
             objectMapper = objectMapper,
             cacheProperties = cacheProperties,
-            cacheStampedeLockScript = cacheStampedeLockScript
+            cacheHelper = cacheHelper
         )
     }
 
@@ -218,9 +215,7 @@ class SeatServiceTest {
             every { eventScheduleRepository.existsById(scheduleId) } returns true
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
             // 락 미획득 (다른 요청이 이미 처리 중)
-            every {
-                redisTemplate.execute(any<DefaultRedisScript<Long>>(), any<List<String>>(), any<String>())
-            } returns 0L
+            every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns false
 
             val response = seatService.getSeats(scheduleId)
 

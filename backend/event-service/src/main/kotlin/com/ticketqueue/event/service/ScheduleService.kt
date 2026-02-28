@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.redis.core.RedisTemplate
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -48,7 +47,7 @@ class ScheduleService(
     private val objectMapper: ObjectMapper,
     private val redisTemplate: RedisTemplate<String, Any>,
     private val cacheProperties: CacheProperties,
-    private val cacheStampedeLockScript: DefaultRedisScript<Long>,
+    private val cacheHelper: CacheHelper,
     private val eventService: EventService
 ) {
 
@@ -152,7 +151,7 @@ class ScheduleService(
 
         // 2. Stampede Lock
         val lockKey = "$SCHEDULE_LOCK_PREFIX$scheduleId"
-        val lockAcquired = tryAcquireStampedeLock(lockKey)
+        val lockAcquired = cacheHelper.tryAcquireStampedeLock(lockKey, STAMPEDE_LOCK_TTL)
 
         // 3. DB query
         val schedule = eventScheduleRepository.findById(scheduleId)
@@ -241,16 +240,6 @@ class ScheduleService(
             (1..seatTemplate.seatsPerRow).map { seatIndex ->
                 Seat(eventSchedule = schedule, seatNumber = "${row}-${seatIndex}", grade = grade, price = price)
             }
-        }
-    }
-
-    private fun tryAcquireStampedeLock(lockKey: String): Boolean {
-        return try {
-            val result = redisTemplate.execute(cacheStampedeLockScript, listOf(lockKey), STAMPEDE_LOCK_TTL.toString())
-            result == 1L
-        } catch (e: Exception) {
-            log.warn("Stampede lock execution failed for key: $lockKey, treating as acquired", e)
-            true
         }
     }
 

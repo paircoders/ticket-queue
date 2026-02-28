@@ -316,7 +316,7 @@ class HallServiceTest {
 
             hallService.getHall(venueId, hallId)
 
-            verify { valueOps.set("cache:layout:$hallId", any(), any<Duration>()) }
+            verify { valueOps.set("cache:layout:$hallId", any(), eq(Duration.ofHours(24))) }
         }
 
         @Test

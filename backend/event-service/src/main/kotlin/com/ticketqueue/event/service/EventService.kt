@@ -25,7 +25,6 @@ import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.core.ScanOptions
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -73,7 +72,7 @@ class EventService(
     private val objectMapper: ObjectMapper,
     private val redisTemplate: RedisTemplate<String, Any>,
     private val cacheProperties: CacheProperties,
-    private val cacheStampedeLockScript: DefaultRedisScript<Long>
+    private val cacheHelper: CacheHelper
 ) {
 
     private val log = LoggerFactory.getLogger(EventService::class.java)
@@ -187,7 +186,7 @@ class EventService(
 
         // 2. Stampede Lock
         val lockKey = "${EVENT_LOCK_PREFIX}list:$cacheKey"
-        val lockAcquired = tryAcquireStampedeLock(lockKey)
+        val lockAcquired = cacheHelper.tryAcquireStampedeLock(lockKey, STAMPEDE_LOCK_TTL)
 
         // 3. DB query
         val pageable = PageRequest.of(coercedPage, coercedSize)
@@ -239,7 +238,7 @@ class EventService(
 
         // 2. Stampede Lock
         val lockKey = "$EVENT_LOCK_PREFIX$eventId"
-        val lockAcquired = tryAcquireStampedeLock(lockKey)
+        val lockAcquired = cacheHelper.tryAcquireStampedeLock(lockKey, STAMPEDE_LOCK_TTL)
 
         // 3. DB query
         val event = eventRepository.findEventWithVenueAndHall(eventId)
@@ -369,22 +368,6 @@ class EventService(
     }
 
     /**
-     * Cache Stampede Lock 획득 시도
-     *
-     * Lua 스크립트로 SET NX EX 원자적 실행. 락 획득 시 true 반환.
-     * Redis 장애 시 true 반환하여 DB 조회와 캐시 저장을 허용한다 (안전 방향).
-     */
-    private fun tryAcquireStampedeLock(lockKey: String): Boolean {
-        return try {
-            val result = redisTemplate.execute(cacheStampedeLockScript, listOf(lockKey), STAMPEDE_LOCK_TTL.toString())
-            result == 1L
-        } catch (e: Exception) {
-            log.warn("Stampede lock execution failed for key: $lockKey, treating as acquired", e)
-            true
-        }
-    }
-
-    /**
      * 공연 상세 캐시 단건 삭제 (REQ-EVT-019)
      */
     internal fun invalidateEventDetailCache(eventId: UUID) {
@@ -403,17 +386,23 @@ class EventService(
      */
     internal fun invalidateEventListCaches() {
         try {
-            val keys = mutableListOf<String>()
             redisTemplate.execute { conn ->
                 conn.scan(
                     ScanOptions.scanOptions().match("${EVENT_LIST_PREFIX}*").count(100).build()
                 ).use { cursor ->
-                    cursor.forEach { keyBytes -> keys.add(String(keyBytes)) }
+                    val batch = mutableListOf<String>()
+                    cursor.forEach { keyBytes ->
+                        batch.add(String(keyBytes))
+                        if (batch.size >= 100) {
+                            redisTemplate.delete(batch)
+                            batch.clear()
+                        }
+                    }
+                    if (batch.isNotEmpty()) {
+                        redisTemplate.delete(batch)
+                    }
                 }
                 null
-            }
-            if (keys.isNotEmpty()) {
-                redisTemplate.delete(keys)
             }
         } catch (e: DataAccessException) {
             log.warn("Redis event list cache invalidation failed", e)

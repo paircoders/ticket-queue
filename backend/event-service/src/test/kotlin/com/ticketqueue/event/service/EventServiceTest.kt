@@ -40,7 +40,6 @@ import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.RedisCallback
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.core.ValueOperations
-import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.LocalDate
@@ -58,7 +57,7 @@ class EventServiceTest {
     private lateinit var objectMapper: ObjectMapper
     private lateinit var redisTemplate: RedisTemplate<String, Any>
     private lateinit var valueOps: ValueOperations<String, Any>
-    private lateinit var stampedeLockScript: DefaultRedisScript<Long>
+    private lateinit var cacheHelper: CacheHelper
     private lateinit var eventService: EventService
 
     private val cacheProperties = CacheProperties()
@@ -122,14 +121,12 @@ class EventServiceTest {
         objectMapper = mockk()
         redisTemplate = mockk()
         valueOps = mockk(relaxed = true)
-        stampedeLockScript = mockk()
+        cacheHelper = mockk()
 
         // Redis 기본 동작: 캐시 Miss, 락 획득 성공, 조용한 삭제
         every { redisTemplate.opsForValue() } returns valueOps
         every { valueOps.get(any<String>()) } returns null
-        every {
-            redisTemplate.execute(any<DefaultRedisScript<Long>>(), any<List<String>>(), any<String>())
-        } returns 1L
+        every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns true
         every { redisTemplate.execute(any<RedisCallback<Any?>>()) } returns null
         every { redisTemplate.delete(any<String>()) } returns true
         every { redisTemplate.delete(any<Collection<String>>()) } returns 0L
@@ -139,7 +136,7 @@ class EventServiceTest {
         eventService = EventService(
             eventRepository, eventScheduleRepository, seatRepository,
             venueRepository, hallRepository, objectMapper,
-            redisTemplate, cacheProperties, stampedeLockScript
+            redisTemplate, cacheProperties, cacheHelper
         )
     }
 
@@ -599,6 +596,20 @@ class EventServiceTest {
 
             assertEquals(0, result.totalElements)
         }
+
+        @Test
+        @DisplayName("Stampede Lock 미획득 시 DB 조회는 수행하지만 캐시 저장은 건너뛴다")
+        fun stampedeLockNotAcquired() {
+            val pageable = PageRequest.of(0, 20)
+            val page = PageImpl(emptyList<EventDto.ListResponse>(), pageable, 0)
+            every { eventRepository.findEventList(any(), null, null, null) } returns page
+            every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns false
+
+            val result = eventService.getEvents(0, 20, null, null, null)
+
+            assertEquals(0, result.totalElements)
+            verify(exactly = 0) { valueOps.set(any(), any(), any<Duration>()) }
+        }
     }
 
     @Nested
@@ -787,6 +798,25 @@ class EventServiceTest {
             val result = eventService.getEvent(eventId)
 
             assertEquals(eventId, result.id)
+        }
+
+        @Test
+        @DisplayName("Stampede Lock 미획득 시 DB 조회는 수행하지만 캐시 저장은 건너뛴다")
+        fun stampedeLockNotAcquired() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+
+            every { eventRepository.findEventWithVenueAndHall(eventId) } returns event
+            every { eventScheduleRepository.findByEventIdOrderByPlaySequence(eventId) } returns listOf(schedule)
+            every { eventRepository.findScheduleIdsWithAvailableSeats(any()) } returns setOf(scheduleId)
+            every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns false
+
+            val result = eventService.getEvent(eventId)
+
+            assertEquals(eventId, result.id)
+            verify(exactly = 0) { valueOps.set(any(), any(), any<Duration>()) }
         }
     }
 
