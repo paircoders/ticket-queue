@@ -1,7 +1,6 @@
 package com.ticketqueue.queue
 
 import com.ticketqueue.common.config.CommonJpaConfig
-import com.ticketqueue.common.config.QuerydslConfig
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
@@ -22,7 +21,7 @@ import org.springframework.context.annotation.FilterType
     excludeFilters = [
         ComponentScan.Filter(
             type = FilterType.ASSIGNABLE_TYPE,
-            classes = [QuerydslConfig::class, CommonJpaConfig::class]
+            classes = [CommonJpaConfig::class]
         )
     ]
 )
