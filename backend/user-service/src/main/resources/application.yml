@@ -43,7 +43,7 @@ recaptcha:
 
 feign:
   circuitbreaker:
-    enabled: true
+    enabled: false
   client:
     config:
       default:
@@ -62,6 +62,16 @@ resilience4j:
         failureRateThreshold: 50     # 실패율이 50% 이상(표본 내 절반 이상)이면 차단
         waitDurationInOpenState: 60s # 차단(OPEN) 상태를 60초간 유지 후 HALF-OPEN으로 전환
         permittedNumberOfCallsInHalfOpenState: 3 # 복구 확인을 위해 3번만 먼저 호출
+        ignoreExceptions:
+          - com.ticketqueue.common.exception.BusinessException
+        recordExceptions:
+          - com.ticketqueue.common.exception.ExternalSystemException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
     instances:
       portone-v2-client:
         baseConfig: default
+      recaptcha:
+        baseConfig: default
+        slowCallDurationThreshold: 5s
+        slowCallRateThreshold: 80
