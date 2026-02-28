@@ -78,6 +78,8 @@ feign:
         read-timeout: 10000
       event-service:
         url: http://localhost:8082
+        connect-timeout: 2000
+        read-timeout: 3000
 
 internal:
   api:
