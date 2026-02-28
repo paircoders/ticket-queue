@@ -45,6 +45,7 @@ class SeatRepositoryCustomImpl(
     }
 
     override fun updateStatusToSold(scheduleId: UUID, seatIds: List<UUID>): Long {
+        if (seatIds.isEmpty()) return 0L
         val seat = QSeat.seat
         return queryFactory
             .update(seat)
@@ -58,6 +59,7 @@ class SeatRepositoryCustomImpl(
     }
 
     override fun updateStatusToAvailable(scheduleId: UUID, seatIds: List<UUID>): Long {
+        if (seatIds.isEmpty()) return 0L
         val seat = QSeat.seat
         return queryFactory
             .update(seat)

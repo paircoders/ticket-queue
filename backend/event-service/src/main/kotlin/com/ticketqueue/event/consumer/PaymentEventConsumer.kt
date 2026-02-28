@@ -1,5 +1,6 @@
 package com.ticketqueue.event.consumer
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
@@ -35,7 +36,13 @@ class PaymentEventConsumer(
     )
     fun consume(record: ConsumerRecord<String, String>, ack: Acknowledgment) {
         val rawJson = record.value()
-        val eventType = objectMapper.readTree(rawJson).get("eventType")?.asText()
+        val eventType = try {
+            objectMapper.readTree(rawJson).get("eventType")?.asText()
+        } catch (e: JsonProcessingException) {
+            log.error("Malformed JSON in payment.events, skipping: ${e.message}")
+            ack.acknowledge()
+            return
+        }
 
         when (eventType) {
             "PaymentSuccess" -> {
