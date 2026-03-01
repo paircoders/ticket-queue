@@ -167,6 +167,7 @@
    - 이러한 예외는 폴백(Fallback) 로직은 수행할 수 있으나, 서킷 브레이커의 실패율 통계에는 합산되지 않음
 
 #### 1.6.3 Resilience4j 설정 예시
+
 ```yaml
 resilience4j.circuitbreaker:
   configs:

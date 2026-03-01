@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
@@ -31,13 +32,12 @@ class AuthTransactionalService(
     private val logger = KotlinLogging.logger {}
 
     fun processLogin(
+        emailHash: String,
         password: String,
         ipAddress: String,
         userAgent: String,
-        email: String,
     ): AuthDto.LoginResponse {
         // 1. 사용자 조회
-        val emailHash = encryptionService.hash(email)
         val user = userRepository.findByEmailHash(emailHash)
         if (user == null) {
             logger.error { "Login attempt for non-existent email" }
@@ -66,11 +66,16 @@ class AuthTransactionalService(
         }
 
         // 4. 토큰 발급 (Access & Refresh with RTR)
+        val email = encryptionService.decrypt(user.email)
         val (accessToken, refreshToken) = try {
             issueTokens(user, email)
         } catch (e: IllegalStateException) {
             logger.error(e) { "JWT secret 설정 오류로 토큰 발급 실패: userId=${user.id}, 원인: ${e.message}" }
             loginHistoryRecorder.recordFailure(user, ipAddress, userAgent, "JWT_CONFIG_ERROR")
+            throw UserException(ErrorCode.JWT_CONFIGURATION_ERROR, cause = e)
+        } catch (e: Exception) {
+            logger.error(e) { "토큰 발급 중 예기치 못한 오류: userId=${user.id}" }
+            loginHistoryRecorder.recordFailure(user, ipAddress, userAgent, "TOKEN_ISSUE_ERROR")
             throw UserException(ErrorCode.JWT_CONFIGURATION_ERROR, cause = e)
         }
 
@@ -149,7 +154,7 @@ class AuthTransactionalService(
             tokenFamily = UUID.randomUUID(),
             refreshToken = refreshToken,
             accessTokenJti = accessTokenJti,
-            expiresAt = LocalDateTime.now().plusSeconds(Duration.ofMillis(jwtProperties.refreshTokenExpiry).seconds),
+            expiresAt = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(Duration.ofMillis(jwtProperties.refreshTokenExpiry).seconds),
         )
         refreshTokenRepository.save(refreshTokenEntity)
 

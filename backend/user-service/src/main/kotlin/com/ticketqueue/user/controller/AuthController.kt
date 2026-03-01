@@ -47,6 +47,7 @@ class AuthController(
         return if (remoteAddr in trustedIps) {
             request.getHeader("X-Forwarded-For")
                 ?.split(",")?.firstOrNull()?.trim()
+                ?.takeIf { it.isNotBlank() }
                 ?: remoteAddr
         } else {
             remoteAddr

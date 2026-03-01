@@ -1,6 +1,7 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.common.external.portone.PortoneIdentityV2Response
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.exception.UserException
@@ -30,7 +31,7 @@ class AuthServiceTest {
         portoneService = mockk()
         authTransactionalService = mockk()
         loginHistoryRecorder = mockk(relaxed = true)
-        authService = AuthService(recaptchaService, encryptionService, portoneService, authTransactionalService, loginHistoryRecorder)
+        authService = AuthService(recaptchaService, portoneService, authTransactionalService, loginHistoryRecorder, encryptionService)
     }
 
     // ─── 공통 헬퍼 ────────────────────────────────────────────────────────────────
@@ -213,7 +214,7 @@ class AuthServiceTest {
             every { recaptchaService.verify(request.recaptchaToken) } returns true
             every { encryptionService.hash(request.email) } returns "email-hash"
             every {
-                authTransactionalService.processLogin("email-hash", request.password, "", "", request.email)
+                authTransactionalService.processLogin("email-hash", request.password, "", "")
             } returns expectedResponse
 
             // when
@@ -224,7 +225,7 @@ class AuthServiceTest {
             response.refreshToken shouldBe "refresh-token"
             response.expiresIn shouldBe 3600L
             verify(exactly = 1) {
-                authTransactionalService.processLogin("email-hash", request.password, "", "", request.email)
+                authTransactionalService.processLogin("email-hash", request.password, "", "")
             }
             verify(exactly = 0) { loginHistoryRecorder.recordFailureWithoutUser(any(), any(), any()) }
         }
@@ -236,7 +237,7 @@ class AuthServiceTest {
             every { recaptchaService.verify(request.recaptchaToken) } returns true
             every { encryptionService.hash(request.email) } returns "computed-email-hash"
             every {
-                authTransactionalService.processLogin("computed-email-hash", any(), any(), any(), any())
+                authTransactionalService.processLogin("computed-email-hash", any(), any(), any())
             } returns mockk(relaxed = true)
 
             // when
@@ -244,7 +245,23 @@ class AuthServiceTest {
 
             // then
             verify { encryptionService.hash(request.email) }
-            verify { authTransactionalService.processLogin("computed-email-hash", any(), any(), any(), any()) }
+            verify { authTransactionalService.processLogin("computed-email-hash", any(), any(), any()) }
+        }
+
+        @Test
+        fun `reCAPTCHA 서비스 장애 - ExternalSystemException 전파 및 RECAPTCHA_SERVICE_ERROR 이력 기록`() {
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } throws
+                ExternalSystemException(ErrorCode.RECAPTCHA_SERVICE_ERROR)
+
+            assertThrows<ExternalSystemException> {
+                authService.login(request, "127.0.0.1", "TestAgent")
+            }
+
+            verify(exactly = 1) {
+                loginHistoryRecorder.recordFailureWithoutUser("127.0.0.1", "TestAgent", "RECAPTCHA_SERVICE_ERROR")
+            }
+            verify(exactly = 0) { authTransactionalService.processLogin(any(), any(), any(), any()) }
         }
 
         @Test
@@ -260,7 +277,7 @@ class AuthServiceTest {
 
             exception.errorCode shouldBe ErrorCode.RECAPTCHA_FAILED
             verify(exactly = 0) { encryptionService.hash(any()) }
-            verify(exactly = 0) { authTransactionalService.processLogin(any(), any(), any(), any(), any()) }
+            verify(exactly = 0) { authTransactionalService.processLogin(any(), any(), any(), any()) }
             verify(exactly = 1) {
                 loginHistoryRecorder.recordFailureWithoutUser("127.0.0.1", "TestAgent", "RECAPTCHA_FAILED")
             }
@@ -273,7 +290,7 @@ class AuthServiceTest {
             every { recaptchaService.verify(request.recaptchaToken) } returns true
             every { encryptionService.hash(request.email) } returns "email-hash"
             every {
-                authTransactionalService.processLogin(any(), any(), any(), any(), any())
+                authTransactionalService.processLogin(any(), any(), any(), any())
             } throws UserException(ErrorCode.INVALID_CREDENTIALS)
 
             // when & then

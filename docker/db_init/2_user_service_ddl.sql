@@ -112,6 +112,18 @@ COMMENT ON COLUMN user_service.login_history.success IS '로그인 성공여부'
 COMMENT ON COLUMN user_service.login_history.failure_reason IS '로그인 실패 사유';
 COMMENT ON COLUMN user_service.login_history.created_at IS '접속 일시';
 
+-- 사용자별 최근 로그인 이력 조회
+CREATE INDEX IF NOT EXISTS idx_login_history_user_id_created
+    ON user_service.login_history (user_id, created_at DESC);
+
+-- IP 기반 이상 탐지
+CREATE INDEX IF NOT EXISTS idx_login_history_ip_created
+    ON user_service.login_history (ip_address, created_at DESC);
+
+-- 로그인 방식별 조회
+CREATE INDEX IF NOT EXISTS idx_login_history_method_created
+    ON user_service.login_history (login_method, created_at);
+
 -- Ownership Transfer
 ALTER TABLE user_service.users OWNER TO user_svc_user;
 ALTER TABLE user_service.refresh_tokens OWNER TO user_svc_user;

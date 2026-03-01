@@ -1,13 +1,13 @@
 package com.ticketqueue.user.service
 
-import com.ticketqueue.common.exception.BusinessException
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.exception.ExternalSystemException
-import com.ticketqueue.user.exception.UserException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
+import org.springframework.web.client.HttpServerErrorException
+import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
 import org.springframework.web.util.UriComponentsBuilder
@@ -36,9 +36,9 @@ class RecaptchaService(
                 .body<RecaptchaResponse>()
 
             response?.success ?: false  // 검증 실패(false)는 정상 응답 — CB 카운트 안 됨
-        } catch (e: org.springframework.web.client.HttpServerErrorException) {
+        } catch (e: HttpServerErrorException) {
             throw ExternalSystemException(ErrorCode.RECAPTCHA_SERVICE_ERROR, cause = e)  // 5xx
-        } catch (e: org.springframework.web.client.ResourceAccessException) {
+        } catch (e: ResourceAccessException) {
             throw ExternalSystemException(ErrorCode.RECAPTCHA_SERVICE_ERROR, cause = e)  // 네트워크
         } catch (e: Exception) {
             throw ExternalSystemException(ErrorCode.RECAPTCHA_SERVICE_ERROR, cause = e)  // 기타 시스템
@@ -46,14 +46,10 @@ class RecaptchaService(
     }
 
     private fun verifyFallback(token: String, ex: Throwable): Boolean {
-        // 비즈니스 예외인 경우 그대로 예외 던짐
-        if(ex is BusinessException) {
-            throw ex
-        }
-
-        // 그 외 시스템 장애인 경우 폴백 로직 수행
-        logger.error { "reCAPTCHA circuit breaker triggered: ${ex.message}" }
-        return false
+        if (ex is ExternalSystemException) throw ex
+        // CallNotPermittedException (CB OPEN) 포함 — 모든 시스템 장애를 일관 처리
+        logger.error(ex) { "reCAPTCHA circuit breaker triggered: ${ex.javaClass.simpleName}" }
+        throw ExternalSystemException(ErrorCode.RECAPTCHA_SERVICE_ERROR, cause = ex)
     }
 
     internal data class RecaptchaResponse(

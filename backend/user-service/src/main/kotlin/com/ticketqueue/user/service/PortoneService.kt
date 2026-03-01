@@ -64,8 +64,8 @@ class PortoneService(
             throw ex
         }
 
-        // 그 외 시스템 장애인 경우 폴백 로직 수행
-        logger.error { "PortOne circuit breaker triggered: ${ex.message}" }
-        throw ExternalSystemException(ErrorCode.PORTONE_API_ERROR)
+        // 그 외 시스템 장애인 경우 폴백 로직 수행 (스택트레이스는 GlobalExceptionHandler에서 기록)
+        logger.error { "PortOne circuit breaker triggered: ${ex.javaClass.simpleName}: ${ex.message}" }
+        throw ExternalSystemException(ErrorCode.PORTONE_API_ERROR, cause = ex)
     }
 }

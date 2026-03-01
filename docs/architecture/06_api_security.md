@@ -179,6 +179,40 @@ INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-44665544000
 
 #### 1.4.2 API Gateway 필터 구현
 
+**필터 체인 순서**
+
+Gateway 필터는 다음 순서로 적용됩니다:
+
+1. **IP 해석 필터** — `X-Forwarded-For` 헤더에서 클라이언트 실제 IP 추출
+2. **인증 필터** — JWT Access Token 검증 및 사용자 컨텍스트 설정
+3. **Rate Limiting 필터** — 클라이언트 IP 기반 요청 수 제한
+4. **로깅 필터** — 요청/응답 정보 구조화 로깅 및 TraceId 전파
+
+**X-Forwarded-For 파싱 로직**
+
+```
+X-Forwarded-For: <client>, <proxy1>, <proxy2>
+```
+
+- 헤더의 첫 번째 토큰을 추출하고 `trim()` 처리
+- `trim()` 후 빈 문자열인 경우 `remoteAddr`로 fallback (`takeIf { it.isNotBlank() }`)
+- 헤더 자체가 없거나 null인 경우에도 `remoteAddr`로 fallback
+- `X-Forwarded-For` 신뢰 여부는 `trusted-proxy-ips` 설정값으로 제한 (신뢰된 프록시 IP에서의 요청만 헤더 값을 사용)
+
+**Rate Limiting 필터 연동**
+
+- IP 해석 결과를 `ServerWebExchange` attribute(`resolvedClientIp`)에 저장
+- Rate Limiting 필터는 해당 attribute를 key로 사용하여 토큰 버킷 적용
+
+**잘못된 헤더 처리 패턴**
+
+| 상황 | 처리 방식 |
+|------|----------|
+| 헤더 없음 | `remoteAddr` fallback, 에러 미반환 |
+| 첫 토큰이 빈 문자열 | `remoteAddr` fallback, 에러 미반환 |
+| 헤더 존재하나 신뢰되지 않은 프록시 | `remoteAddr` 직접 사용 |
+| 유효한 IP 추출 성공 | 추출된 IP 사용 |
+
 ---
 
 ## 2. 보안 아키텍처

@@ -74,6 +74,7 @@ class AuthTransactionalServiceTest {
 
     private fun mockSuccessfulLogin(user: User, email: String = "test@example.com") {
         every { passwordEncoder.matches(any(), user.passwordHash) } returns true
+        every { encryptionService.decrypt(user.email) } returns email
         every { jwtTokenProvider.generateAccessToken(user.id!!, user.role, email) } returns Pair("access-token", "access-jti")
         every { jwtTokenProvider.generateRefreshToken(user.id!!) } returns Pair("refresh-token", "refresh-jti")
         every { refreshTokenRepository.save(any()) } returns mockk()
@@ -110,7 +111,7 @@ class AuthTransactionalServiceTest {
             // when
             val response = authTransactionalService.processLogin(
                 emailHash = "email-hash", password = "password", ipAddress = "127.0.0.1",
-                userAgent = "Mozilla/5.0", email = "test@example.com"
+                userAgent = "Mozilla/5.0"
             )
 
             // then
@@ -130,7 +131,7 @@ class AuthTransactionalServiceTest {
             // when
             authTransactionalService.processLogin(
                 emailHash = "email-hash", password = "password", ipAddress = "",
-                userAgent = "", email = "test@example.com"
+                userAgent = ""
             )
 
             // then
@@ -147,7 +148,7 @@ class AuthTransactionalServiceTest {
             val exception = assertThrows<UserException> {
                 authTransactionalService.processLogin(
                     emailHash = "not-found-hash", password = "any", ipAddress = "1.2.3.4",
-                    userAgent = "Chrome", email = "unknown@example.com"
+                    userAgent = "Chrome"
                 )
             }
 
@@ -166,7 +167,7 @@ class AuthTransactionalServiceTest {
             // when & then
             val exception = assertThrows<UserException> {
                 authTransactionalService.processLogin(
-                    emailHash = "email-hash", password = "pw", ipAddress = "", userAgent = "", email = "t@t.com"
+                    emailHash = "email-hash", password = "pw", ipAddress = "", userAgent = ""
                 )
             }
 
@@ -185,7 +186,7 @@ class AuthTransactionalServiceTest {
             // when & then
             val exception = assertThrows<UserException> {
                 authTransactionalService.processLogin(
-                    emailHash = "email-hash", password = "pw", ipAddress = "", userAgent = "", email = "t@t.com"
+                    emailHash = "email-hash", password = "pw", ipAddress = "", userAgent = ""
                 )
             }
 
@@ -205,7 +206,7 @@ class AuthTransactionalServiceTest {
             // when & then
             val exception = assertThrows<UserException> {
                 authTransactionalService.processLogin(
-                    emailHash = "email-hash", password = "wrong", ipAddress = "", userAgent = "", email = "t@t.com"
+                    emailHash = "email-hash", password = "wrong", ipAddress = "", userAgent = ""
                 )
             }
 
@@ -219,6 +220,7 @@ class AuthTransactionalServiceTest {
             val user = createActiveUser()
             every { userRepository.findByEmailHash("email-hash") } returns user
             every { passwordEncoder.matches(any(), user.passwordHash) } returns true
+            every { encryptionService.decrypt(user.email) } returns "test@example.com"
             every { jwtTokenProvider.generateAccessToken(user.id!!, user.role, any()) } throws
                 IllegalStateException("JWT secret은 유효한 Base64 형식이어야 합니다.")
             every { loginHistoryRecorder.recordFailure(user, any(), any(), "JWT_CONFIG_ERROR") } just Runs
@@ -226,7 +228,7 @@ class AuthTransactionalServiceTest {
             // when & then
             val exception = assertThrows<UserException> {
                 authTransactionalService.processLogin(
-                    emailHash = "email-hash", password = "pw", ipAddress = "", userAgent = "", email = "t@t.com"
+                    emailHash = "email-hash", password = "pw", ipAddress = "", userAgent = ""
                 )
             }
 

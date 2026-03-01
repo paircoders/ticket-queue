@@ -1,6 +1,7 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.exception.UserException
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -12,6 +13,7 @@ class AuthService(
     private val portoneService: PortoneService,
     private val authTransactionalService: AuthTransactionalService,
     private val loginHistoryRecorder: LoginHistoryRecorder,
+    private val encryptionService: EncryptionService,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -34,14 +36,21 @@ class AuthService(
         userAgent: String = "",
     ): AuthDto.LoginResponse {
         // 1. reCAPTCHA 검증 (트랜잭션 외부에서 수행, 실패 시 로그인 실패 이력 기록)
-        if (!recaptchaService.verify(request.recaptchaToken)) {
+        val recaptchaPassed = try {
+            recaptchaService.verify(request.recaptchaToken)
+        } catch (e: ExternalSystemException) {
+            loginHistoryRecorder.recordFailureWithoutUser(ipAddress, userAgent, "RECAPTCHA_SERVICE_ERROR")
+            throw e
+        }
+        if (!recaptchaPassed) {
             logger.error { "reCAPTCHA verification failed during login" }
             loginHistoryRecorder.recordFailureWithoutUser(ipAddress, userAgent, "RECAPTCHA_FAILED")
             throw UserException(ErrorCode.RECAPTCHA_FAILED)
         }
 
         // 2. DB 처리 위임 (사용자 조회 + 검증 + 토큰 발급)
-        return authTransactionalService.processLogin(request.password, ipAddress, userAgent, request.email)
+        val emailHash = encryptionService.hash(request.email)
+        return authTransactionalService.processLogin(emailHash, request.password, ipAddress, userAgent)
     }
 
     private fun verifyRecaptcha(token: String) {
