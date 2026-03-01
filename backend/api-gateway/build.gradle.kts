@@ -32,6 +32,9 @@ dependencies {
     // Redis Reactive (토큰 블랙리스트 조회)
     implementation(libs.spring.boot.starter.data.redis.reactive)
 
+    // Spring Cloud AWS (Secrets Manager - config property 해석용)
+    implementation(libs.spring.cloud.aws.starter.secrets.manager)
+
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.reactor.test)
@@ -40,5 +43,6 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.cloud:spring-cloud-dependencies:${libs.versions.springCloud.get()}")
+        mavenBom(libs.spring.cloud.aws.dependencies.get().toString())
     }
 }

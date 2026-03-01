@@ -5,6 +5,9 @@ server:
 spring:
   application:
     name: api-gateway
+  config:
+    import:
+      - "optional:aws-secretsmanager:common/secure-config"
 
   codec:
     max-in-memory-size: 1MB
