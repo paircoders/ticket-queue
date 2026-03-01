@@ -353,6 +353,7 @@ erDiagram
         varchar status "PREPARING/OPEN/ENDED/CANCELLED"
         timestamp created_at
         timestamp updated_at
+        timestamp deleted_at
     }
 
     event_schedules {
