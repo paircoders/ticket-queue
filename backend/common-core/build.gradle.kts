@@ -32,11 +32,8 @@ dependencies {
     api(libs.kotlin.logging)
     api(libs.logstash.logback.encoder)
 
-    // Database
-    runtimeOnly(libs.postgresql)
-
     // Spring Security (GlobalExceptionHandler에서 AccessDeniedException 사용)
-    compileOnly(libs.spring.boot.starter.security)
+    api(libs.spring.boot.starter.security)
 
     // Test
     testImplementation(libs.bundles.test.base)

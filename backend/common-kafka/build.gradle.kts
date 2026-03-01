@@ -19,7 +19,6 @@ dependencies {
 
     // Test
     testImplementation(libs.bundles.test.base)
-    testImplementation(libs.spring.kafka)
     testImplementation("org.springframework.kafka:spring-kafka-test")
 
     // TestContainers
