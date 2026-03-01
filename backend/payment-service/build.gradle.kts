@@ -7,29 +7,20 @@ plugins {
 }
 
 dependencies {
-    // Common module
-    implementation(project(":common"))
+    // Common modules
+    implementation(project(":common-core"))
+    implementation(project(":common-jpa"))
+    implementation(project(":common-kafka"))
+    implementation(project(":common-web"))
 
     // Spring Boot
     implementation(libs.spring.boot.starter.webflux)  // For WebClient
 
-    // Kafka
-    implementation(libs.spring.kafka)
-
     // Resilience4j for circuit breaker
     implementation(libs.bundles.resilience4j)
-
-    // OpenFeign for service-to-service calls
-    implementation(libs.spring.cloud.starter.openfeign)
     implementation(libs.spring.cloud.starter.circuitbreaker.resilience4j)
 
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.bundles.testcontainers)
-}
-
-dependencyManagement {
-    imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:${libs.versions.springCloud.get()}")
-    }
 }

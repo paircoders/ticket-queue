@@ -12,8 +12,8 @@ spring:
   config:
     import:
       - "optional:classpath:/application-common-${spring.profiles.active}.yml"
+      - "optional:classpath:/application-common-web-${spring.profiles.active}.yml"
       - "optional:aws-secretsmanager:event-svc/secure-config"
-      - "optional:aws-secretsmanager:common/secure-config"
 
   jpa:
     hibernate:

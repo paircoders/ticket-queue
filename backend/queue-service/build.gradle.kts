@@ -6,8 +6,8 @@ plugins {
 }
 
 dependencies {
-    // Common module (for DTOs and exceptions only, no JPA)
-    implementation(project(":common"))
+    // Common module (core만 사용 - JPA/Kafka 불필요)
+    implementation(project(":common-core"))
 
     // Spring Boot
     implementation(libs.spring.boot.starter.data.redis)

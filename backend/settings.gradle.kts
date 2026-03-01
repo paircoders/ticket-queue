@@ -7,7 +7,10 @@ rootProject.name = "ticket-queue"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(
-    "common",
+    "common-core",
+    "common-jpa",
+    "common-kafka",
+    "common-web",
     "api-gateway",
     "user-service",
     "event-service",

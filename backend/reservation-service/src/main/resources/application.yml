@@ -1,6 +1,14 @@
 server:
   port: 8084
 
+spring:
+  application:
+    name: reservation-service
+  config:
+    import:
+      - "optional:classpath:/application-common-${spring.profiles.active}.yml"
+      - "optional:aws-secretsmanager:reservation-svc/secure-config"
+
 outbox:
   poller:
     enabled: true
@@ -16,16 +24,6 @@ processed-event:
   cleanup:
     enabled: true
     retention-days: 30
-
-spring:
-  application:
-    name: reservation-service
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/ticketing
-    username: reservation_svc_user
-    password: ${DB_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
