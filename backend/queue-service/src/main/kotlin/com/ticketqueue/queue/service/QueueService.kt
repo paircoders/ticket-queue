@@ -60,23 +60,14 @@ class QueueService(
             throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 서비스에 일시적인 오류가 발생했습니다.", e)
         }
 
-        val code = (result[0] as Long).toInt()
+        val code = (result.getOrNull(0) as? Long)?.toInt()
+            ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
 
         return when (code) {
-            0 -> {
-                val rank = (result[1] as Long) + 1
-                logger.info("Queue entered: userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
-                QueueDto.EnterResponse(
-                    status = QueueStatus.WAITING,
-                    scheduleId = scheduleId,
-                    rank = rank,
-                    estimatedWaitTime = calculateWaitTime(rank),
-                    token = null
-                )
-            }
-            1 -> {
-                val rank = (result[1] as Long) + 1
-                logger.info("Queue re-entered (idempotent): userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
+            0, 1 -> {
+                val rank = safeRank(result)
+                val logMsg = if (code == 0) "Queue entered" else "Queue re-entered (idempotent)"
+                logger.info("$logMsg: userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
                 QueueDto.EnterResponse(
                     status = QueueStatus.WAITING,
                     scheduleId = scheduleId,
@@ -105,11 +96,21 @@ class QueueService(
      * 예상 대기 시간 계산 (초)
      *
      * 배치 처리 단위: batchSize명 / interval ms마다 승인
-     * 공식: ceil(rank / batchSize) * (interval / 1000)
+     * 밀리초 단위로 먼저 계산한 후 올림(ceiling)하여 초로 변환
+     * interval < 1000ms인 경우(예: 500ms)에도 0초 반환 버그 방지
      */
     private fun calculateWaitTime(rank: Long): Long {
         val batchSize = queueProperties.batch.size.toLong()
-        val intervalSeconds = queueProperties.batch.interval / 1000L
-        return ((rank + batchSize - 1) / batchSize) * intervalSeconds
+        val intervalMs = queueProperties.batch.interval
+        val batchCount = (rank + batchSize - 1) / batchSize
+        val waitMs = batchCount * intervalMs
+        return (waitMs + 999) / 1000
     }
+
+    /**
+     * Lua 결과 리스트에서 rank를 안전하게 추출한다.
+     * result[1]이 없거나 Long이 아닌 경우 0으로 폴백 (0-based index → 1-based rank)
+     */
+    private fun safeRank(result: List<*>): Long =
+        ((result.getOrNull(1) as? Long) ?: 0L) + 1
 }

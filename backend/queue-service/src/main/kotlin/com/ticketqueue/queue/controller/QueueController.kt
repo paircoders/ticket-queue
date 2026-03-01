@@ -31,6 +31,8 @@ class QueueController(private val queueService: QueueService) {
     ): QueueDto.EnterResponse {
         val userId = runCatching { UUID.fromString(authentication.principal as String) }
             .getOrElse { throw QueueException(ErrorCode.UNAUTHORIZED) }
-        return queueService.enterQueue(userId, request.scheduleId!!)
+        val scheduleId = request.scheduleId
+            ?: throw QueueException(ErrorCode.INVALID_INPUT, "회차 ID는 필수입니다.")
+        return queueService.enterQueue(userId, scheduleId)
     }
 }
