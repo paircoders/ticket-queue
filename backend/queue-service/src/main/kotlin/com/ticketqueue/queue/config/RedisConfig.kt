@@ -45,4 +45,23 @@ class RedisConfig {
             setResultType(List::class.java)
         }
     }
+
+    /**
+     * 대기열 진입 Lua 스크립트 (REQ-QUEUE-001, REQ-QUEUE-006, REQ-QUEUE-011)
+     *
+     * ZCARD, ZADD, SET 간의 Race Condition을 원자적으로 처리한다.
+     *
+     * KEYS[1]: queue:{scheduleId}
+     * KEYS[2]: queue:active:{userId}
+     * ARGV[1]: userId, ARGV[2]: timestamp, ARGV[3]: maxCapacity
+     * ARGV[4]: activeUserTtl, ARGV[5]: scheduleId
+     * @return [resultCode, value] 쌍
+     */
+    @Bean
+    fun queueEnterScript(): DefaultRedisScript<List<*>> {
+        return DefaultRedisScript<List<*>>().apply {
+            setLocation(ClassPathResource("lua/queue-enter.lua"))
+            setResultType(List::class.java)
+        }
+    }
 }

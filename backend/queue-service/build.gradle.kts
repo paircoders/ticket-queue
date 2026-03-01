@@ -11,7 +11,9 @@ dependencies {
 
     // Spring Boot
     implementation(libs.spring.boot.starter.data.redis)
+    implementation(libs.spring.boot.starter.security)
 
     // Test
     testImplementation(libs.bundles.test.base)
+    testImplementation(libs.spring.security.test)
 }
