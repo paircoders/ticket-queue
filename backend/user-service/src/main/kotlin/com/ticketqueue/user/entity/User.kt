@@ -64,10 +64,10 @@ class User(
     val updatedAt: LocalDateTime? = null,
 
     @Column(name = "last_login_at")
-    val lastLoginAt: LocalDateTime? = null,
+    var lastLoginAt: LocalDateTime? = null,
 
     @Column(name = "deleted_at")
-    val deletedAt: LocalDateTime? = null
+    var deletedAt: LocalDateTime? = null
 )
 
 enum class UserRole {

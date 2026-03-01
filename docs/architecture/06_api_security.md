@@ -151,7 +151,7 @@ INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-44665544000
 
 **전략: 대기열 중심의 트래픽 제어 (Queue-Based Throttling)**
 
-복잡한 IP/사용자 기반의 Rate Limiting을 API Gateway에서 직접 구현하는 대신, **대기열 시스템(Queue Service)**이 전체 트래픽의 유입량을 제어하는 핵심 역할을 수행합니다.
+**대기열 시스템(Queue Service)** 이 예매/결제 트래픽 유입량을 1차 제어하고, API Gateway는 전 구간 보호를 위해 IP/사용자 기반 Rate Limiting을 2차로 적용함.
 
 **핵심 로직:**
 1. **대기열 토큰 검증**: `Queue Token`이 유효한 경우에만 주요 API(예매, 결제) 접근 허용.
@@ -169,7 +169,50 @@ INTERNAL_API_KEY=<GENERATED_UUID_V4>  # 예: 550e8400-e29b-41d4-a716-44665544000
 
 **관련 요구사항:** REQ-GW-006, REQ-QUEUE-008
 
-#### 1.4.1 API Gateway 필터 구현
+#### 1.4.1 Client IP 식별 정책 (Trusted Proxy)
+
+정확한 Rate Limiting 및 보안 감사를 위해 프록시(ALB, Nginx 등) 환경에서도 클라이언트의 실제 IP를 식별합니다.
+
+- **로직**: `X-Forwarded-For` 헤더의 첫 번째 IP를 추출하되, 호출자가 `trusted-proxy-ips`에 설정된 신뢰할 수 있는 IP인 경우에만 헤더 값을 신뢰합니다.
+- **설정**: `security.trusted-proxy-ips` (예: `127.0.0.1, 10.0.0.0/8`)
+- **미적용 시**: L4/L7 장비의 IP가 클라이언트 IP로 오인되어 전체 서비스 가용성에 영향을 줄 수 있습니다.
+
+#### 1.4.2 API Gateway 필터 구현
+
+**필터 체인 순서**
+
+Gateway 필터는 다음 순서로 적용됩니다:
+
+1. **IP 해석 필터** — `X-Forwarded-For` 헤더에서 클라이언트 실제 IP 추출
+2. **인증 필터** — JWT Access Token 검증 및 사용자 컨텍스트 설정
+3. **Rate Limiting 필터** — 클라이언트 IP + 사용자(JWT) 기반 요청 수 제한
+4. **로깅 필터** — 요청/응답 정보 구조화 로깅 및 TraceId 전파
+
+**X-Forwarded-For 파싱 로직**
+
+```text
+X-Forwarded-For: <client>, <proxy1>, <proxy2>
+```
+
+- 헤더의 첫 번째 토큰을 추출하고 `trim()` 처리
+- `trim()` 후 빈 문자열인 경우 `remoteAddr`로 fallback (`takeIf { it.isNotBlank() }`)
+- 헤더 자체가 없거나 null인 경우에도 `remoteAddr`로 fallback
+- `X-Forwarded-For` 신뢰 여부는 `trusted-proxy-ips` 설정값으로 제한 (신뢰된 프록시 IP에서의 요청만 헤더 값을 사용)
+
+**Rate Limiting 필터 연동**
+
+- IP 해석 결과를 `ServerWebExchange` attribute(`resolvedClientIp`)에 저장
+- Rate Limiting 필터는 해당 attribute를 key로 사용하여 토큰 버킷 적용
+
+**잘못된 헤더 처리 패턴**
+
+| 상황 | 처리 방식 |
+|------|----------|
+| 헤더 없음 | `remoteAddr` fallback, 에러 미반환 |
+| 첫 토큰이 빈 문자열 | `remoteAddr` fallback, 에러 미반환 |
+| 첫 토큰이 IP 형식이 아님 | `remoteAddr` fallback, 경고 로그 기록 |
+| 헤더 존재하나 신뢰되지 않은 프록시 | `remoteAddr` 직접 사용 |
+| 유효한 IP 추출 성공 | 추출된 IP 사용 |
 
 ---
 

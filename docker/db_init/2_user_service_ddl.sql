@@ -93,7 +93,7 @@ COMMENT ON COLUMN user_service.refresh_tokens.revoked_at IS '토큰 무효화 �
 -- 3. login_history Table
 CREATE TABLE user_service.login_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES user_service.users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES user_service.users(id) ON DELETE SET NULL,
     ip_address VARCHAR(45),
     user_agent TEXT,
     login_method VARCHAR(20) NOT NULL,
@@ -111,6 +111,18 @@ COMMENT ON COLUMN user_service.login_history.login_method IS '로그인 방식 (
 COMMENT ON COLUMN user_service.login_history.success IS '로그인 성공여부';
 COMMENT ON COLUMN user_service.login_history.failure_reason IS '로그인 실패 사유';
 COMMENT ON COLUMN user_service.login_history.created_at IS '접속 일시';
+
+-- 사용자별 최근 로그인 이력 조회
+CREATE INDEX IF NOT EXISTS idx_login_history_user_id_created
+    ON user_service.login_history (user_id, created_at DESC);
+
+-- IP 기반 이상 탐지
+CREATE INDEX IF NOT EXISTS idx_login_history_ip_created
+    ON user_service.login_history (ip_address, created_at DESC);
+
+-- 로그인 방식별 조회
+CREATE INDEX IF NOT EXISTS idx_login_history_method_created
+    ON user_service.login_history (login_method, created_at);
 
 -- Ownership Transfer
 ALTER TABLE user_service.users OWNER TO user_svc_user;

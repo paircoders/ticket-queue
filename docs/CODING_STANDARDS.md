@@ -325,7 +325,7 @@ enum class ErrorCode(
 }
 ```
 
-### BusinessException 계층
+### BusinessException 및 ExternalSystemException 계층
 
 ```kotlin
 // common: 기반 클래스
@@ -335,11 +335,18 @@ open class BusinessException(
     override val cause: Throwable? = null
 ) : RuntimeException(message, cause)
 
-// 서비스별 서브클래스 (각 서비스 exception/ 패키지에 위치)
+// 서비스별 비즈니스 예외 (서킷 브레이커가 무시하도록 설정)
 class EventException(
     errorCode: ErrorCode,
     message: String = errorCode.message,
     cause: Throwable? = null
+) : BusinessException(errorCode, message, cause)
+
+// 외부 시스템 장애 전용 예외 (서킷 브레이커가 실패로 기록하도록 설정)
+class ExternalSystemException(
+    errorCode: ErrorCode,
+    message: String = errorCode.message,
+    override val cause: Throwable? = null
 ) : BusinessException(errorCode, message, cause)
 ```
 

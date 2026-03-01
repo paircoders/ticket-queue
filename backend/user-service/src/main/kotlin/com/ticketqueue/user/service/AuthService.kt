@@ -1,75 +1,62 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.user.dto.AuthDto
-import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.exception.UserException
-import com.ticketqueue.user.repository.UserRepository
-import org.springframework.security.crypto.password.PasswordEncoder
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 
 @Service
 class AuthService(
-    private val userRepository: UserRepository,
-    private val passwordEncoder: PasswordEncoder,
     private val recaptchaService: RecaptchaService,
+    private val portoneService: PortoneService,
+    private val authTransactionalService: AuthTransactionalService,
+    private val loginHistoryRecorder: LoginHistoryRecorder,
     private val encryptionService: EncryptionService,
-    private val portoneService: PortoneService
 ) {
+    private val logger = KotlinLogging.logger {}
 
-    @Transactional
     fun signup(request: AuthDto.SignupRequest): AuthDto.SignupResponse {
         // 1. reCAPTCHA 검증
-        if (!recaptchaService.verify(request.recaptchaToken)) {
-            throw UserException(ErrorCode.RECAPTCHA_FAILED)
-        }
+        verifyRecaptcha(request.recaptchaToken)
 
-        // 2. PortOne 본인인증 검증
+        // 2. PortOne 본인인증 검증 (트랜잭션 외부에서 수행)
         val verifiedCustomer = portoneService.verifyIdentity(request.identityVerificationId)
         val verifiedCi = verifiedCustomer.ci ?: throw UserException(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
         val verifiedDi = verifiedCustomer.di ?: throw UserException(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
 
-        // 3. 이메일 중복 체크 (hash 사용)
+        // 3. DB 처리 위임 (중복 체크 + 저장)
+        return authTransactionalService.processSignup(request, verifiedCi, verifiedDi)
+    }
+
+    fun login(
+        request: AuthDto.LoginRequest,
+        ipAddress: String = "",
+        userAgent: String = "",
+    ): AuthDto.LoginResponse {
+        // 1. reCAPTCHA 검증 (트랜잭션 외부에서 수행, 실패 시 로그인 실패 이력 기록)
+        val recaptchaPassed = try {
+            recaptchaService.verify(request.recaptchaToken)
+        } catch (e: ExternalSystemException) {
+            loginHistoryRecorder.recordFailureWithoutUser(ipAddress, userAgent, "RECAPTCHA_SERVICE_ERROR")
+            throw e
+        }
+        if (!recaptchaPassed) {
+            logger.error { "reCAPTCHA verification failed during login" }
+            loginHistoryRecorder.recordFailureWithoutUser(ipAddress, userAgent, "RECAPTCHA_FAILED")
+            throw UserException(ErrorCode.RECAPTCHA_FAILED)
+        }
+
+        // 2. DB 처리 위임 (사용자 조회 + 검증 + 토큰 발급)
         val emailHash = encryptionService.hash(request.email)
-        if (userRepository.existsByEmailHash(emailHash)) {
-            throw UserException(ErrorCode.ALREADY_EXISTS_EMAIL)
+        return authTransactionalService.processLogin(emailHash, request.password, ipAddress, userAgent)
+    }
+
+    private fun verifyRecaptcha(token: String) {
+        if (!recaptchaService.verify(token)) {
+            logger.error { "reCAPTCHA verification failed" }
+            throw UserException(ErrorCode.RECAPTCHA_FAILED)
         }
-
-        // 4. CI 중복 체크 (hash 사용 - 1인 1계정)
-        val ciHash = encryptionService.hash(verifiedCi)
-        if (userRepository.existsByCiHash(ciHash)) {
-            throw UserException(ErrorCode.DUPLICATE_IDENTITY)
-        }
-
-        // 5. 데이터 암호화 및 해싱
-        val encryptedEmail = encryptionService.encrypt(request.email)
-        val encryptedName = encryptionService.encrypt(request.name)
-        val encryptedPhone = encryptionService.encrypt(request.phone)
-        val encryptedCi = encryptionService.encrypt(verifiedCi)
-        
-        val phoneHash = encryptionService.hash(request.phone)
-        val passwordHash = passwordEncoder.encode(request.password)
-
-        // 6. 엔티티 생성 및 저장
-        val user = User(
-            email = encryptedEmail,
-            emailHash = emailHash,
-            passwordHash = passwordHash,
-            name = encryptedName,
-            phone = encryptedPhone,
-            phoneHash = phoneHash,
-            ci = encryptedCi,
-            ciHash = ciHash,
-            di = verifiedDi
-        )
-
-        val savedUser = userRepository.save(user)
-
-        return AuthDto.SignupResponse(
-            id = savedUser.id!!,
-            email = request.email,
-            name = request.name
-        )
     }
 }

@@ -1,43 +1,40 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.common.external.portone.PortoneIdentityV2Response
 import com.ticketqueue.user.dto.AuthDto
-import com.ticketqueue.user.entity.User
-import com.ticketqueue.user.entity.UserRole
-import com.ticketqueue.user.entity.UserStatus
 import com.ticketqueue.user.exception.UserException
-import com.ticketqueue.user.repository.UserRepository
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
-import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.springframework.security.crypto.password.PasswordEncoder
 import java.util.UUID
 
 class AuthServiceTest {
 
-    private lateinit var userRepository: UserRepository
-    private lateinit var passwordEncoder: PasswordEncoder
     private lateinit var recaptchaService: RecaptchaService
     private lateinit var encryptionService: EncryptionService
     private lateinit var portoneService: PortoneService
+    private lateinit var authTransactionalService: AuthTransactionalService
+    private lateinit var loginHistoryRecorder: LoginHistoryRecorder
     private lateinit var authService: AuthService
 
     @BeforeEach
     fun setUp() {
-        userRepository = mockk()
-        passwordEncoder = mockk()
         recaptchaService = mockk()
         encryptionService = mockk()
         portoneService = mockk()
-        authService = AuthService(userRepository, passwordEncoder, recaptchaService, encryptionService, portoneService)
+        authTransactionalService = mockk()
+        loginHistoryRecorder = mockk(relaxed = true)
+        authService = AuthService(recaptchaService, portoneService, authTransactionalService, loginHistoryRecorder, encryptionService)
     }
+
+    // ─── 공통 헬퍼 ────────────────────────────────────────────────────────────────
 
     private fun createSignupRequest(
         email: String = "test@example.com",
@@ -67,139 +64,42 @@ class AuthServiceTest {
         di = di
     )
 
+    private fun createLoginRequest(
+        email: String = "test@example.com",
+        password: String = "password123!",
+        recaptchaToken: String = "valid-recaptcha-token"
+    ) = AuthDto.LoginRequest(
+        email = email,
+        password = password,
+        recaptchaToken = recaptchaToken
+    )
+
+    // ─── Signup 테스트 ────────────────────────────────────────────────────────────
+
     @Test
-    fun `회원가입 성공 - SignupResponse 반환 (id, email, name 포함)`() {
+    fun `회원가입 성공 - reCAPTCHA, PortOne 후 processSignup 위임`() {
         // given
         val request = createSignupRequest()
-        val userId = UUID.randomUUID()
         val verifiedCustomer = createVerifiedCustomer()
+        val userId = UUID.randomUUID()
+        val expectedResponse = AuthDto.SignupResponse(id = userId, email = request.email, name = request.name)
 
-        val savedUser = User(
-            id = userId,
-            email = "encrypted-email",
-            emailHash = "email-hash",
-            passwordHash = "bcrypt-password-hash",
-            name = "encrypted-name",
-            phone = "encrypted-phone",
-            phoneHash = "phone-hash",
-            ci = "encrypted-ci",
-            ciHash = "ci-hash",
-            di = verifiedCustomer.di!!
-        )
-
-        mockSignupDependencies(request, verifiedCustomer)
-        every { userRepository.save(any()) } returns savedUser
+        every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
+        every { authTransactionalService.processSignup(request, verifiedCustomer.ci!!, verifiedCustomer.di!!) } returns expectedResponse
 
         // when
         val response = authService.signup(request)
 
         // then
-        assertThat(response).isNotNull
-        assertThat(response.id).isEqualTo(userId)
-        assertThat(response.email).isEqualTo(request.email)
-        assertThat(response.name).isEqualTo(request.name)
+        response.id shouldBe userId
+        response.email shouldBe request.email
+        response.name shouldBe request.name
+        verify(exactly = 1) { authTransactionalService.processSignup(request, verifiedCustomer.ci!!, verifiedCustomer.di!!) }
     }
 
     @Test
-    fun `성공 시 암호화된 데이터 저장 (User 엔티티 slot capture)`() {
-        // given
-        val request = createSignupRequest()
-        val userId = UUID.randomUUID()
-        val userSlot = slot<User>()
-        val verifiedCustomer = createVerifiedCustomer()
-
-        val savedUser = User(
-            id = userId,
-            email = "encrypted-email",
-            emailHash = "email-hash",
-            passwordHash = "bcrypt-password-hash",
-            name = "encrypted-name",
-            phone = "encrypted-phone",
-            phoneHash = "phone-hash",
-            ci = "encrypted-ci",
-            ciHash = "ci-hash",
-            di = verifiedCustomer.di!!
-        )
-
-        mockSignupDependencies(request, verifiedCustomer)
-        every { userRepository.save(capture(userSlot)) } returns savedUser
-
-        // when
-        authService.signup(request)
-
-        // then
-        val capturedUser = userSlot.captured
-        assertThat(capturedUser.email).isEqualTo("encrypted-email")
-        assertThat(capturedUser.emailHash).isEqualTo("email-hash")
-        assertThat(capturedUser.name).isEqualTo("encrypted-name")
-        assertThat(capturedUser.phone).isEqualTo("encrypted-phone")
-        assertThat(capturedUser.phoneHash).isEqualTo("phone-hash")
-        assertThat(capturedUser.ci).isEqualTo("encrypted-ci")
-        assertThat(capturedUser.ciHash).isEqualTo("ci-hash")
-        assertThat(capturedUser.di).isEqualTo(verifiedCustomer.di)
-    }
-
-    private fun mockSignupDependencies(
-        request: AuthDto.SignupRequest,
-        verifiedCustomer: PortoneIdentityV2Response.VerifiedCustomerDetail,
-        emailExists: Boolean = false,
-        ciExists: Boolean = false
-    ) {
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
-        every { encryptionService.hash(request.email) } returns "email-hash"
-        every { userRepository.existsByEmailHash("email-hash") } returns emailExists
-        
-        if (!emailExists) {
-            every { encryptionService.hash(verifiedCustomer.ci!!) } returns "ci-hash"
-            every { userRepository.existsByCiHash("ci-hash") } returns ciExists
-            
-            if (!ciExists) {
-                every { encryptionService.encrypt(request.email) } returns "encrypted-email"
-                every { encryptionService.encrypt(request.name) } returns "encrypted-name"
-                every { encryptionService.encrypt(request.phone) } returns "encrypted-phone"
-                every { encryptionService.encrypt(verifiedCustomer.ci!!) } returns "encrypted-ci"
-                every { encryptionService.hash(request.phone) } returns "phone-hash"
-                every { passwordEncoder.encode(request.password) } returns "bcrypt-password-hash"
-            }
-        }
-    }
-
-    @Test
-    fun `성공 시 BCrypt 비밀번호 인코딩`() {
-        // given
-        val request = createSignupRequest()
-        val userId = UUID.randomUUID()
-        val userSlot = slot<User>()
-        val verifiedCustomer = createVerifiedCustomer()
-
-        val savedUser = User(
-            id = userId,
-            email = "encrypted-email",
-            emailHash = "email-hash",
-            passwordHash = "bcrypt-password-hash",
-            name = "encrypted-name",
-            phone = "encrypted-phone",
-            phoneHash = "phone-hash",
-            ci = "encrypted-ci",
-            ciHash = "ci-hash",
-            di = verifiedCustomer.di!!
-        )
-
-        mockSignupDependencies(request, verifiedCustomer)
-        every { userRepository.save(capture(userSlot)) } returns savedUser
-
-        // when
-        authService.signup(request)
-
-        // then
-        val capturedUser = userSlot.captured
-        assertThat(capturedUser.passwordHash).isEqualTo("bcrypt-password-hash")
-        verify { passwordEncoder.encode(request.password) }
-    }
-
-    @Test
-    fun `reCAPTCHA 실패 - RECAPTCHA_FAILED 예외`() {
+    fun `reCAPTCHA 실패 - RECAPTCHA_FAILED 예외, processSignup 미호출`() {
         // given
         val request = createSignupRequest()
         every { recaptchaService.verify(request.recaptchaToken) } returns false
@@ -209,7 +109,10 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.RECAPTCHA_FAILED)
+        exception.errorCode shouldBe ErrorCode.RECAPTCHA_FAILED
+        verify(exactly = 0) { portoneService.verifyIdentity(any()) }
+        verify(exactly = 0) { authTransactionalService.processSignup(any(), any(), any()) }
+        verify(exactly = 0) { loginHistoryRecorder.recordFailureWithoutUser(any(), any(), any()) }
     }
 
     @Test
@@ -226,39 +129,26 @@ class AuthServiceTest {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.PORTONE_MISSING_REQUIRED_INFO)
+        exception.errorCode shouldBe ErrorCode.PORTONE_MISSING_REQUIRED_INFO
+        verify(exactly = 0) { authTransactionalService.processSignup(any(), any(), any()) }
     }
 
     @Test
-    fun `이메일 중복 - ALREADY_EXISTS_EMAIL 예외`() {
+    fun `PortOne 본인인증 정보에 DI가 없는 경우 - PORTONE_MISSING_REQUIRED_INFO 예외`() {
         // given
         val request = createSignupRequest()
-        val verifiedCustomer = createVerifiedCustomer()
+        val verifiedCustomer = createVerifiedCustomer(di = null)
 
-        mockSignupDependencies(request, verifiedCustomer, emailExists = true)
+        every { recaptchaService.verify(request.recaptchaToken) } returns true
+        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
 
         // when & then
         val exception = assertThrows<UserException> {
             authService.signup(request)
         }
 
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.ALREADY_EXISTS_EMAIL)
-    }
-
-    @Test
-    fun `CI 중복 - DUPLICATE_IDENTITY 예외`() {
-        // given
-        val request = createSignupRequest()
-        val verifiedCustomer = createVerifiedCustomer()
-
-        mockSignupDependencies(request, verifiedCustomer, ciExists = true)
-
-        // when & then
-        val exception = assertThrows<UserException> {
-            authService.signup(request)
-        }
-
-        assertThat(exception.errorCode).isEqualTo(ErrorCode.DUPLICATE_IDENTITY)
+        exception.errorCode shouldBe ErrorCode.PORTONE_MISSING_REQUIRED_INFO
+        verify(exactly = 0) { authTransactionalService.processSignup(any(), any(), any()) }
     }
 
     @Test
@@ -277,19 +167,16 @@ class AuthServiceTest {
         }
 
         // when & then
-        assertThrows<UserException> {
-            authService.signup(request)
-        }
+        assertThrows<UserException> { authService.signup(request) }
 
-        assertThat(callOrder).containsExactly("recaptcha")
+        callOrder shouldBe listOf("recaptcha")
         verify(exactly = 0) { portoneService.verifyIdentity(any()) }
     }
 
     @Test
-    fun `PortOne 호출이 이메일 체크보다 먼저 수행`() {
+    fun `PortOne 호출이 processSignup보다 먼저 수행`() {
         // given
         val request = createSignupRequest()
-        val verifiedCustomer = createVerifiedCustomer()
         val callOrder = mutableListOf<String>()
 
         every { recaptchaService.verify(request.recaptchaToken) } returns true
@@ -297,128 +184,121 @@ class AuthServiceTest {
             callOrder.add("portone")
             throw UserException(ErrorCode.PORTONE_VERIFICATION_FAILED)
         }
-        every { encryptionService.hash(request.email) } answers {
-            callOrder.add("emailHash")
-            "email-hash"
+        every { authTransactionalService.processSignup(any(), any(), any()) } answers {
+            callOrder.add("processSignup")
+            mockk()
         }
 
         // when & then
-        assertThrows<UserException> {
-            authService.signup(request)
-        }
+        assertThrows<UserException> { authService.signup(request) }
 
-        assertThat(callOrder).containsExactly("portone")
-        verify(exactly = 0) { encryptionService.hash(request.email) }
+        callOrder shouldBe listOf("portone")
+        verify(exactly = 0) { authTransactionalService.processSignup(any(), any(), any()) }
     }
 
-    @Test
-    fun `이메일 체크가 CI 체크보다 먼저 수행`() {
-        // given
-        val request = createSignupRequest()
-        val verifiedCustomer = createVerifiedCustomer()
-        val callOrder = mutableListOf<String>()
+    // ─── Login 테스트 ─────────────────────────────────────────────────────────────
 
-        every { recaptchaService.verify(request.recaptchaToken) } returns true
-        every { portoneService.verifyIdentity(request.identityVerificationId) } returns verifiedCustomer
-        every { encryptionService.hash(request.email) } answers {
-            callOrder.add("emailHash")
-            "email-hash"
-        }
-        every { userRepository.existsByEmailHash("email-hash") } answers {
-            callOrder.add("emailCheck")
-            true
-        }
-        every { encryptionService.hash(verifiedCustomer.ci!!) } answers {
-            callOrder.add("ciHash")
-            "ci-hash"
-        }
+    @Nested
+    inner class LoginTest {
 
-        // when & then
-        assertThrows<UserException> {
-            authService.signup(request)
-        }
+        @Test
+        fun `정상 로그인 - processLogin 위임 후 LoginResponse 반환`() {
+            // given
+            val request = createLoginRequest()
+            val expectedResponse = AuthDto.LoginResponse(
+                accessToken = "access-token",
+                refreshToken = "refresh-token",
+                expiresIn = 3600L,
+            )
 
-        assertThat(callOrder).containsExactly("emailHash", "emailCheck")
-        verify(exactly = 0) { encryptionService.hash(verifiedCustomer.ci!!) }
-    }
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "email-hash"
+            every {
+                authTransactionalService.processLogin("email-hash", request.password, "", "")
+            } returns expectedResponse
 
-    @Test
-    fun `이메일 해시로 중복 체크 수행`() {
-        // given
-        val request = createSignupRequest()
-        val verifiedCustomer = createVerifiedCustomer()
+            // when
+            val response = authService.login(request)
 
-        mockSignupDependencies(request, verifiedCustomer, emailExists = true)
-
-        // when & then
-        assertThrows<UserException> {
-            authService.signup(request)
+            // then
+            response.accessToken shouldBe "access-token"
+            response.refreshToken shouldBe "refresh-token"
+            response.expiresIn shouldBe 3600L
+            verify(exactly = 1) {
+                authTransactionalService.processLogin("email-hash", request.password, "", "")
+            }
+            verify(exactly = 0) { loginHistoryRecorder.recordFailureWithoutUser(any(), any(), any()) }
         }
 
-        verify { encryptionService.hash(request.email) }
-        verify { userRepository.existsByEmailHash("email-hash") }
-    }
+        @Test
+        fun `정상 로그인 - 이메일 해시를 processLogin에 전달`() {
+            // given
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "computed-email-hash"
+            every {
+                authTransactionalService.processLogin("computed-email-hash", any(), any(), any())
+            } returns mockk(relaxed = true)
 
-    @Test
-    fun `phone 해시값도 저장`() {
-        // given
-        val request = createSignupRequest()
-        val userId = UUID.randomUUID()
-        val userSlot = slot<User>()
-        val verifiedCustomer = createVerifiedCustomer()
+            // when
+            authService.login(request)
 
-        val savedUser = User(
-            id = userId,
-            email = "encrypted-email",
-            emailHash = "email-hash",
-            passwordHash = "bcrypt-password-hash",
-            name = "encrypted-name",
-            phone = "encrypted-phone",
-            phoneHash = "phone-hash",
-            ci = "encrypted-ci",
-            ciHash = "ci-hash",
-            di = verifiedCustomer.di!!
-        )
-
-        mockSignupDependencies(request, verifiedCustomer)
-        every { userRepository.save(capture(userSlot)) } returns savedUser
-
-        // when
-        authService.signup(request)
-
-        // then
-        val capturedUser = userSlot.captured
-        assertThat(capturedUser.phoneHash).isEqualTo("phone-hash")
-        verify { encryptionService.hash(request.phone) }
-    }
-
-    @Test
-    fun `reCAPTCHA 실패 시 save 미호출`() {
-        // given
-        val request = createSignupRequest()
-        every { recaptchaService.verify(request.recaptchaToken) } returns false
-
-        // when & then
-        assertThrows<UserException> {
-            authService.signup(request)
+            // then
+            verify { encryptionService.hash(request.email) }
+            verify { authTransactionalService.processLogin("computed-email-hash", any(), any(), any()) }
         }
 
-        verify(exactly = 0) { userRepository.save(any()) }
-    }
+        @Test
+        fun `reCAPTCHA 서비스 장애 - ExternalSystemException 전파 및 RECAPTCHA_SERVICE_ERROR 이력 기록`() {
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } throws
+                ExternalSystemException(ErrorCode.RECAPTCHA_SERVICE_ERROR)
 
-    @Test
-    fun `이메일 중복 시 save 미호출`() {
-        // given
-        val request = createSignupRequest()
-        val verifiedCustomer = createVerifiedCustomer()
+            assertThrows<ExternalSystemException> {
+                authService.login(request, "127.0.0.1", "TestAgent")
+            }
 
-        mockSignupDependencies(request, verifiedCustomer, emailExists = true)
-
-        // when & then
-        assertThrows<UserException> {
-            authService.signup(request)
+            verify(exactly = 1) {
+                loginHistoryRecorder.recordFailureWithoutUser("127.0.0.1", "TestAgent", "RECAPTCHA_SERVICE_ERROR")
+            }
+            verify(exactly = 0) { authTransactionalService.processLogin(any(), any(), any(), any()) }
         }
 
-        verify(exactly = 0) { userRepository.save(any()) }
+        @Test
+        fun `reCAPTCHA 실패 - RECAPTCHA_FAILED 예외, processLogin 미호출`() {
+            // given
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns false
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request, "127.0.0.1", "TestAgent")
+            }
+
+            exception.errorCode shouldBe ErrorCode.RECAPTCHA_FAILED
+            verify(exactly = 0) { encryptionService.hash(any()) }
+            verify(exactly = 0) { authTransactionalService.processLogin(any(), any(), any(), any()) }
+            verify(exactly = 1) {
+                loginHistoryRecorder.recordFailureWithoutUser("127.0.0.1", "TestAgent", "RECAPTCHA_FAILED")
+            }
+        }
+
+        @Test
+        fun `processLogin 예외 - 그대로 전파`() {
+            // given
+            val request = createLoginRequest()
+            every { recaptchaService.verify(request.recaptchaToken) } returns true
+            every { encryptionService.hash(request.email) } returns "email-hash"
+            every {
+                authTransactionalService.processLogin(any(), any(), any(), any())
+            } throws UserException(ErrorCode.INVALID_CREDENTIALS)
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.login(request)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+        }
     }
 }

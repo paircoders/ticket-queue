@@ -22,6 +22,7 @@ enum class ErrorCode(
     ALREADY_EXISTS_EMAIL(HttpStatus.CONFLICT, "ALREADY_EXISTS_EMAIL", "이미 사용 중인 이메일입니다."),
     DUPLICATE_IDENTITY(HttpStatus.CONFLICT, "DUPLICATE_IDENTITY", "이미 본인인증이 완료된 다른 계정이 존재합니다."),
     RECAPTCHA_FAILED(HttpStatus.BAD_REQUEST, "RECAPTCHA_FAILED", "reCAPTCHA 검증에 실패했습니다."),
+    JWT_CONFIGURATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "JWT_CONFIGURATION_ERROR", "서버 설정 오류로 로그인을 처리할 수 없습니다."),
 
     // Queue
     QUEUE_FULL(HttpStatus.SERVICE_UNAVAILABLE, "QUEUE_FULL", "대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요."),
@@ -47,6 +48,7 @@ enum class ErrorCode(
     PORTONE_VERIFICATION_TIMEOUT(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_TIMEOUT", "본인인증 시간이 초과되었거나 완료되지 않았습니다."),
     PORTONE_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_FAILED", "본인인증에 실패했습니다."),
     PORTONE_API_ERROR(HttpStatus.BAD_GATEWAY, "PORTONE_API_ERROR", "인증 서비스 서버와의 통신 중 오류가 발생했습니다."),
+    RECAPTCHA_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "RECAPTCHA_SERVICE_ERROR", "reCAPTCHA 서비스와의 통신 중 오류가 발생했습니다."),
     PORTONE_MISSING_REQUIRED_INFO(HttpStatus.BAD_REQUEST, "PORTONE_MISSING_REQUIRED_INFO", "본인인증 응답에 필수 정보(CI/DI)가 누락되었습니다."),
 
     // Internal API

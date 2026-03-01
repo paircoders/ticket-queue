@@ -187,4 +187,90 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
         }
     }
+
+    @Nested
+    @DisplayName("POST /auth/login")
+    inner class LoginTest {
+
+        private val loginUrl = "/auth/login"
+        private val validRequest = AuthDto.LoginRequest(
+            email = "test@example.com",
+            password = "securePassword123!",
+            recaptchaToken = "valid_recaptcha_token"
+        )
+        private val validResponse = AuthDto.LoginResponse(
+            accessToken = "mock-access-token",
+            refreshToken = "mock-refresh-token",
+            expiresIn = 3600L,
+            tokenType = "Bearer"
+        )
+
+        @Test
+        @DisplayName("유효한 요청 시 200 OK 응답")
+        fun `should return 200 when valid request`() {
+            every { authService.login(validRequest, any(), any()) } returns validResponse
+
+            performPost(loginUrl, validRequest)
+                .andExpect(status().isOk)
+        }
+
+        @Test
+        @DisplayName("성공 응답에 accessToken, refreshToken, expiresIn, tokenType 포함")
+        fun `should return token fields in response`() {
+            every { authService.login(validRequest, any(), any()) } returns validResponse
+
+            performPost(loginUrl, validRequest)
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.accessToken").value("mock-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("mock-refresh-token"))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+        }
+
+        @Test
+        @DisplayName("입력값 검증 오류 시 400 BAD REQUEST")
+        fun `should return 400 when validation fails`() {
+            val cases = listOf(
+                validRequest.copy(email = "") to "이메일",
+                validRequest.copy(email = "invalid-email") to "이메일",
+                validRequest.copy(password = "") to "비밀번호",
+                validRequest.copy(recaptchaToken = "") to "reCAPTCHA"
+            )
+
+            cases.forEach { (request, messagePart) ->
+                performPost(loginUrl, request)
+                    .andExpect(status().isBadRequest)
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(messagePart)))
+            }
+        }
+
+        @Test
+        @DisplayName("reCAPTCHA 실패 시 400 BAD REQUEST")
+        fun `should return 400 when recaptcha fails`() {
+            every { authService.login(validRequest, any(), any()) } throws BusinessException(ErrorCode.RECAPTCHA_FAILED)
+
+            performPost(loginUrl, validRequest)
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("RECAPTCHA_FAILED"))
+        }
+
+        @Test
+        @DisplayName("이메일/비밀번호 불일치 시 401 UNAUTHORIZED")
+        fun `should return 401 when credentials are invalid`() {
+            every { authService.login(validRequest, any(), any()) } throws BusinessException(ErrorCode.INVALID_CREDENTIALS)
+
+            performPost(loginUrl, validRequest)
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+        }
+
+        @Test
+        @DisplayName("요청 body 없을 시 400 BAD REQUEST")
+        fun `should return 400 when request body is missing`() {
+            performPost(loginUrl, null)
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+        }
+    }
 }
