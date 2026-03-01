@@ -1,21 +1,14 @@
 package com.ticketqueue.queue.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.ticketqueue.common.dto.ErrorResponse
-import com.ticketqueue.common.exception.ErrorCode
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
+import com.ticketqueue.common.security.GatewayAuthFilter
+import com.ticketqueue.common.security.SecurityErrorHandlers
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.http.MediaType
-import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
-import org.springframework.security.core.AuthenticationException
-import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
 /**
@@ -31,7 +24,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
-    private val gatewayAuthFilter: GatewayAuthFilter,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -47,28 +39,10 @@ class SecurityConfig(
             }
             .exceptionHandling { exceptions ->
                 exceptions
-                    .authenticationEntryPoint(customAuthenticationEntryPoint())
-                    .accessDeniedHandler(customAccessDeniedHandler())
+                    .authenticationEntryPoint(SecurityErrorHandlers.authenticationEntryPoint(objectMapper))
+                    .accessDeniedHandler(SecurityErrorHandlers.accessDeniedHandler(objectMapper))
             }
-            .addFilterBefore(gatewayAuthFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterBefore(GatewayAuthFilter(), UsernamePasswordAuthenticationFilter::class.java)
             .build()
-    }
-
-    private fun customAuthenticationEntryPoint(): AuthenticationEntryPoint {
-        return AuthenticationEntryPoint { _: HttpServletRequest, response: HttpServletResponse, _: AuthenticationException ->
-            response.status = HttpServletResponse.SC_UNAUTHORIZED
-            response.contentType = MediaType.APPLICATION_JSON_VALUE
-            response.characterEncoding = "UTF-8"
-            response.writer.write(objectMapper.writeValueAsString(ErrorResponse.of(ErrorCode.UNAUTHORIZED)))
-        }
-    }
-
-    private fun customAccessDeniedHandler(): AccessDeniedHandler {
-        return AccessDeniedHandler { _: HttpServletRequest, response: HttpServletResponse, _: AccessDeniedException ->
-            response.status = HttpServletResponse.SC_FORBIDDEN
-            response.contentType = MediaType.APPLICATION_JSON_VALUE
-            response.characterEncoding = "UTF-8"
-            response.writer.write(objectMapper.writeValueAsString(ErrorResponse.of(ErrorCode.FORBIDDEN)))
-        }
     }
 }

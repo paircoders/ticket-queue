@@ -6,8 +6,8 @@ plugins {
 }
 
 dependencies {
-    // Common module (core만 사용 - JPA/Kafka 불필요)
-    implementation(project(":common-core"))
+    // Common module (web 모듈 사용 - GatewayAuthFilter, SecurityErrorHandlers 포함)
+    implementation(project(":common-web"))
 
     // Spring Boot
     implementation(libs.spring.boot.starter.data.redis)
