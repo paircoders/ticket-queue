@@ -10,7 +10,8 @@ import org.springframework.test.context.ActiveProfiles
     properties = [
         "spring.cloud.discovery.enabled=false",
         "spring.cloud.config.enabled=false",
-        "spring.data.redis.repositories.enabled=false"
+        "spring.data.redis.repositories.enabled=false",
+        "spring.cloud.aws.secretsmanager.enabled=false"
     ]
 )
 @ActiveProfiles("test")

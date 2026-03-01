@@ -13,7 +13,7 @@ import org.springframework.test.context.ActiveProfiles
  * Issue #12: Spring Cloud Gateway 프로젝트 초기 설정
  * - 5개 서비스 라우트 등록 검증
  */
-@SpringBootTest
+@SpringBootTest(properties = ["spring.cloud.aws.secretsmanager.enabled=false"])
 @ActiveProfiles("test")
 class GatewayBasicConfigTest {
 
