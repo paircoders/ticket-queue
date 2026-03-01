@@ -7,8 +7,10 @@ plugins {
 }
 
 dependencies {
-    // Common module
-    implementation(project(":common"))
+    // Common modules
+    implementation(project(":common-core"))
+    implementation(project(":common-jpa"))
+    implementation(project(":common-web"))
 
     // Spring Boot & Security
     implementation(libs.spring.boot.starter.security)

@@ -1,27 +1,14 @@
 server:
   port: 8085
 
-outbox:
-  poller:
-    enabled: true
-    max-retry-count: 3
-    batch-size: 100
-    fixed-delay: 1000
-  cleanup:
-    enabled: true
-    aggregate-type: Payment
-    retention-days: 7
-
 spring:
   application:
     name: payment-service
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/ticketing
-    username: payment_svc_user
-    password: ${DB_PASSWORD:password}
-    driver-class-name: org.postgresql.Driver
-
+  config:
+    import:
+      - "optional:classpath:/application-common-${spring.profiles.active}.yml"
+      - "optional:classpath:/application-common-web-${spring.profiles.active}.yml"
+      - "optional:aws-secretsmanager:payment-svc/secure-config"
   jpa:
     hibernate:
       ddl-auto: validate
@@ -47,6 +34,17 @@ spring:
         spring.json.trusted.packages: com.ticketqueue.*
     listener:
       ack-mode: MANUAL_IMMEDIATE
+
+outbox:
+  poller:
+    enabled: true
+    max-retry-count: 3
+    batch-size: 100
+    fixed-delay: 1000
+  cleanup:
+    enabled: true
+    aggregate-type: Payment
+    retention-days: 7
 
 feign:
   circuitbreaker:

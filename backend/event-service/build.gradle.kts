@@ -8,18 +8,18 @@ plugins {
 }
 
 dependencies {
-    // Common module
-    implementation(project(":common"))
+    // Common modules
+    implementation(project(":common-core"))
+    implementation(project(":common-jpa"))
+    implementation(project(":common-kafka"))
+    implementation(project(":common-web"))
 
-    // QueryDSL - Q클래스 생성 (querydsl-jpa는 common api()로 전파됨)
+    // QueryDSL - Q클래스 생성 (querydsl-jpa는 common-jpa api()로 전파됨)
     ksp(libs.querydsl.ksp.codegen)
 
     // Spring Boot
     implementation(libs.spring.boot.starter.data.redis)
     implementation(libs.spring.boot.starter.security)
-
-    // Kafka
-    implementation(libs.spring.kafka)
 
     // Test
     testImplementation(platform(libs.testcontainers.bom))

@@ -7,17 +7,14 @@ plugins {
 }
 
 dependencies {
-    // Common module
-    implementation(project(":common"))
+    // Common modules
+    implementation(project(":common-core"))
+    implementation(project(":common-jpa"))
+    implementation(project(":common-kafka"))
+    implementation(project(":common-web"))
 
     // Redis with Redisson for distributed locks
     implementation(libs.redisson.spring.boot.starter)
-
-    // Kafka
-    implementation(libs.spring.kafka)
-
-    // OpenFeign for service-to-service calls
-    implementation(libs.spring.cloud.starter.openfeign)
 
     // Test
     testImplementation(libs.bundles.test.base)
