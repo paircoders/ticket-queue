@@ -8,3 +8,7 @@ spring:
     username: payment_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver
+
+external:
+  portone:
+    enabled: false

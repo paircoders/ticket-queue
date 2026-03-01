@@ -7,7 +7,8 @@ spring:
 
 external:
   portone:
+    enabled: false
     api-url: https://api.portone.io
-    api-secret: ${portone_api_secret}
-    store-id: ${portone_store_id}
-    channel-key: ${portone_channel_key}
+    api-secret: ${portone_api_secret:}
+    store-id: ${portone_store_id:}
+    channel-key: ${portone_channel_key:}

@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicReference
  * PortOne V2 Access Token 관리 및 자동 갱신 서비스
  */
 @Service
-@ConditionalOnProperty(prefix = "external.portone", name = ["api-secret"])
+@ConditionalOnProperty(prefix = "external.portone", name = ["enabled"], havingValue = "true")
 class PortoneTokenService(
     private val portoneClient: PortoneFeignClient,
     private val portoneProperties: PortoneProperties
@@ -69,7 +69,7 @@ class PortoneTokenService(
     }
 
     private fun login(): TokenState {
-        val response = portoneClient.login(PortoneTokenRequest(portoneProperties.apiSecret))
+        val response = portoneClient.login(PortoneTokenRequest(portoneProperties.apiSecret ?: error("external.portone.api-secret is required when enabled=true")))
         return createState(response, null)
     }
 
