@@ -9,8 +9,9 @@ spring:
     import:
       - "optional:aws-secretsmanager:common/secure-config"
 
-  codec:
-    max-in-memory-size: 1MB
+  http:
+    codecs:
+      max-in-memory-size: 1MB
 
   data:
     redis:
@@ -24,7 +25,7 @@ spring:
         webflux:
           httpclient:
             connect-timeout: 5000    # 5초 연결 타임아웃
-            response-timeout: 30s    # 30초 글로벌 응답 타임아웃 (REQ-GW-007)
+            response-timeout: 30s    # 30초 글로벌 응답 타임아웃
           globalcors:
             cors-configurations:
               '[/**]':
@@ -79,7 +80,7 @@ spring:
                     name: eventService
                     fallbackUri: forward:/fallback/event
 
-            - id: queue-service                          # REQ-GW-008: 10초 타임아웃
+            - id: queue-service                          # 10초 타임아웃
               uri: ${SERVICE_URI_QUEUE:http://192.168.50.111:8083}
               predicates:
                 - Path=/queue/**
@@ -101,7 +102,7 @@ spring:
                     name: reservationService
                     fallbackUri: forward:/fallback/reservation
 
-            - id: payment-service                        # REQ-GW-008: 60초 타임아웃
+            - id: payment-service                        # 60초 타임아웃
               uri: ${SERVICE_URI_PAYMENT:http://192.168.50.111:8085}
               predicates:
                 - Path=/payments/**
@@ -116,7 +117,7 @@ spring:
 jwt:
   secret: ${jwt_secret}
 
-# Resilience4j Circuit Breaker + TimeLimiter 설정 (REQ-GW-006)
+# Resilience4j Circuit Breaker + TimeLimiter 설정
 # TimeLimiter 필수 이유: ReactiveResilience4JCircuitBreakerFactory가 내부적으로 TimeLimiter를 함께 감싸며,
 # 미설정 시 기본 1초로 모든 요청이 타임아웃됨.
 resilience4j:
@@ -155,12 +156,12 @@ resilience4j:
         baseConfig: default
       queueService:
         baseConfig: default
-        timeoutDuration: 10s     # REQ-GW-008: Queue 10초
+        timeoutDuration: 10s     # Queue 10초
       reservationService:
         baseConfig: default
       paymentService:
         baseConfig: default
-        timeoutDuration: 60s     # REQ-GW-008: Payment 60초
+        timeoutDuration: 60s     # Payment 60초
 
 management:
   endpoints:

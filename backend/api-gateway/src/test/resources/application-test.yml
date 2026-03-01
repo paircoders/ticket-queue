@@ -6,10 +6,24 @@ spring:
   application:
     name: api-gateway-test
 
-  codec:
-    max-in-memory-size: 1MB
+  config:
+    import: []                    # main의 aws-secretsmanager config.import 무효화
+
+  autoconfigure:
+    exclude:
+      - io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
+      - io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
+
+  http:
+    codecs:
+      max-in-memory-size: 1MB
 
   cloud:
+    aws:
+      secretsmanager:
+        enabled: false            # Secrets Manager AutoConfiguration 비활성화
+      region:
+        static: ap-northeast-2    # 더미 리전 (AWS SDK 초기화 방지)
     gateway:
       server:
         webflux:

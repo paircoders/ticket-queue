@@ -302,6 +302,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Docker & Docker Compose** 설치
 - **Gradle** (프로젝트 내 Wrapper 사용 가능)
 
+### 로컬 실행 프로필 및 환경 변수
+- **Active Profile**: `local` (모든 서비스 공통)
+- **필수 환경 변수** (IDE Run Configuration 또는 CLI에서 설정):
+  ```
+  SPRING_CLOUD_AWS_REGION_STATIC=ap-northeast-2
+  SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=test
+  SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=test
+  SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://192.168.50.111:4566
+  ```
+- Gradle로 실행 시 예시:
+  ```bash
+  SPRING_PROFILES_ACTIVE=local \
+  SPRING_CLOUD_AWS_REGION_STATIC=ap-northeast-2 \
+  SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=test \
+  SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=test \
+  SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://192.168.50.111:4566 \
+  ./gradlew :api-gateway:bootRun
+  ```
+
 ### 로컬 환경 실행 순서
 
 1. **인프라 컨테이너 실행**
