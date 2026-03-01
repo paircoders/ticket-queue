@@ -1,6 +1,8 @@
 package com.ticketqueue.queue.controller
 
+import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.queue.dto.QueueDto
+import com.ticketqueue.queue.exception.QueueException
 import com.ticketqueue.queue.service.QueueService
 import jakarta.validation.Valid
 import org.springframework.security.core.Authentication
@@ -27,7 +29,8 @@ class QueueController(private val queueService: QueueService) {
         @Valid @RequestBody request: QueueDto.EnterRequest,
         authentication: Authentication
     ): QueueDto.EnterResponse {
-        val userId = UUID.fromString(authentication.principal as String)
+        val userId = runCatching { UUID.fromString(authentication.principal as String) }
+            .getOrElse { throw QueueException(ErrorCode.UNAUTHORIZED) }
         return queueService.enterQueue(userId, request.scheduleId!!)
     }
 }

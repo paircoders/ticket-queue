@@ -5,6 +5,7 @@ import com.ticketqueue.queue.config.QueueProperties
 import com.ticketqueue.queue.dto.QueueDto
 import com.ticketqueue.queue.dto.QueueStatus
 import com.ticketqueue.queue.exception.QueueException
+import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
@@ -23,6 +24,8 @@ class QueueService(
     private val queueProperties: QueueProperties
 ) {
 
+    private val logger = LoggerFactory.getLogger(QueueService::class.java)
+
     /**
      * 대기열 진입 처리 (REQ-QUEUE-001)
      *
@@ -31,6 +34,10 @@ class QueueService(
      * - 1: 동일 회차 중복 진입 (멱등성 — 기존 순위 반환)
      * - 2: 다른 회차 대기 중 → ALREADY_IN_QUEUE
      * - 3: 대기열 가득 참 → QUEUE_FULL
+     * - 4: 이미 배치 승인 완료 → ALREADY_APPROVED
+     *
+     * TODO: scheduleId 유효성 검증 미구현 — 존재하지 않거나 판매 상태가 아닌 회차에 대한 대기열 생성 가능
+     *       Event Service 내부 API 호출 또는 Gateway 레벨 검증 필요 (GitHub Issue #163)
      */
     fun enterQueue(userId: UUID, scheduleId: UUID): QueueDto.EnterResponse {
         val queueKey = "queue:$scheduleId"
@@ -46,15 +53,19 @@ class QueueService(
         )
 
         @Suppress("UNCHECKED_CAST")
-        val result = stringRedisTemplate.execute(queueEnterScript, keys, *args) as List<*>
+        val result = try {
+            stringRedisTemplate.execute(queueEnterScript, keys, *args) as List<*>
+        } catch (e: Exception) {
+            logger.error("Redis execute failed: scheduleId={}, userId={}", scheduleId, userId, e)
+            throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 서비스에 일시적인 오류가 발생했습니다.", e)
+        }
 
         val code = (result[0] as Long).toInt()
 
         return when (code) {
-            0, 1 -> {
-                // 0: 신규 진입, 1: 동일 회차 중복 (멱등성)
-                val zeroBasedRank = result[1] as Long
-                val rank = zeroBasedRank + 1 // 0-based → 1-based 변환
+            0 -> {
+                val rank = (result[1] as Long) + 1
+                logger.info("Queue entered: userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
                 QueueDto.EnterResponse(
                     status = QueueStatus.WAITING,
                     scheduleId = scheduleId,
@@ -63,8 +74,29 @@ class QueueService(
                     token = null
                 )
             }
-            2 -> throw QueueException(ErrorCode.ALREADY_IN_QUEUE)
-            3 -> throw QueueException(ErrorCode.QUEUE_FULL)
+            1 -> {
+                val rank = (result[1] as Long) + 1
+                logger.info("Queue re-entered (idempotent): userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
+                QueueDto.EnterResponse(
+                    status = QueueStatus.WAITING,
+                    scheduleId = scheduleId,
+                    rank = rank,
+                    estimatedWaitTime = calculateWaitTime(rank),
+                    token = null
+                )
+            }
+            2 -> {
+                logger.warn("Queue enter rejected (already in another queue): userId={}, scheduleId={}", userId, scheduleId)
+                throw QueueException(ErrorCode.ALREADY_IN_QUEUE)
+            }
+            3 -> {
+                logger.warn("Queue enter rejected (queue full): scheduleId={}, capacity={}", scheduleId, queueProperties.maxCapacity)
+                throw QueueException(ErrorCode.QUEUE_FULL)
+            }
+            4 -> {
+                logger.info("Queue enter rejected (already approved): userId={}, scheduleId={}", userId, scheduleId)
+                throw QueueException(ErrorCode.ALREADY_APPROVED)
+            }
             else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
         }
     }

@@ -17,6 +17,7 @@
     {1, rank} : 동일 회차 중복 진입 — 멱등성 처리, 기존 rank 반환
     {2, existingScheduleId} : 다른 회차 대기 중 (ALREADY_IN_QUEUE)
     {3, -1}   : 대기열 가득 참 (QUEUE_FULL)
+    {4, -1}   : 이미 배치 승인 완료 — Sorted Set에 존재하지 않음 (ALREADY_APPROVED)
 ]]
 
 local queueKey    = KEYS[1]
@@ -34,6 +35,12 @@ if existingScheduleId then
     if existingScheduleId == scheduleId then
         -- 같은 회차에 이미 대기 중 → 멱등성: 기존 순위 반환
         local rank = redis.call('ZRANK', queueKey, userId)
+        if rank == false then
+            -- ZRANK가 nil: 배치 승인으로 Sorted Set에서 이미 제거된 상태
+            return {4, -1}
+        end
+        -- 멱등성 경로에서 TTL 갱신: 반복 요청 시 active 키 만료 방지
+        redis.call('EXPIRE', activeKey, activeUserTtl)
         return {1, rank}
     else
         -- 다른 회차에 대기 중 → 거부
