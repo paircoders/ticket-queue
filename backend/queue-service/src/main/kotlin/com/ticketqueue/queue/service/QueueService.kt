@@ -98,10 +98,20 @@ class QueueService(
      * 배치 처리 단위: batchSize명 / interval ms마다 승인
      * 밀리초 단위로 먼저 계산한 후 올림(ceiling)하여 초로 변환
      * interval < 1000ms인 경우(예: 500ms)에도 0초 반환 버그 방지
+     *
+     * 설정값 방어:
+     * - batchSize <= 0 → 1로 보정 (divide-by-zero 방지)
+     * - intervalMs < 0 → 0으로 보정 (음수 대기시간 방지, interval=0은 "즉시 처리"로 허용)
      */
     private fun calculateWaitTime(rank: Long): Long {
-        val batchSize = queueProperties.batch.size.toLong()
-        val intervalMs = queueProperties.batch.interval
+        val batchSize = queueProperties.batch.size.toLong().coerceAtLeast(1)
+        val intervalMs = queueProperties.batch.interval.coerceAtLeast(0)
+        if (batchSize != queueProperties.batch.size.toLong() || intervalMs != queueProperties.batch.interval) {
+            logger.warn(
+                "Invalid queue batch config detected — batchSize={}, intervalMs={}. Using safe fallback values.",
+                queueProperties.batch.size, queueProperties.batch.interval
+            )
+        }
         val batchCount = (rank + batchSize - 1) / batchSize
         val waitMs = batchCount * intervalMs
         return (waitMs + 999) / 1000
@@ -109,8 +119,11 @@ class QueueService(
 
     /**
      * Lua 결과 리스트에서 rank를 안전하게 추출한다.
-     * result[1]이 없거나 Long이 아닌 경우 0으로 폴백 (0-based index → 1-based rank)
+     * result[1]이 없거나 Long이 아닌 경우 예외를 던져 Lua 스크립트 버그를 즉시 노출한다.
      */
-    private fun safeRank(result: List<*>): Long =
-        ((result.getOrNull(1) as? Long) ?: 0L) + 1
+    private fun safeRank(result: List<*>): Long {
+        val rawRank = result.getOrNull(1) as? Long
+            ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 순위 정보를 읽을 수 없습니다.")
+        return rawRank + 1
+    }
 }
