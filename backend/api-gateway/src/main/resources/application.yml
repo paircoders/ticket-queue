@@ -164,6 +164,8 @@ resilience4j:
         timeoutDuration: 60s     # Payment 60초
 
 management:
+  server:
+    port: 9080
   endpoints:
     web:
       exposure:

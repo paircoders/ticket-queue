@@ -30,13 +30,15 @@ internal:
     key: ${internal_api_key}
 
 management:
+  server:
+    port: 9081
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
 
 recaptcha:
   url: https://www.google.com/recaptcha/api/siteverify

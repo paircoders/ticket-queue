@@ -41,10 +41,12 @@ internal:
     key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
 
 management:
+  server:
+    port: 9082
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized

@@ -174,8 +174,8 @@ services:
       - "3000:3000"
     environment:
       - TZ=Asia/Seoul
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_pw
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -185,6 +185,8 @@ services:
       - prometheus
     networks:
       - ticket-network
+    secrets:
+      - grafana_admin_pw
 
 volumes:
   postgres_data:
@@ -227,3 +229,5 @@ secrets:
       file: ./secrets/enc_secret_key.txt
     enc_hash_salt:
       file: ./secrets/enc_hash_salt.txt
+    grafana_admin_pw:
+      file: ./secrets/grafana_admin_pw.txt

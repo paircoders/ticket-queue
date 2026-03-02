@@ -23,9 +23,7 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
-          "mappings": [
-            { "options": { "CLOSED": { "color": "green", "index": 0, "text": "CLOSED" }, "HALF_OPEN": { "color": "yellow", "index": 1, "text": "HALF_OPEN" }, "OPEN": { "color": "red", "index": 2, "text": "OPEN" } }, "type": "value" }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [{ "color": "green", "value": null }]
@@ -42,13 +40,13 @@
         "orientation": "auto",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "text": {},
-        "textMode": "auto"
+        "textMode": "name"
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "resilience4j_circuitbreaker_state{application=~\"$service\"}",
-          "legendFormat": "{{application}} - {{name}}",
+          "expr": "resilience4j_circuitbreaker_state{application=~\"$service\"} == 1",
+          "legendFormat": "{{application}} - {{name}} ({{state}})",
           "refId": "A"
         }
       ],

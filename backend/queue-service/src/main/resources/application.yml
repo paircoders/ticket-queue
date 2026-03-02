@@ -20,10 +20,12 @@ queue:
     ttl: 600
 
 management:
+  server:
+    port: 9083
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized

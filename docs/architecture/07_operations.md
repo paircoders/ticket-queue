@@ -22,7 +22,9 @@
 
 **접근 URL:**
 - Prometheus: `http://localhost:9090` (메트릭 쿼리 및 타겟 상태 확인)
-- Grafana: `http://localhost:3000` (admin / admin)
+- Grafana: `http://localhost:3000` (로컬 전용 기본값: admin / admin — 공유/스테이징/운영 환경에서는 반드시 변경)
+  - 비밀번호 변경: Grafana UI → Server Admin → Users → admin → Change Password
+  - 또는 `docker/secrets/grafana_admin_pw.txt` 파일에 강력한 비밀번호 설정 후 컨테이너 재시작
 
 **메트릭 수집 방식:**
 - 각 서비스 `/actuator/prometheus` 엔드포인트에서 15초 간격 스크래핑
@@ -40,25 +42,28 @@
 
 **서비스별 포트 매핑 (Prometheus 스크래핑 대상):**
 
-| 서비스 | 포트 | 메트릭 경로 |
-|--------|------|-----------|
-| api-gateway | 8080 | `/actuator/prometheus` |
-| user-service | 8081 | `/actuator/prometheus` |
-| event-service | 8082 | `/actuator/prometheus` |
-| queue-service | 8083 | `/actuator/prometheus` |
-| reservation-service | 8084 | `/actuator/prometheus` |
-| payment-service | 8085 | `/actuator/prometheus` |
+| 서비스 | 서비스 포트 | Management 포트 | 메트릭 경로 |
+|--------|-----------|----------------|-----------|
+| api-gateway | 8080 | 9080 | `/actuator/prometheus` |
+| user-service | 8081 | 9081 | `/actuator/prometheus` |
+| event-service | 8082 | 9082 | `/actuator/prometheus` |
+| queue-service | 8083 | 9083 | `/actuator/prometheus` |
+| reservation-service | 8084 | 9084 | `/actuator/prometheus` |
+| payment-service | 8085 | 9085 | `/actuator/prometheus` |
+
+> **보안 참고:** Actuator 엔드포인트는 management 전용 포트(908X)에서만 노출됩니다. 서비스 메인 포트(808X)로는 `/actuator/**` 접근이 불가합니다.
 
 **실행 방법:**
+
 ```bash
 # Prometheus + Grafana 시작
 docker-compose up -d prometheus grafana
 
 # 타겟 상태 확인 (서비스 기동 후)
-open http://localhost:9090/targets
+echo "브라우저에서 접속: http://localhost:9090/targets"
 
 # Grafana 대시보드 확인
-open http://localhost:3000
+echo "브라우저에서 접속: http://localhost:3000"
 ```
 
 **관련 요구사항:** REQ-GW-012 (라우트별 요청 수, 응답 시간, 에러율 메트릭)
