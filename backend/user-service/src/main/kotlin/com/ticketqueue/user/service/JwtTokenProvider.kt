@@ -91,10 +91,12 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
      */
     fun parseAccessTokenJti(token: String): String {
         return try {
-            Jwts.parser().verifyWith(secretKey).build()
+            val claims = Jwts.parser().verifyWith(secretKey).build()
                 .parseSignedClaims(token).payload
-                .id ?: throw UserException(ErrorCode.INVALID_TOKEN)
+            if (claims["type"] == "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
+            claims.id ?: throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: ExpiredJwtException) {
+            if (e.claims["type"] == "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
             e.claims.id ?: throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: UserException) {
             throw e
