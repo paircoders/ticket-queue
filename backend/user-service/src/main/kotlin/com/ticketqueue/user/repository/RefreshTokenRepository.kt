@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import java.util.UUID
 
-interface RefreshTokenRepository : JpaRepository<RefreshToken, UUID> {
+interface RefreshTokenRepository : JpaRepository<RefreshToken, UUID>, RefreshTokenRepositoryCustom {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     fun findByRefreshToken(token: String): RefreshToken?
     fun findAllByTokenFamilyAndRevokedFalse(tokenFamily: UUID): List<RefreshToken>

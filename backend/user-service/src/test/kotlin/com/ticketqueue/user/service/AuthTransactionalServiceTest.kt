@@ -500,7 +500,7 @@ class AuthTransactionalServiceTest {
             val user = createActiveUser()
             val revokedToken = createStoredToken(user, rawToken = "revoked-token", revoked = true)
             every { refreshTokenRepository.findByRefreshToken("revoked-token") } returns revokedToken
-            every { refreshTokenRepository.findAllByTokenFamilyAndRevokedFalse(tokenFamily) } returns emptyList()
+            every { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) } returns 0L
 
             // when & then
             val exception = assertThrows<UserException> {
@@ -516,18 +516,15 @@ class AuthTransactionalServiceTest {
             // given
             val user = createActiveUser()
             val revokedToken = createStoredToken(user, rawToken = "revoked-token", revoked = true)
-            val activeToken1 = createStoredToken(user, rawToken = "active-token-1")
-            val activeToken2 = createStoredToken(user, rawToken = "active-token-2")
             every { refreshTokenRepository.findByRefreshToken("revoked-token") } returns revokedToken
-            every { refreshTokenRepository.findAllByTokenFamilyAndRevokedFalse(tokenFamily) } returns listOf(activeToken1, activeToken2)
+            every { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) } returns 2L
 
             // when & then
             assertThrows<UserException> {
                 authTransactionalService.processRefresh("revoked-token")
             }
 
-            activeToken1.revoked shouldBe true
-            activeToken2.revoked shouldBe true
+            verify(exactly = 1) { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) }
         }
 
         @Test
@@ -541,7 +538,7 @@ class AuthTransactionalServiceTest {
                 expiresAt = LocalDateTime.now(ZoneOffset.UTC).minusDays(1),
             )
             every { refreshTokenRepository.findByRefreshToken("expired-revoked-token") } returns expiredRevokedToken
-            every { refreshTokenRepository.findAllByTokenFamilyAndRevokedFalse(tokenFamily) } returns emptyList()
+            every { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) } returns 0L
 
             // when & then
             val exception = assertThrows<UserException> {

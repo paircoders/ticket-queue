@@ -155,9 +155,7 @@ class AuthTransactionalService(
 
         // 2. 탈취 감지: revoked 토큰 재사용 시도 → token_family 전체 무효화 (만료 체크 전 수행)
         if (storedToken.revoked) {
-            refreshTokenRepository
-                .findAllByTokenFamilyAndRevokedFalse(storedToken.tokenFamily)
-                .forEach { it.revoke(now) }
+            refreshTokenRepository.revokeAllActiveByTokenFamily(storedToken.tokenFamily, now)
             logger.error { "Token reuse detected! Family ${storedToken.tokenFamily} fully revoked." }
             throw UserException(ErrorCode.REVOKED_REFRESH_TOKEN)
         }

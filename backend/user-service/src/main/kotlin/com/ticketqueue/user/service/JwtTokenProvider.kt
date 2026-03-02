@@ -97,6 +97,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
                 .parseSignedClaims(token)
                 .payload
             if (claims["type"] != "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
+            if (claims.subject.isNullOrBlank()) throw UserException(ErrorCode.INVALID_TOKEN)
             UUID.fromString(claims.subject) // subject가 유효한 UUID인지 검증
         } catch (e: ExpiredJwtException) {
             logger.error { "JWT token expired: ${e.javaClass.simpleName}" }
