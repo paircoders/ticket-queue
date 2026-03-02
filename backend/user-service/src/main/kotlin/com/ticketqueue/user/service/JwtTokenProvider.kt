@@ -106,6 +106,9 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
         } catch (e: JwtException) {
             logger.error { "JWT token invalid: ${e.javaClass.simpleName}" }
             throw UserException(ErrorCode.INVALID_TOKEN)
+        } catch (e: IllegalArgumentException) {
+            logger.error { "JWT subject is not a valid UUID: ${e.javaClass.simpleName} - ${e.message}" }
+            throw UserException(ErrorCode.INVALID_TOKEN)
         }
     }
 }

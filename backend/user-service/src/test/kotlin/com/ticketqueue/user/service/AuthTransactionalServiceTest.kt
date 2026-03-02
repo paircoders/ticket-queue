@@ -354,7 +354,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `이메일 체크가 CI 체크 보다 먼저 수행`() {
+        fun processSignup_shouldPerformEmailCheckBeforeCICheck_whenEmailExists() {
             // given
             val request = createSignupRequest()
             val callOrder = mutableListOf<String>()
@@ -408,7 +408,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `정상 갱신 - LoginResponse 반환`() {
+        fun processRefresh_shouldReturnLoginResponse_whenValid() {
             // given
             val user = createActiveUser()
             val storedToken = createStoredToken(user)
@@ -426,7 +426,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `정상 갱신 - 기존 토큰 폐기 (revoked=true, revokedAt 설정)`() {
+        fun processRefresh_shouldRevokeExistingToken_whenValid() {
             // given
             val user = createActiveUser()
             val storedToken = createStoredToken(user)
@@ -442,7 +442,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `정상 갱신 - 새 RefreshToken 저장 시 동일 tokenFamily 유지`() {
+        fun processRefresh_shouldMaintainTokenFamily_whenValid() {
             // given
             val user = createActiveUser()
             val storedToken = createStoredToken(user, tokenFamily = tokenFamily)
@@ -462,7 +462,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `존재하지 않는 토큰 - INVALID_TOKEN 예외`() {
+        fun processRefresh_shouldThrowInvalidToken_whenTokenNotFound() {
             // given
             every { refreshTokenRepository.findByRefreshToken("unknown-token") } returns null
 
@@ -476,7 +476,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `만료된 토큰 (DB 기준) - EXPIRED_TOKEN 예외`() {
+        fun processRefresh_shouldThrowExpiredToken_whenTokenExpiredByDb() {
             // given
             val user = createActiveUser()
             val expiredToken = createStoredToken(
@@ -495,7 +495,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `탈취 감지 - revoked 토큰 재사용 시 REVOKED_REFRESH_TOKEN 예외`() {
+        fun processRefresh_shouldThrowRevokedRefreshToken_whenRevokedTokenReused() {
             // given
             val user = createActiveUser()
             val revokedToken = createStoredToken(user, rawToken = "revoked-token", revoked = true)
@@ -512,7 +512,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `탈취 감지 - token_family 내 활성 토큰 전체 무효화`() {
+        fun processRefresh_shouldRevokeAllTokensInFamily_whenRevokedTokenDetected() {
             // given
             val user = createActiveUser()
             val revokedToken = createStoredToken(user, rawToken = "revoked-token", revoked = true)
@@ -531,7 +531,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `탈취 감지 - 만료된 revoked 토큰도 감지 (revoked 체크가 만료 체크보다 우선)`() {
+        fun processRefresh_shouldThrowRevokedRefreshToken_whenExpiredAndRevoked() {
             // given
             val user = createActiveUser()
             val expiredRevokedToken = createStoredToken(
@@ -553,7 +553,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `DELETED 계정 토큰 갱신 - INVALID_CREDENTIALS 예외 및 토큰 즉시 폐기`() {
+        fun processRefresh_shouldThrowInvalidCredentials_whenDeletedAccount() {
             // given
             val user = createActiveUser(status = UserStatus.DELETED)
             val storedToken = createStoredToken(user)
@@ -570,7 +570,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `DORMANT 계정 토큰 갱신 - INVALID_CREDENTIALS 예외 및 토큰 즉시 폐기`() {
+        fun processRefresh_shouldThrowInvalidCredentials_whenDormantAccount() {
             // given
             val user = createActiveUser(status = UserStatus.DORMANT)
             val storedToken = createStoredToken(user)

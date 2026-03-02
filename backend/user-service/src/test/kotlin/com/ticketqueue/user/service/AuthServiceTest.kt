@@ -319,7 +319,7 @@ class AuthServiceTest {
         )
 
         @Test
-        fun `정상 갱신 - JWT 검증 후 processRefresh 위임 및 LoginResponse 반환`() {
+        fun refresh_shouldReturnLoginResponse_whenValid() {
             // given
             every { jwtTokenProvider.validateAndParseRefreshToken(validRequest.refreshToken) } just Runs
             every { authTransactionalService.processRefresh(validRequest.refreshToken) } returns validResponse
@@ -335,7 +335,7 @@ class AuthServiceTest {
         }
 
         @Test
-        fun `JWT 서명 검증 실패 - INVALID_TOKEN 예외, processRefresh 미호출`() {
+        fun refresh_shouldThrowInvalidToken_whenSignatureInvalid() {
             // given
             every { jwtTokenProvider.validateAndParseRefreshToken(any()) } throws UserException(ErrorCode.INVALID_TOKEN)
 
@@ -349,7 +349,7 @@ class AuthServiceTest {
         }
 
         @Test
-        fun `JWT 만료 - EXPIRED_TOKEN 예외, processRefresh 미호출`() {
+        fun refresh_shouldThrowExpiredToken_whenExpired() {
             // given
             every { jwtTokenProvider.validateAndParseRefreshToken(any()) } throws UserException(ErrorCode.EXPIRED_TOKEN)
 
@@ -363,7 +363,7 @@ class AuthServiceTest {
         }
 
         @Test
-        fun `processRefresh 예외 - 그대로 전파`() {
+        fun refresh_shouldPropagateException_whenProcessRefreshFails() {
             // given
             every { jwtTokenProvider.validateAndParseRefreshToken(any()) } just Runs
             every { authTransactionalService.processRefresh(any()) } throws UserException(ErrorCode.REVOKED_REFRESH_TOKEN)

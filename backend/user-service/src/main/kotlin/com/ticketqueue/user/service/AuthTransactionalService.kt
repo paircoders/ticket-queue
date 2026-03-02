@@ -163,7 +163,7 @@ class AuthTransactionalService(
         }
 
         // 3. DB 기준 만료 체크
-        if (storedToken.expiresAt.isBefore(now))
+        if (!storedToken.expiresAt.isAfter(now))
             throw UserException(ErrorCode.EXPIRED_TOKEN)
 
         // 4. 사용자 상태 검증 (삭제/휴면 계정은 토큰 즉시 폐기)

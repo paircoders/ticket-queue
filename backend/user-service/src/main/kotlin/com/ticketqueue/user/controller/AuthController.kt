@@ -3,11 +3,11 @@ package com.ticketqueue.user.controller
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.service.AuthService
 import io.github.oshai.kotlinlogging.KotlinLogging
-import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.server.reactive.ServerHttpRequest
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -35,11 +35,11 @@ class AuthController(
     @PostMapping("/login")
     fun login(
         @Valid @RequestBody request: AuthDto.LoginRequest,
-        httpRequest: HttpServletRequest,
+        httpRequest: ServerHttpRequest,
     ): ResponseEntity<AuthDto.LoginResponse> {
         logger.info { "Login request received" }
         val ipAddress = resolveClientIp(httpRequest)
-        val userAgent = httpRequest.getHeader("User-Agent") ?: ""
+        val userAgent = httpRequest.headers.getFirst("User-Agent") ?: ""
         return ResponseEntity.ok(authService.login(request, ipAddress, userAgent))
     }
 
@@ -52,11 +52,11 @@ class AuthController(
         return ResponseEntity.ok(authService.refresh(request))
     }
 
-    private fun resolveClientIp(request: HttpServletRequest): String {
-        val remoteAddr = request.remoteAddr ?: ""
+    private fun resolveClientIp(request: ServerHttpRequest): String {
+        val remoteAddr = request.remoteAddress?.address?.hostAddress ?: ""
         val trustedIps = trustedProxyIps.split(",").map { it.trim() }
         return if (remoteAddr in trustedIps) {
-            request.getHeader("X-Forwarded-For")
+            request.headers.getFirst("X-Forwarded-For")
                 ?.split(",")?.firstOrNull()?.trim()
                 ?.takeIf { it.isNotBlank() }
                 ?: remoteAddr
