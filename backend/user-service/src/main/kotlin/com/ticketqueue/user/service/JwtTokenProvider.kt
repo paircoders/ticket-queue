@@ -99,10 +99,10 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
         } catch (e: UserException) {
             throw e
         } catch (e: JwtException) {
-            logger.error { "JWT token invalid: ${e.javaClass.simpleName} - ${e.message}" }
+            logger.error { "JWT token invalid" }
             throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: IllegalArgumentException) {
-            logger.error { "JWT subject is not a valid UUID: ${e.javaClass.simpleName} - ${e.message}" }
+            logger.error { "JWT subject is not a valid UUID" }
             throw UserException(ErrorCode.INVALID_TOKEN)
         }
     }
@@ -123,15 +123,15 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             if (claims.subject.isNullOrBlank()) throw UserException(ErrorCode.INVALID_TOKEN)
             UUID.fromString(claims.subject) // subject가 유효한 UUID인지 검증
         } catch (e: ExpiredJwtException) {
-            logger.error { "JWT token expired: ${e.javaClass.simpleName} - ${e.message}" }
+            logger.error { "JWT token expired" }
             throw UserException(ErrorCode.EXPIRED_TOKEN)
         } catch (e: UserException) {
             throw e
         } catch (e: JwtException) {
-            logger.error { "JWT token invalid: ${e.javaClass.simpleName} - ${e.message}" }
+            logger.error { "JWT token invalid" }
             throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: IllegalArgumentException) {
-            logger.error { "JWT subject is not a valid UUID: ${e.javaClass.simpleName} - ${e.message}" }
+            logger.error { "JWT subject is not a valid UUID" }
             throw UserException(ErrorCode.INVALID_TOKEN)
         }
     }

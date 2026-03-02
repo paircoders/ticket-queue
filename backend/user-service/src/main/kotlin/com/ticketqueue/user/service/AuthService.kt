@@ -62,8 +62,8 @@ class AuthService(
             throw UserException(ErrorCode.UNAUTHORIZED)
         val accessToken = authorizationHeader.removePrefix("Bearer ")
         val jti = jwtTokenProvider.parseAccessTokenJti(accessToken)
-        tokenBlacklistService.addToBlacklist(jti, jwtProperties.accessTokenExpiry)
         authTransactionalService.processLogout(jti)
+        tokenBlacklistService.addToBlacklist(jti, jwtProperties.accessTokenExpiry)
     }
 
     fun refresh(request: AuthDto.RefreshRequest): AuthDto.LoginResponse {

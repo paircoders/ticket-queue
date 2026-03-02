@@ -12,6 +12,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -379,6 +380,75 @@ class AuthServiceTest {
             }
 
             exception.errorCode shouldBe ErrorCode.REVOKED_REFRESH_TOKEN
+        }
+    }
+
+    // ─── Logout 테스트 ────────────────────────────────────────────────────────────
+
+    @Nested
+    inner class LogoutTest {
+
+        private val jti = "test-jti-value"
+        private val accessToken = "valid.access.token"
+        private val validHeader = "Bearer $accessToken"
+
+        @Test
+        fun `정상 로그아웃 - DB revoke 먼저, Redis 블랙리스트 나중 순서 검증`() {
+            // given
+            every { jwtTokenProvider.parseAccessTokenJti(accessToken) } returns jti
+            every { authTransactionalService.processLogout(jti) } just Runs
+            every { jwtProperties.accessTokenExpiry } returns 3600000L
+            every { tokenBlacklistService.addToBlacklist(jti, 3600000L) } just Runs
+
+            // when
+            authService.logout(validHeader)
+
+            // then
+            verifyOrder {
+                authTransactionalService.processLogout(jti)
+                tokenBlacklistService.addToBlacklist(jti, 3600000L)
+            }
+        }
+
+        @Test
+        fun `Authorization 헤더 없음 - UNAUTHORIZED 예외, DB revoke 및 블랙리스트 미호출`() {
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.logout("")
+            }
+
+            exception.errorCode shouldBe ErrorCode.UNAUTHORIZED
+            verify(exactly = 0) { jwtTokenProvider.parseAccessTokenJti(any()) }
+            verify(exactly = 0) { authTransactionalService.processLogout(any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
+        }
+
+        @Test
+        fun `Bearer 접두사 없음 - UNAUTHORIZED 예외, DB revoke 및 블랙리스트 미호출`() {
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.logout(accessToken)
+            }
+
+            exception.errorCode shouldBe ErrorCode.UNAUTHORIZED
+            verify(exactly = 0) { jwtTokenProvider.parseAccessTokenJti(any()) }
+            verify(exactly = 0) { authTransactionalService.processLogout(any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
+        }
+
+        @Test
+        fun `유효하지 않은 토큰 - INVALID_TOKEN 전파, DB revoke 및 블랙리스트 미호출`() {
+            // given
+            every { jwtTokenProvider.parseAccessTokenJti(accessToken) } throws UserException(ErrorCode.INVALID_TOKEN)
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.logout(validHeader)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_TOKEN
+            verify(exactly = 0) { authTransactionalService.processLogout(any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
         }
     }
 }
