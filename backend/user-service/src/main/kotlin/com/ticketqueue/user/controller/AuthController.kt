@@ -1,6 +1,8 @@
 package com.ticketqueue.user.controller
 
+import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.user.dto.AuthDto
+import com.ticketqueue.user.exception.UserException
 import com.ticketqueue.user.service.AuthService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
@@ -41,6 +43,16 @@ class AuthController(
         val ipAddress = resolveClientIp(httpRequest)
         val userAgent = httpRequest.getHeader("User-Agent") ?: ""
         return ResponseEntity.ok(authService.login(request, ipAddress, userAgent))
+    }
+
+    // 로그아웃
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun logout(httpRequest: HttpServletRequest) {
+        logger.info { "Logout request received" }
+        val authHeader = httpRequest.getHeader("Authorization")
+            ?: throw UserException(ErrorCode.UNAUTHORIZED)
+        authService.logout(authHeader)
     }
 
     // 토큰 재발급

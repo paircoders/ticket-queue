@@ -9,5 +9,5 @@ import java.util.UUID
 interface RefreshTokenRepository : JpaRepository<RefreshToken, UUID>, RefreshTokenRepositoryCustom {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     fun findByRefreshToken(token: String): RefreshToken?
-    fun findAllByTokenFamilyAndRevokedFalse(tokenFamily: UUID): List<RefreshToken>
+    fun findByAccessTokenJti(jti: String): RefreshToken?
 }

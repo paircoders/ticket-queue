@@ -2,6 +2,7 @@ package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.exception.ExternalSystemException
+import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.exception.UserException
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -15,6 +16,8 @@ class AuthService(
     private val loginHistoryRecorder: LoginHistoryRecorder,
     private val encryptionService: EncryptionService,
     private val jwtTokenProvider: JwtTokenProvider,
+    private val tokenBlacklistService: TokenBlacklistService,
+    private val jwtProperties: JwtProperties,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -52,6 +55,15 @@ class AuthService(
         // 2. DB 처리 위임 (사용자 조회 + 검증 + 토큰 발급)
         val emailHash = encryptionService.hash(request.email)
         return authTransactionalService.processLogin(emailHash, request.password, ipAddress, userAgent)
+    }
+
+    fun logout(authorizationHeader: String) {
+        if (!authorizationHeader.startsWith("Bearer "))
+            throw UserException(ErrorCode.UNAUTHORIZED)
+        val accessToken = authorizationHeader.removePrefix("Bearer ")
+        val jti = jwtTokenProvider.parseAccessTokenJti(accessToken)
+        authTransactionalService.processLogout(jti)
+        tokenBlacklistService.addToBlacklist(jti, jwtProperties.accessTokenExpiry)
     }
 
     fun refresh(request: AuthDto.RefreshRequest): AuthDto.LoginResponse {
