@@ -3,6 +3,7 @@ package com.ticketqueue.user.service
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.AuthDto
+import com.ticketqueue.user.entity.RefreshToken
 import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.entity.UserRole
 import com.ticketqueue.user.entity.UserStatus
@@ -10,6 +11,7 @@ import com.ticketqueue.user.exception.UserException
 import com.ticketqueue.user.repository.RefreshTokenRepository
 import com.ticketqueue.user.repository.UserRepository
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -21,6 +23,8 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.security.crypto.password.PasswordEncoder
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.Base64
 import java.util.UUID
 
@@ -350,7 +354,7 @@ class AuthTransactionalServiceTest {
         }
 
         @Test
-        fun `이메일 체크가 CI 체크보다 먼저 수행`() {
+        fun processSignup_shouldPerformEmailCheckBeforeCICheck_whenEmailExists() {
             // given
             val request = createSignupRequest()
             val callOrder = mutableListOf<String>()
@@ -372,6 +376,211 @@ class AuthTransactionalServiceTest {
 
             callOrder shouldBe listOf("emailCheck")
             verify(exactly = 0) { encryptionService.hash("test-ci-value") }
+        }
+    }
+
+    // ─── processRefresh 테스트 ────────────────────────────────────────────────────
+
+    @Nested
+    inner class ProcessRefreshTest {
+
+        private val tokenFamily: UUID = UUID.randomUUID()
+
+        private fun createStoredToken(
+            user: User,
+            tokenFamily: UUID = this.tokenFamily,
+            rawToken: String = "raw-refresh-token",
+            expiresAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC).plusDays(7),
+            revoked: Boolean = false,
+        ) = RefreshToken(
+            user = user,
+            tokenFamily = tokenFamily,
+            refreshToken = rawToken,
+            expiresAt = expiresAt,
+            revoked = revoked,
+        )
+
+        private fun mockSuccessfulRefresh(user: User, email: String = "test@example.com") {
+            every { encryptionService.decrypt(user.email) } returns email
+            every { jwtTokenProvider.generateAccessToken(user.id!!, user.role, email) } returns Pair("new-access-token", "new-access-jti")
+            every { jwtTokenProvider.generateRefreshToken(user.id!!) } returns Pair("new-refresh-token", "new-refresh-jti")
+            every { refreshTokenRepository.save(any()) } returns mockk()
+        }
+
+        @Test
+        fun processRefresh_shouldReturnLoginResponse_whenValid() {
+            // given
+            val user = createActiveUser()
+            val storedToken = createStoredToken(user)
+            every { refreshTokenRepository.findByRefreshToken("raw-refresh-token") } returns storedToken
+            mockSuccessfulRefresh(user)
+
+            // when
+            val response = authTransactionalService.processRefresh("raw-refresh-token")
+
+            // then
+            response.accessToken shouldBe "new-access-token"
+            response.refreshToken shouldBe "new-refresh-token"
+            response.expiresIn shouldBe 3600L
+            response.tokenType shouldBe "Bearer"
+        }
+
+        @Test
+        fun processRefresh_shouldRevokeExistingToken_whenValid() {
+            // given
+            val user = createActiveUser()
+            val storedToken = createStoredToken(user)
+            every { refreshTokenRepository.findByRefreshToken("raw-refresh-token") } returns storedToken
+            mockSuccessfulRefresh(user)
+
+            // when
+            authTransactionalService.processRefresh("raw-refresh-token")
+
+            // then
+            storedToken.revoked shouldBe true
+            storedToken.revokedAt shouldNotBe null
+        }
+
+        @Test
+        fun processRefresh_shouldMaintainTokenFamily_whenValid() {
+            // given
+            val user = createActiveUser()
+            val storedToken = createStoredToken(user, tokenFamily = tokenFamily)
+            val savedTokenSlot = slot<RefreshToken>()
+            every { refreshTokenRepository.findByRefreshToken("raw-refresh-token") } returns storedToken
+            every { encryptionService.decrypt(user.email) } returns "test@example.com"
+            every { jwtTokenProvider.generateAccessToken(any(), any(), any()) } returns Pair("new-access-token", "new-access-jti")
+            every { jwtTokenProvider.generateRefreshToken(any()) } returns Pair("new-refresh-token", "new-refresh-jti")
+            every { refreshTokenRepository.save(capture(savedTokenSlot)) } returns mockk()
+
+            // when
+            authTransactionalService.processRefresh("raw-refresh-token")
+
+            // then
+            savedTokenSlot.captured.tokenFamily shouldBe tokenFamily
+            savedTokenSlot.captured.refreshToken shouldBe "new-refresh-token"
+        }
+
+        @Test
+        fun processRefresh_shouldThrowInvalidToken_whenTokenNotFound() {
+            // given
+            every { refreshTokenRepository.findByRefreshToken("unknown-token") } returns null
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authTransactionalService.processRefresh("unknown-token")
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_TOKEN
+            verify(exactly = 0) { refreshTokenRepository.save(any()) }
+        }
+
+        @Test
+        fun processRefresh_shouldThrowExpiredToken_whenTokenExpiredByDb() {
+            // given
+            val user = createActiveUser()
+            val expiredToken = createStoredToken(
+                user = user,
+                expiresAt = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1),
+            )
+            every { refreshTokenRepository.findByRefreshToken("expired-token") } returns expiredToken
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authTransactionalService.processRefresh("expired-token")
+            }
+
+            exception.errorCode shouldBe ErrorCode.EXPIRED_TOKEN
+            verify(exactly = 0) { refreshTokenRepository.save(any()) }
+        }
+
+        @Test
+        fun processRefresh_shouldThrowRevokedRefreshToken_whenRevokedTokenReused() {
+            // given
+            val user = createActiveUser()
+            val revokedToken = createStoredToken(user, rawToken = "revoked-token", revoked = true)
+            every { refreshTokenRepository.findByRefreshToken("revoked-token") } returns revokedToken
+            every { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) } returns 0L
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authTransactionalService.processRefresh("revoked-token")
+            }
+
+            exception.errorCode shouldBe ErrorCode.REVOKED_REFRESH_TOKEN
+            verify(exactly = 0) { refreshTokenRepository.save(any()) }
+        }
+
+        @Test
+        fun processRefresh_shouldRevokeAllTokensInFamily_whenRevokedTokenDetected() {
+            // given
+            val user = createActiveUser()
+            val revokedToken = createStoredToken(user, rawToken = "revoked-token", revoked = true)
+            every { refreshTokenRepository.findByRefreshToken("revoked-token") } returns revokedToken
+            every { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) } returns 2L
+
+            // when & then
+            assertThrows<UserException> {
+                authTransactionalService.processRefresh("revoked-token")
+            }
+
+            verify(exactly = 1) { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) }
+        }
+
+        @Test
+        fun processRefresh_shouldThrowRevokedRefreshToken_whenExpiredAndRevoked() {
+            // given
+            val user = createActiveUser()
+            val expiredRevokedToken = createStoredToken(
+                user = user,
+                rawToken = "expired-revoked-token",
+                revoked = true,
+                expiresAt = LocalDateTime.now(ZoneOffset.UTC).minusDays(1),
+            )
+            every { refreshTokenRepository.findByRefreshToken("expired-revoked-token") } returns expiredRevokedToken
+            every { refreshTokenRepository.revokeAllActiveByTokenFamily(tokenFamily, any()) } returns 0L
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authTransactionalService.processRefresh("expired-revoked-token")
+            }
+
+            // EXPIRED_TOKEN이 아닌 REVOKED_REFRESH_TOKEN이어야 함 (탈취 우선 감지)
+            exception.errorCode shouldBe ErrorCode.REVOKED_REFRESH_TOKEN
+        }
+
+        @Test
+        fun processRefresh_shouldThrowInvalidCredentials_whenDeletedAccount() {
+            // given
+            val user = createActiveUser(status = UserStatus.DELETED)
+            val storedToken = createStoredToken(user)
+            every { refreshTokenRepository.findByRefreshToken("raw-refresh-token") } returns storedToken
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authTransactionalService.processRefresh("raw-refresh-token")
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+            storedToken.revoked shouldBe true
+            verify(exactly = 0) { refreshTokenRepository.save(any()) }
+        }
+
+        @Test
+        fun processRefresh_shouldThrowInvalidCredentials_whenDormantAccount() {
+            // given
+            val user = createActiveUser(status = UserStatus.DORMANT)
+            val storedToken = createStoredToken(user)
+            every { refreshTokenRepository.findByRefreshToken("raw-refresh-token") } returns storedToken
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authTransactionalService.processRefresh("raw-refresh-token")
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+            storedToken.revoked shouldBe true
+            verify(exactly = 0) { refreshTokenRepository.save(any()) }
         }
     }
 }

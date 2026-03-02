@@ -145,18 +145,61 @@ class AuthTransactionalService(
         )
     }
 
-    private fun issueTokens(user: User, email: String): Pair<String, String> {
+    @Transactional(noRollbackFor = [UserException::class])
+    fun processRefresh(rawToken: String): AuthDto.LoginResponse {
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+
+        // 1. DB에서 토큰 조회
+        val storedToken = refreshTokenRepository.findByRefreshToken(rawToken)
+            ?: throw UserException(ErrorCode.INVALID_TOKEN)
+
+        // 2. 탈취 감지: revoked 토큰 재사용 시도 → token_family 전체 무효화 (만료 체크 전 수행)
+        if (storedToken.revoked) {
+            refreshTokenRepository.revokeAllActiveByTokenFamily(storedToken.tokenFamily, now)
+            logger.error { "Token reuse detected! Family ${storedToken.tokenFamily} fully revoked." }
+            throw UserException(ErrorCode.REVOKED_REFRESH_TOKEN)
+        }
+
+        // 3. DB 기준 만료 체크
+        if (!storedToken.expiresAt.isAfter(now))
+            throw UserException(ErrorCode.EXPIRED_TOKEN)
+
+        // 4. 사용자 상태 검증 (삭제/휴면 계정은 토큰 즉시 폐기)
+        val user = storedToken.user
+        if (user.status == UserStatus.DELETED || user.status == UserStatus.DORMANT) {
+            storedToken.revoke(now)
+            throw UserException(ErrorCode.INVALID_CREDENTIALS)
+        }
+
+        // 5. 기존 토큰 폐기 (RTR: 1회용)
+        storedToken.revoke(now)
+
+        // 6. 신규 Access + Refresh Token 발급 (같은 tokenFamily 유지)
+        val email = encryptionService.decrypt(user.email)
+        val (accessToken, refreshToken) = issueTokens(user, email, storedToken.tokenFamily)
+
+        logger.info { "Token refreshed successfully: userId=${user.id}" }
+
+        return AuthDto.LoginResponse(
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            expiresIn = Duration.ofMillis(jwtProperties.accessTokenExpiry).seconds,
+        )
+    }
+
+    private fun issueTokens(user: User, email: String, tokenFamily: UUID = UUID.randomUUID()): Pair<String, String> {
         val (accessToken, accessTokenJti) = jwtTokenProvider.generateAccessToken(user.id!!, user.role, email)
         val (refreshToken, _) = jwtTokenProvider.generateRefreshToken(user.id)
 
-        val refreshTokenEntity = RefreshToken(
-            user = user,
-            tokenFamily = UUID.randomUUID(),
-            refreshToken = refreshToken,
-            accessTokenJti = accessTokenJti,
-            expiresAt = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(Duration.ofMillis(jwtProperties.refreshTokenExpiry).seconds),
+        refreshTokenRepository.save(
+            RefreshToken(
+                user = user,
+                tokenFamily = tokenFamily,
+                refreshToken = refreshToken,
+                accessTokenJti = accessTokenJti,
+                expiresAt = LocalDateTime.now(ZoneOffset.UTC).plusSeconds(Duration.ofMillis(jwtProperties.refreshTokenExpiry).seconds),
+            )
         )
-        refreshTokenRepository.save(refreshTokenEntity)
 
         return Pair(accessToken, refreshToken)
     }

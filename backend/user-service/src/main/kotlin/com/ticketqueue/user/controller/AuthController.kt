@@ -23,6 +23,7 @@ class AuthController(
 ) {
     private val logger = KotlinLogging.logger {}
 
+    // 회원가입
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
     fun signup(@Valid @RequestBody request: AuthDto.SignupRequest): AuthDto.SignupResponse {
@@ -30,6 +31,7 @@ class AuthController(
         return authService.signup(request)
     }
 
+    // 로그인
     @PostMapping("/login")
     fun login(
         @Valid @RequestBody request: AuthDto.LoginRequest,
@@ -39,6 +41,15 @@ class AuthController(
         val ipAddress = resolveClientIp(httpRequest)
         val userAgent = httpRequest.getHeader("User-Agent") ?: ""
         return ResponseEntity.ok(authService.login(request, ipAddress, userAgent))
+    }
+
+    // 토큰 재발급
+    @PostMapping("/refresh")
+    fun refresh(
+        @Valid @RequestBody request: AuthDto.RefreshRequest,
+    ): ResponseEntity<AuthDto.LoginResponse> {
+        logger.info { "Token refresh request received" }
+        return ResponseEntity.ok(authService.refresh(request))
     }
 
     private fun resolveClientIp(request: HttpServletRequest): String {

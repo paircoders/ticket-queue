@@ -41,8 +41,13 @@ class RefreshToken(
     val expiresAt: LocalDateTime,
 
     @Column(nullable = false)
-    val revoked: Boolean = false,
+    var revoked: Boolean = false,
 
     @Column(name = "revoked_at")
-    val revokedAt: LocalDateTime? = null
-)
+    var revokedAt: LocalDateTime? = null
+) {
+    fun revoke(now: LocalDateTime) {
+        this.revoked = true
+        this.revokedAt = now
+    }
+}

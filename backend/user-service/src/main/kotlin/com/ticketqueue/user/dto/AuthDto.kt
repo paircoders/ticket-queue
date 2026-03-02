@@ -59,4 +59,9 @@ class AuthDto {
         val expiresIn: Long,
         val tokenType: String = "Bearer"
     )
+
+    data class RefreshRequest(
+        @field:NotBlank(message = "리프레시 토큰은 필수입니다.")
+        val refreshToken: String
+    )
 }

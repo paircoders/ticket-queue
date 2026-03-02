@@ -6,7 +6,9 @@ import com.ticketqueue.common.external.portone.PortoneIdentityV2Response
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.exception.UserException
 import io.kotest.matchers.shouldBe
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
@@ -22,6 +24,7 @@ class AuthServiceTest {
     private lateinit var portoneService: PortoneService
     private lateinit var authTransactionalService: AuthTransactionalService
     private lateinit var loginHistoryRecorder: LoginHistoryRecorder
+    private lateinit var jwtTokenProvider: JwtTokenProvider
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -31,7 +34,8 @@ class AuthServiceTest {
         portoneService = mockk()
         authTransactionalService = mockk()
         loginHistoryRecorder = mockk(relaxed = true)
-        authService = AuthService(recaptchaService, portoneService, authTransactionalService, loginHistoryRecorder, encryptionService)
+        jwtTokenProvider = mockk()
+        authService = AuthService(recaptchaService, portoneService, authTransactionalService, loginHistoryRecorder, encryptionService, jwtTokenProvider)
     }
 
     // ─── 공통 헬퍼 ────────────────────────────────────────────────────────────────
@@ -299,6 +303,77 @@ class AuthServiceTest {
             }
 
             exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
+        }
+    }
+
+    // ─── Refresh 테스트 ───────────────────────────────────────────────────────────
+
+    @Nested
+    inner class RefreshTest {
+
+        private val validRequest = AuthDto.RefreshRequest(refreshToken = "valid-refresh-token")
+        private val validResponse = AuthDto.LoginResponse(
+            accessToken = "new-access-token",
+            refreshToken = "new-refresh-token",
+            expiresIn = 3600L,
+        )
+
+        @Test
+        fun refresh_shouldReturnLoginResponse_whenValid() {
+            // given
+            every { jwtTokenProvider.validateAndParseRefreshToken(validRequest.refreshToken) } just Runs
+            every { authTransactionalService.processRefresh(validRequest.refreshToken) } returns validResponse
+
+            // when
+            val response = authService.refresh(validRequest)
+
+            // then
+            response.accessToken shouldBe "new-access-token"
+            response.refreshToken shouldBe "new-refresh-token"
+            verify(exactly = 1) { jwtTokenProvider.validateAndParseRefreshToken(validRequest.refreshToken) }
+            verify(exactly = 1) { authTransactionalService.processRefresh(validRequest.refreshToken) }
+        }
+
+        @Test
+        fun refresh_shouldThrowInvalidToken_whenSignatureInvalid() {
+            // given
+            every { jwtTokenProvider.validateAndParseRefreshToken(any()) } throws UserException(ErrorCode.INVALID_TOKEN)
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.refresh(validRequest)
+            }
+
+            exception.errorCode shouldBe ErrorCode.INVALID_TOKEN
+            verify(exactly = 0) { authTransactionalService.processRefresh(any()) }
+        }
+
+        @Test
+        fun refresh_shouldThrowExpiredToken_whenExpired() {
+            // given
+            every { jwtTokenProvider.validateAndParseRefreshToken(any()) } throws UserException(ErrorCode.EXPIRED_TOKEN)
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.refresh(validRequest)
+            }
+
+            exception.errorCode shouldBe ErrorCode.EXPIRED_TOKEN
+            verify(exactly = 0) { authTransactionalService.processRefresh(any()) }
+        }
+
+        @Test
+        fun refresh_shouldPropagateException_whenProcessRefreshFails() {
+            // given
+            every { jwtTokenProvider.validateAndParseRefreshToken(any()) } just Runs
+            every { authTransactionalService.processRefresh(any()) } throws UserException(ErrorCode.REVOKED_REFRESH_TOKEN)
+
+            // when & then
+            val exception = assertThrows<UserException> {
+                authService.refresh(validRequest)
+            }
+
+            exception.errorCode shouldBe ErrorCode.REVOKED_REFRESH_TOKEN
         }
     }
 }

@@ -1,7 +1,12 @@
 package com.ticketqueue.user.service
 
+import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.entity.UserRole
+import com.ticketqueue.user.exception.UserException
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.jsonwebtoken.ExpiredJwtException
+import io.jsonwebtoken.JwtException
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -19,6 +24,8 @@ import java.util.UUID
 @Component
 @EnableConfigurationProperties(JwtProperties::class)
 class JwtTokenProvider(private val jwtProperties: JwtProperties) {
+
+    private val logger = KotlinLogging.logger {}
 
     private val secretKey by lazy {
         val decoded = try {
@@ -75,5 +82,34 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .compact()
 
         return Pair(token, jti)
+    }
+
+    /**
+     * Refresh Token 서명 검증 및 userId 파싱
+     * - 서명 불일치 → INVALID_TOKEN
+     * - 만료 → EXPIRED_TOKEN (JWT 레벨; DB 레벨 만료는 별도 체크)
+     */
+    fun validateAndParseRefreshToken(token: String) {
+        try {
+            val claims = Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .payload
+            if (claims["type"] != "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
+            if (claims.subject.isNullOrBlank()) throw UserException(ErrorCode.INVALID_TOKEN)
+            UUID.fromString(claims.subject) // subject가 유효한 UUID인지 검증
+        } catch (e: ExpiredJwtException) {
+            logger.error { "JWT token expired: ${e.javaClass.simpleName}" }
+            throw UserException(ErrorCode.EXPIRED_TOKEN)
+        } catch (e: UserException) {
+            throw e
+        } catch (e: JwtException) {
+            logger.error { "JWT token invalid: ${e.javaClass.simpleName}" }
+            throw UserException(ErrorCode.INVALID_TOKEN)
+        } catch (e: IllegalArgumentException) {
+            logger.error { "JWT subject is not a valid UUID: ${e.javaClass.simpleName} - ${e.message}" }
+            throw UserException(ErrorCode.INVALID_TOKEN)
+        }
     }
 }

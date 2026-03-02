@@ -1,7 +1,10 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.user.exception.UserException
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.shouldBe
 import io.mockk.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
@@ -126,10 +129,10 @@ class RecaptchaServiceTest {
         every { mockRequestBodySpec.retrieve() } throws expectedException
 
         // When & Then
-        val exception = assertThrows(UserException::class.java) {
+        val exception = shouldThrow<ExternalSystemException> {
             recaptchaService.verify(testToken)
         }
 
-        assertEquals(ErrorCode.RECAPTCHA_FAILED, exception.errorCode)
+        exception.errorCode shouldBe ErrorCode.RECAPTCHA_SERVICE_ERROR
     }
 }

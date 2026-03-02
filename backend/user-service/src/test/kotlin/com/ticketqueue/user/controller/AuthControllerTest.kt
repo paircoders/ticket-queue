@@ -273,4 +273,87 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
         }
     }
+
+    @Nested
+    @DisplayName("POST /auth/refresh")
+    inner class RefreshTest {
+
+        private val refreshUrl = "/auth/refresh"
+        private val validRequest = AuthDto.RefreshRequest(refreshToken = "valid-refresh-token")
+        private val validResponse = AuthDto.LoginResponse(
+            accessToken = "new-access-token",
+            refreshToken = "new-refresh-token",
+            expiresIn = 3600L,
+            tokenType = "Bearer"
+        )
+
+        @Test
+        @DisplayName("유효한 요청 시 200 OK 응답")
+        fun `should return 200 when valid request`() {
+            every { authService.refresh(validRequest) } returns validResponse
+
+            performPost(refreshUrl, validRequest)
+                .andExpect(status().isOk)
+        }
+
+        @Test
+        @DisplayName("성공 응답에 accessToken, refreshToken, expiresIn, tokenType 포함")
+        fun `should return token fields in response`() {
+            every { authService.refresh(validRequest) } returns validResponse
+
+            performPost(refreshUrl, validRequest)
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.accessToken").value("new-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+        }
+
+        @Test
+        @DisplayName("빈 refreshToken 시 400 BAD REQUEST")
+        fun `should return 400 when refreshToken is blank`() {
+            performPost(refreshUrl, AuthDto.RefreshRequest(refreshToken = ""))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("리프레시 토큰")))
+        }
+
+        @Test
+        @DisplayName("요청 body 없을 시 400 BAD REQUEST")
+        fun `should return 400 when request body is missing`() {
+            performPost(refreshUrl, null)
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+        }
+
+        @Test
+        @DisplayName("유효하지 않은 토큰 시 401 UNAUTHORIZED")
+        fun `should return 401 when token is invalid`() {
+            every { authService.refresh(validRequest) } throws BusinessException(ErrorCode.INVALID_TOKEN)
+
+            performPost(refreshUrl, validRequest)
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
+        }
+
+        @Test
+        @DisplayName("만료된 토큰 시 401 UNAUTHORIZED")
+        fun `should return 401 when token is expired`() {
+            every { authService.refresh(validRequest) } throws BusinessException(ErrorCode.EXPIRED_TOKEN)
+
+            performPost(refreshUrl, validRequest)
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("EXPIRED_TOKEN"))
+        }
+
+        @Test
+        @DisplayName("탈취된 토큰 사용 시 403 FORBIDDEN")
+        fun `should return 403 when token is revoked`() {
+            every { authService.refresh(validRequest) } throws BusinessException(ErrorCode.REVOKED_REFRESH_TOKEN)
+
+            performPost(refreshUrl, validRequest)
+                .andExpect(status().isForbidden)
+                .andExpect(jsonPath("$.code").value("REVOKED_REFRESH_TOKEN"))
+        }
+    }
 }
