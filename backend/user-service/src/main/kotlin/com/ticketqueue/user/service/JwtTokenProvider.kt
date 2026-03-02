@@ -102,7 +102,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             logger.error { "JWT token invalid" }
             throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: IllegalArgumentException) {
-            logger.error { "JWT subject is not a valid UUID" }
+            logger.error { "JWT token malformed" }
             throw UserException(ErrorCode.INVALID_TOKEN)
         }
     }
