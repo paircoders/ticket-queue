@@ -20,6 +20,7 @@ dependencies {
     api(libs.spring.boot.starter.web)
     api(libs.spring.boot.starter.validation)
     api(libs.spring.boot.starter.actuator)
+    api(libs.micrometer.registry.prometheus)
 
     // Spring Cloud
     api(platform(libs.spring.cloud.dependencies))

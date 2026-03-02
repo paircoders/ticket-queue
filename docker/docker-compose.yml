@@ -144,11 +144,55 @@ services:
       - enc_secret_key
       - enc_hash_salt
       
+  # Prometheus (메트릭 수집)
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: ticket-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ticket-network
+
+  # Grafana (메트릭 시각화)
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: ticket-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - TZ=Asia/Seoul
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - ticket-network
+
 volumes:
   postgres_data:
   valkey_data:
   kafka_data:
   localstack_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   ticket-network:
