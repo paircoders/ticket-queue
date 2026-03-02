@@ -14,6 +14,7 @@ class AuthService(
     private val authTransactionalService: AuthTransactionalService,
     private val loginHistoryRecorder: LoginHistoryRecorder,
     private val encryptionService: EncryptionService,
+    private val jwtTokenProvider: JwtTokenProvider,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -51,6 +52,12 @@ class AuthService(
         // 2. DB 처리 위임 (사용자 조회 + 검증 + 토큰 발급)
         val emailHash = encryptionService.hash(request.email)
         return authTransactionalService.processLogin(emailHash, request.password, ipAddress, userAgent)
+    }
+
+    fun refresh(request: AuthDto.RefreshRequest): AuthDto.LoginResponse {
+        // JWT 서명 검증 (DB 조회 전 빠른 실패)
+        jwtTokenProvider.validateAndParseRefreshToken(request.refreshToken)
+        return authTransactionalService.processRefresh(request.refreshToken)
     }
 
     private fun verifyRecaptcha(token: String) {

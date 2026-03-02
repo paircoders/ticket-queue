@@ -2,6 +2,7 @@ package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.BusinessException
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.common.external.portone.*
 import com.ticketqueue.user.exception.UserException
 import feign.Request
@@ -124,7 +125,7 @@ class PortoneServiceTest {
         } throws retryableException
 
         // when & then
-        val exception = shouldThrow<UserException> {
+        val exception = shouldThrow<ExternalSystemException> {
             portoneService.verifyIdentity(identityVerificationId)
         }
         exception.errorCode shouldBe ErrorCode.PORTONE_API_ERROR
