@@ -3,6 +3,7 @@ package com.ticketqueue.user.service
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.exception.ExternalSystemException
 import com.ticketqueue.common.external.portone.PortoneIdentityV2Response
+import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.AuthDto
 import com.ticketqueue.user.exception.UserException
 import io.kotest.matchers.shouldBe
@@ -25,6 +26,8 @@ class AuthServiceTest {
     private lateinit var authTransactionalService: AuthTransactionalService
     private lateinit var loginHistoryRecorder: LoginHistoryRecorder
     private lateinit var jwtTokenProvider: JwtTokenProvider
+    private lateinit var tokenBlacklistService: TokenBlacklistService
+    private lateinit var jwtProperties: JwtProperties
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -35,7 +38,9 @@ class AuthServiceTest {
         authTransactionalService = mockk()
         loginHistoryRecorder = mockk(relaxed = true)
         jwtTokenProvider = mockk()
-        authService = AuthService(recaptchaService, portoneService, authTransactionalService, loginHistoryRecorder, encryptionService, jwtTokenProvider)
+        tokenBlacklistService = mockk(relaxed = true)
+        jwtProperties = mockk()
+        authService = AuthService(recaptchaService, portoneService, authTransactionalService, loginHistoryRecorder, encryptionService, jwtTokenProvider, tokenBlacklistService, jwtProperties)
     }
 
     // ─── 공통 헬퍼 ────────────────────────────────────────────────────────────────

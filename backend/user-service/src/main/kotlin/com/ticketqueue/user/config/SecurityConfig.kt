@@ -23,7 +23,7 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh").permitAll()
+                    .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh", "/auth/logout").permitAll()
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                     .anyRequest().authenticated()
             }

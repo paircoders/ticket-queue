@@ -145,6 +145,13 @@ class AuthTransactionalService(
         )
     }
 
+    fun processLogout(jti: String) {
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        refreshTokenRepository.findByAccessTokenJti(jti)?.let { token ->
+            if (!token.revoked) token.revoke(now)
+        }
+    }
+
     @Transactional(noRollbackFor = [UserException::class])
     fun processRefresh(rawToken: String): AuthDto.LoginResponse {
         val now = LocalDateTime.now(ZoneOffset.UTC)
