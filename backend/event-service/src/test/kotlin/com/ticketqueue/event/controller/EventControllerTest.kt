@@ -1,10 +1,10 @@
 package com.ticketqueue.event.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.ninjasquad.springmockk.MockkBean
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.exception.GlobalExceptionHandler
+import com.ticketqueue.event.config.SecurityConfig
 import com.ticketqueue.event.dto.EventDto
 import com.ticketqueue.event.dto.SeatDto
 import com.ticketqueue.event.entity.EventStatus
@@ -13,16 +13,25 @@ import com.ticketqueue.event.entity.SeatStatus
 import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.service.EventService
 import com.ticketqueue.event.service.SeatService
+import io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
+import io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
 import io.mockk.every
-import io.mockk.mockk
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.FilterType
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.http.MediaType
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.ContextConfiguration
+import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -30,19 +39,48 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID
 
+@WebMvcTest(
+    controllers = [EventController::class],
+    useDefaultFilters = false,
+    includeFilters = [
+        ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = [EventController::class, GlobalExceptionHandler::class, SecurityConfig::class]
+        )
+    ],
+    excludeAutoConfiguration = [
+        DataSourceAutoConfiguration::class,
+        HibernateJpaAutoConfiguration::class,
+        RedisAutoConfiguration::class,
+        SecretsManagerAutoConfiguration::class,
+        ParameterStoreAutoConfiguration::class
+    ]
+)
+@ContextConfiguration(classes = [EventController::class, GlobalExceptionHandler::class, SecurityConfig::class])
+@ActiveProfiles("test")
+@TestPropertySource(properties = [
+    "spring.cloud.aws.region.static=us-east-1",
+    "spring.cloud.aws.credentials.access-key=test",
+    "spring.cloud.aws.credentials.secret-key=test"
+])
+@DisplayName("EventController 단위 테스트")
 class EventControllerTest {
 
+    @Autowired
     private lateinit var mockMvc: MockMvc
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    @MockkBean
     private lateinit var eventService: EventService
+
+    @MockkBean
     private lateinit var seatService: SeatService
-    private val objectMapper: ObjectMapper = jacksonObjectMapper().apply {
-        registerModule(JavaTimeModule())
-    }
 
     private val eventId = UUID.randomUUID()
     private val now = LocalDateTime.now()
@@ -106,17 +144,6 @@ class EventControllerTest {
         )
     )
 
-    @BeforeEach
-    fun setUp() {
-        eventService = mockk()
-        seatService = mockk()
-        val controller = EventController(eventService, seatService)
-        mockMvc = MockMvcBuilders.standaloneSetup(controller)
-            .setControllerAdvice(GlobalExceptionHandler())
-            .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
-            .build()
-    }
-
     @Nested
     @DisplayName("POST /events")
     inner class CreateEvent {
@@ -128,6 +155,8 @@ class EventControllerTest {
 
             mockMvc.perform(
                 post("/events")
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(validCreateRequest()))
             )
@@ -144,6 +173,8 @@ class EventControllerTest {
 
             mockMvc.perform(
                 post("/events")
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(invalidRequest))
             )
@@ -218,6 +249,8 @@ class EventControllerTest {
 
             mockMvc.perform(
                 patch("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(EventDto.UpdateRequest(title = "BTS World Tour 2026")))
             )
@@ -232,6 +265,8 @@ class EventControllerTest {
 
             mockMvc.perform(
                 patch("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(EventDto.UpdateRequest(artist = "변경된 아티스트")))
             )
@@ -245,6 +280,8 @@ class EventControllerTest {
 
             mockMvc.perform(
                 patch("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(EventDto.UpdateRequest(title = "새 제목")))
             )
@@ -256,6 +293,8 @@ class EventControllerTest {
         fun titleEmpty() {
             mockMvc.perform(
                 patch("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(EventDto.UpdateRequest(title = "")))
             )
@@ -269,6 +308,8 @@ class EventControllerTest {
 
             mockMvc.perform(
                 patch("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
             )
@@ -285,7 +326,11 @@ class EventControllerTest {
         fun success() {
             every { eventService.deleteEvent(eventId) } returns EventDto.DeleteResponse("공연이 삭제되었습니다.")
 
-            mockMvc.perform(delete("/events/{eventId}", eventId))
+            mockMvc.perform(
+                delete("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
+            )
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$.message").value("공연이 삭제되었습니다."))
         }
@@ -295,7 +340,11 @@ class EventControllerTest {
         fun conflict() {
             every { eventService.deleteEvent(eventId) } throws EventException(ErrorCode.EVENT_HAS_RESERVATIONS)
 
-            mockMvc.perform(delete("/events/{eventId}", eventId))
+            mockMvc.perform(
+                delete("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
+            )
                 .andExpect(status().isConflict)
         }
 
@@ -304,7 +353,11 @@ class EventControllerTest {
         fun notFound() {
             every { eventService.deleteEvent(eventId) } throws EventException(ErrorCode.EVENT_NOT_FOUND)
 
-            mockMvc.perform(delete("/events/{eventId}", eventId))
+            mockMvc.perform(
+                delete("/events/{eventId}", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
+            )
                 .andExpect(status().isNotFound)
         }
     }
@@ -351,6 +404,92 @@ class EventControllerTest {
 
             mockMvc.perform(get("/events/schedules/{scheduleId}/seats", scheduleId))
                 .andExpect(status().isNotFound)
+        }
+    }
+
+    @Nested
+    @DisplayName("Security")
+    inner class Security {
+
+        @Nested
+        @DisplayName("인증 없이 요청 시 401")
+        inner class Unauthenticated {
+
+            @Test
+            @DisplayName("POST /events → 401")
+            fun `post events without auth returns 401`() {
+                mockMvc.perform(
+                    post("/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isUnauthorized)
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            }
+
+            @Test
+            @DisplayName("PATCH /events/{id} → 401")
+            fun `patch event without auth returns 401`() {
+                mockMvc.perform(
+                    patch("/events/{eventId}", eventId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isUnauthorized)
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            }
+
+            @Test
+            @DisplayName("DELETE /events/{id} → 401")
+            fun `delete event without auth returns 401`() {
+                mockMvc.perform(delete("/events/{eventId}", eventId))
+                    .andExpect(status().isUnauthorized)
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            }
+        }
+
+        @Nested
+        @DisplayName("ROLE_USER 요청 시 403")
+        inner class Forbidden {
+
+            @Test
+            @DisplayName("POST /events with ROLE_USER → 403")
+            fun `post events with user role returns 403`() {
+                mockMvc.perform(
+                    post("/events")
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
+        }
+
+        @Nested
+        @DisplayName("인증 없이 공개 엔드포인트 200")
+        inner class PublicAccess {
+
+            @Test
+            @DisplayName("GET /events → 200")
+            fun `get events without auth returns 200`() {
+                val pageable = PageRequest.of(0, 20)
+                val page = PageImpl(listOf(listResponse()), pageable, 1)
+                every { eventService.getEvents(0, 20, null, null, null) } returns page
+
+                mockMvc.perform(get("/events"))
+                    .andExpect(status().isOk)
+            }
+
+            @Test
+            @DisplayName("GET /events/{id} → 200")
+            fun `get event without auth returns 200`() {
+                every { eventService.getEvent(eventId) } returns detailResponse()
+
+                mockMvc.perform(get("/events/{eventId}", eventId))
+                    .andExpect(status().isOk)
+            }
         }
     }
 }

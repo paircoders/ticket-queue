@@ -1,23 +1,32 @@
 package com.ticketqueue.event.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.ninjasquad.springmockk.MockkBean
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.exception.GlobalExceptionHandler
+import com.ticketqueue.event.config.SecurityConfig
 import com.ticketqueue.event.dto.VenueDto
 import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.service.VenueService
+import io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
+import io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
 import io.mockk.every
-import io.mockk.mockk
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.FilterType
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.http.MediaType
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.ContextConfiguration
+import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -25,17 +34,44 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.time.LocalDateTime
 import java.util.UUID
 
+@WebMvcTest(
+    controllers = [VenueController::class],
+    useDefaultFilters = false,
+    includeFilters = [
+        ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = [VenueController::class, GlobalExceptionHandler::class, SecurityConfig::class]
+        )
+    ],
+    excludeAutoConfiguration = [
+        DataSourceAutoConfiguration::class,
+        HibernateJpaAutoConfiguration::class,
+        RedisAutoConfiguration::class,
+        SecretsManagerAutoConfiguration::class,
+        ParameterStoreAutoConfiguration::class
+    ]
+)
+@ContextConfiguration(classes = [VenueController::class, GlobalExceptionHandler::class, SecurityConfig::class])
+@ActiveProfiles("test")
+@TestPropertySource(properties = [
+    "spring.cloud.aws.region.static=us-east-1",
+    "spring.cloud.aws.credentials.access-key=test",
+    "spring.cloud.aws.credentials.secret-key=test"
+])
+@DisplayName("VenueController 단위 테스트")
 class VenueControllerTest {
 
+    @Autowired
     private lateinit var mockMvc: MockMvc
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    @MockkBean
     private lateinit var venueService: VenueService
-    private val objectMapper: ObjectMapper = jacksonObjectMapper().apply {
-        registerModule(JavaTimeModule())
-    }
 
     private val venueId = UUID.randomUUID()
     private val now = LocalDateTime.now()
@@ -47,16 +83,6 @@ class VenueControllerTest {
         city = "서울",
         createdAt = now
     )
-
-    @BeforeEach
-    fun setUp() {
-        venueService = mockk()
-        val controller = VenueController(venueService)
-        mockMvc = MockMvcBuilders.standaloneSetup(controller)
-            .setControllerAdvice(GlobalExceptionHandler())
-            .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
-            .build()
-    }
 
     @Nested
     @DisplayName("POST /venues")
@@ -74,6 +100,8 @@ class VenueControllerTest {
 
             mockMvc.perform(
                 post("/venues")
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request))
             )
@@ -88,6 +116,8 @@ class VenueControllerTest {
 
             mockMvc.perform(
                 post("/venues")
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request))
             )
@@ -178,6 +208,8 @@ class VenueControllerTest {
             val request = VenueDto.UpdateRequest(name = "고척스카이돔")
             mockMvc.perform(
                 patch("/venues/{venueId}", venueId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request))
             )
@@ -193,6 +225,8 @@ class VenueControllerTest {
             val request = VenueDto.UpdateRequest(name = "고척스카이돔")
             mockMvc.perform(
                 patch("/venues/{venueId}", venueId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request))
             )
@@ -209,7 +243,11 @@ class VenueControllerTest {
         fun success() {
             every { venueService.deleteVenue(venueId) } returns VenueDto.DeleteResponse("공연장이 삭제되었습니다.")
 
-            mockMvc.perform(delete("/venues/{venueId}", venueId))
+            mockMvc.perform(
+                delete("/venues/{venueId}", venueId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
+            )
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$.message").value("공연장이 삭제되었습니다."))
         }
@@ -219,7 +257,11 @@ class VenueControllerTest {
         fun conflict() {
             every { venueService.deleteVenue(venueId) } throws EventException(ErrorCode.VENUE_HAS_EVENTS)
 
-            mockMvc.perform(delete("/venues/{venueId}", venueId))
+            mockMvc.perform(
+                delete("/venues/{venueId}", venueId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
+            )
                 .andExpect(status().isConflict)
         }
 
@@ -228,8 +270,107 @@ class VenueControllerTest {
         fun conflictHalls() {
             every { venueService.deleteVenue(venueId) } throws EventException(ErrorCode.VENUE_HAS_HALLS)
 
-            mockMvc.perform(delete("/venues/{venueId}", venueId))
+            mockMvc.perform(
+                delete("/venues/{venueId}", venueId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
+            )
                 .andExpect(status().isConflict)
+        }
+    }
+
+    @Nested
+    @DisplayName("Security")
+    inner class Security {
+
+        @Nested
+        @DisplayName("인증 없이 요청 시 401")
+        inner class Unauthenticated {
+
+            @Test
+            @DisplayName("POST /venues → 401")
+            fun `post venues without auth returns 401`() {
+                mockMvc.perform(
+                    post("/venues")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isUnauthorized)
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            }
+
+            @Test
+            @DisplayName("PATCH /venues/{id} → 401")
+            fun `patch venue without auth returns 401`() {
+                mockMvc.perform(
+                    patch("/venues/{venueId}", venueId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isUnauthorized)
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            }
+
+            @Test
+            @DisplayName("DELETE /venues/{id} → 401")
+            fun `delete venue without auth returns 401`() {
+                mockMvc.perform(delete("/venues/{venueId}", venueId))
+                    .andExpect(status().isUnauthorized)
+                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            }
+        }
+
+        @Nested
+        @DisplayName("ROLE_USER 요청 시 403")
+        inner class Forbidden {
+
+            @Test
+            @DisplayName("POST /venues with ROLE_USER → 403")
+            fun `post venues with user role returns 403`() {
+                mockMvc.perform(
+                    post("/venues")
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
+        }
+
+        @Nested
+        @DisplayName("인증 없이 공개 엔드포인트 200")
+        inner class PublicAccess {
+
+            @Test
+            @DisplayName("GET /venues → 200")
+            fun `get venues without auth returns 200`() {
+                val pageable = PageRequest.of(0, 20)
+                val page = PageImpl(listOf(venueResponse()), pageable, 1)
+                every { venueService.getVenues(0, 20, null) } returns page
+
+                mockMvc.perform(get("/venues"))
+                    .andExpect(status().isOk)
+            }
+
+            @Test
+            @DisplayName("GET /venues/{id} → 200")
+            fun `get venue without auth returns 200`() {
+                val detail = VenueDto.DetailResponse(
+                    id = venueId,
+                    name = "올림픽공원",
+                    address = "서울시 송파구",
+                    city = "서울",
+                    halls = emptyList(),
+                    createdAt = now,
+                    updatedAt = now
+                )
+                every { venueService.getVenue(venueId) } returns detail
+
+                mockMvc.perform(get("/venues/{venueId}", venueId))
+                    .andExpect(status().isOk)
+            }
         }
     }
 }
