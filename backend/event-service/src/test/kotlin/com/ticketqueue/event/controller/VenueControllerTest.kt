@@ -10,8 +10,10 @@ import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.service.VenueService
 import io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
 import io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import org.junit.jupiter.api.DisplayName
+import org.springframework.http.HttpStatus
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -289,34 +291,34 @@ class VenueControllerTest {
 
             @Test
             @DisplayName("POST /venues → 401")
-            fun `post venues without auth returns 401`() {
-                mockMvc.perform(
+            fun postVenue_shouldReturnUnauthorized_whenNoAuth() {
+                val response = mockMvc.perform(
                     post("/venues")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}")
-                )
-                    .andExpect(status().isUnauthorized)
-                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                ).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
             }
 
             @Test
             @DisplayName("PATCH /venues/{id} → 401")
-            fun `patch venue without auth returns 401`() {
-                mockMvc.perform(
+            fun patchVenue_shouldReturnUnauthorized_whenNoAuth() {
+                val response = mockMvc.perform(
                     patch("/venues/{venueId}", venueId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}")
-                )
-                    .andExpect(status().isUnauthorized)
-                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                ).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
             }
 
             @Test
             @DisplayName("DELETE /venues/{id} → 401")
-            fun `delete venue without auth returns 401`() {
-                mockMvc.perform(delete("/venues/{venueId}", venueId))
-                    .andExpect(status().isUnauthorized)
-                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+            fun deleteVenue_shouldReturnUnauthorized_whenNoAuth() {
+                val response = mockMvc.perform(delete("/venues/{venueId}", venueId)).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
             }
         }
 

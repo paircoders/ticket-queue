@@ -12,8 +12,10 @@ import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.service.ScheduleService
 import io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
 import io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
+import io.kotest.matchers.shouldBe
 import io.mockk.every
 import org.junit.jupiter.api.DisplayName
+import org.springframework.http.HttpStatus
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -374,26 +376,26 @@ class ScheduleControllerTest {
 
             @Test
             @DisplayName("POST /events/{id}/schedules → 401")
-            fun `post schedules without auth returns 401`() {
-                mockMvc.perform(
+            fun postSchedule_shouldReturn401_whenUnauthenticated() {
+                val response = mockMvc.perform(
                     post("/events/{eventId}/schedules", eventId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}")
-                )
-                    .andExpect(status().isUnauthorized)
-                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                ).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
             }
 
             @Test
             @DisplayName("PATCH /events/schedules/{id}/status → 401")
-            fun `patch schedule status without auth returns 401`() {
-                mockMvc.perform(
+            fun patchScheduleStatus_shouldReturn401_whenUnauthenticated() {
+                val response = mockMvc.perform(
                     patch("/events/schedules/{scheduleId}/status", scheduleId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}")
-                )
-                    .andExpect(status().isUnauthorized)
-                    .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                ).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
             }
         }
 
