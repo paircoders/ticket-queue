@@ -370,6 +370,32 @@ class HallControllerTest {
                     .andExpect(status().isForbidden)
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"))
             }
+
+            @Test
+            @DisplayName("PATCH /venues/{id}/halls/{id} with ROLE_USER → 403")
+            fun `patch hall with user role returns 403`() {
+                mockMvc.perform(
+                    patch("/venues/{venueId}/halls/{hallId}", venueId, hallId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
+
+            @Test
+            @DisplayName("DELETE /venues/{id}/halls/{id} with ROLE_USER → 403")
+            fun `delete hall with user role returns 403`() {
+                mockMvc.perform(
+                    delete("/venues/{venueId}/halls/{hallId}", venueId, hallId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
         }
 
         @Nested

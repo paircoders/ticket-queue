@@ -465,6 +465,32 @@ class EventControllerTest {
                     .andExpect(status().isForbidden)
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"))
             }
+
+            @Test
+            @DisplayName("PATCH /events/{id} with ROLE_USER → 403")
+            fun `patch event with user role returns 403`() {
+                mockMvc.perform(
+                    patch("/events/{eventId}", eventId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
+
+            @Test
+            @DisplayName("DELETE /events/{id} with ROLE_USER → 403")
+            fun `delete event with user role returns 403`() {
+                mockMvc.perform(
+                    delete("/events/{eventId}", eventId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
         }
 
         @Nested

@@ -414,6 +414,20 @@ class ScheduleControllerTest {
                     .andExpect(status().isForbidden)
                     .andExpect(jsonPath("$.code").value("FORBIDDEN"))
             }
+
+            @Test
+            @DisplayName("PATCH /events/schedules/{id}/status with ROLE_USER → 403")
+            fun `patch schedule status with user role returns 403`() {
+                mockMvc.perform(
+                    patch("/events/schedules/{scheduleId}/status", scheduleId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
         }
 
         @Nested
