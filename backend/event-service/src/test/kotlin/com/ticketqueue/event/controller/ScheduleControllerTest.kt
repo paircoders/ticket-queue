@@ -1,41 +1,79 @@
 package com.ticketqueue.event.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.ninjasquad.springmockk.MockkBean
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.exception.GlobalExceptionHandler
+import com.ticketqueue.event.config.SecurityConfig
 import com.ticketqueue.event.dto.ScheduleDto
 import com.ticketqueue.event.entity.ScheduleStatus
 import com.ticketqueue.event.entity.SeatGrade
 import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.service.ScheduleService
+import io.awspring.cloud.autoconfigure.config.parameterstore.ParameterStoreAutoConfiguration
+import io.awspring.cloud.autoconfigure.config.secretsmanager.SecretsManagerAutoConfiguration
+import io.kotest.matchers.shouldBe
 import io.mockk.every
-import io.mockk.mockk
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
+import org.springframework.http.HttpStatus
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.FilterType
 import org.springframework.http.MediaType
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.ContextConfiguration
+import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.util.UUID
 
+@WebMvcTest(
+    controllers = [ScheduleController::class],
+    useDefaultFilters = false,
+    includeFilters = [
+        ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = [ScheduleController::class, GlobalExceptionHandler::class, SecurityConfig::class]
+        )
+    ],
+    excludeAutoConfiguration = [
+        DataSourceAutoConfiguration::class,
+        HibernateJpaAutoConfiguration::class,
+        RedisAutoConfiguration::class,
+        SecretsManagerAutoConfiguration::class,
+        ParameterStoreAutoConfiguration::class
+    ]
+)
+@ContextConfiguration(classes = [ScheduleController::class, GlobalExceptionHandler::class, SecurityConfig::class])
+@ActiveProfiles("test")
+@TestPropertySource(properties = [
+    "spring.cloud.aws.region.static=us-east-1",
+    "spring.cloud.aws.credentials.access-key=test",
+    "spring.cloud.aws.credentials.secret-key=test"
+])
+@DisplayName("ScheduleController 단위 테스트")
 class ScheduleControllerTest {
 
+    @Autowired
     private lateinit var mockMvc: MockMvc
+
+    @Autowired
+    private lateinit var objectMapper: ObjectMapper
+
+    @MockkBean
     private lateinit var scheduleService: ScheduleService
-    private val objectMapper: ObjectMapper = jacksonObjectMapper().apply {
-        registerModule(JavaTimeModule())
-    }
 
     private val eventId = UUID.randomUUID()
     private val scheduleId = UUID.randomUUID()
@@ -95,16 +133,6 @@ class ScheduleControllerTest {
         priceByGrade = mapOf(SeatGrade.VIP to BigDecimal("100000"))
     )
 
-    @BeforeEach
-    fun setUp() {
-        scheduleService = mockk()
-        val controller = ScheduleController(scheduleService)
-        mockMvc = MockMvcBuilders.standaloneSetup(controller)
-            .setControllerAdvice(GlobalExceptionHandler())
-            .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
-            .build()
-    }
-
     @Nested
     @DisplayName("POST /events/{eventId}/schedules")
     inner class CreateSchedule {
@@ -116,6 +144,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 post("/events/{eventId}/schedules", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(validCreateRequest()))
             )
@@ -135,6 +165,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 post("/events/{eventId}/schedules", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(invalidRequest))
             )
@@ -151,6 +183,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 post("/events/{eventId}/schedules", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(invalidRequest))
             )
@@ -164,6 +198,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 post("/events/{eventId}/schedules", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(validCreateRequest()))
             )
@@ -177,6 +213,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 post("/events/{eventId}/schedules", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(validCreateRequest()))
             )
@@ -190,6 +228,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 post("/events/{eventId}/schedules", eventId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(validCreateRequest()))
             )
@@ -271,6 +311,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 patch("/events/schedules/{scheduleId}/status", scheduleId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(ScheduleDto.ChangeStatusRequest(ScheduleStatus.ONGOING)))
             )
@@ -284,6 +326,8 @@ class ScheduleControllerTest {
         fun badRequestMissingStatus() {
             mockMvc.perform(
                 patch("/events/schedules/{scheduleId}/status", scheduleId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
             )
@@ -297,6 +341,8 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 patch("/events/schedules/{scheduleId}/status", scheduleId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(ScheduleDto.ChangeStatusRequest(ScheduleStatus.UPCOMING)))
             )
@@ -311,10 +357,102 @@ class ScheduleControllerTest {
 
             mockMvc.perform(
                 patch("/events/schedules/{scheduleId}/status", scheduleId)
+                    .header("X-User-Id", UUID.randomUUID().toString())
+                    .header("X-User-Role", "ADMIN")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(ScheduleDto.ChangeStatusRequest(ScheduleStatus.ONGOING)))
             )
                 .andExpect(status().isNotFound)
+        }
+    }
+
+    @Nested
+    @DisplayName("Security")
+    inner class Security {
+
+        @Nested
+        @DisplayName("인증 없이 요청 시 401")
+        inner class Unauthenticated {
+
+            @Test
+            @DisplayName("POST /events/{id}/schedules → 401")
+            fun postSchedule_shouldReturn401_whenUnauthenticated() {
+                val response = mockMvc.perform(
+                    post("/events/{eventId}/schedules", eventId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                ).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
+            }
+
+            @Test
+            @DisplayName("PATCH /events/schedules/{id}/status → 401")
+            fun patchScheduleStatus_shouldReturn401_whenUnauthenticated() {
+                val response = mockMvc.perform(
+                    patch("/events/schedules/{scheduleId}/status", scheduleId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                ).andReturn().response
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
+            }
+        }
+
+        @Nested
+        @DisplayName("ROLE_USER 요청 시 403")
+        inner class Forbidden {
+
+            @Test
+            @DisplayName("POST /events/{id}/schedules with ROLE_USER → 403")
+            fun postSchedule_shouldReturnForbidden_whenUserRole() {
+                mockMvc.perform(
+                    post("/events/{eventId}/schedules", eventId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
+
+            @Test
+            @DisplayName("PATCH /events/schedules/{id}/status with ROLE_USER → 403")
+            fun patchScheduleStatus_shouldReturnForbidden_whenUserRole() {
+                mockMvc.perform(
+                    patch("/events/schedules/{scheduleId}/status", scheduleId)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                )
+                    .andExpect(status().isForbidden)
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+            }
+        }
+
+        @Nested
+        @DisplayName("인증 없이 공개 엔드포인트 200")
+        inner class PublicAccess {
+
+            @Test
+            @DisplayName("GET /events/{id}/schedules → 200")
+            fun getSchedules_shouldReturnOk_whenNoAuth() {
+                every { scheduleService.getSchedules(eventId) } returns listOf(listResponse())
+
+                mockMvc.perform(get("/events/{eventId}/schedules", eventId))
+                    .andExpect(status().isOk)
+            }
+
+            @Test
+            @DisplayName("GET /events/schedules/{id} → 200")
+            fun getSchedule_shouldReturnOk_whenNoAuth() {
+                every { scheduleService.getSchedule(scheduleId) } returns detailResponse()
+
+                mockMvc.perform(get("/events/schedules/{scheduleId}", scheduleId))
+                    .andExpect(status().isOk)
+            }
         }
     }
 }
