@@ -328,7 +328,7 @@ class VenueControllerTest {
 
             @Test
             @DisplayName("POST /venues with ROLE_USER → 403")
-            fun `post venues with user role returns 403`() {
+            fun postVenues_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     post("/venues")
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -342,7 +342,7 @@ class VenueControllerTest {
 
             @Test
             @DisplayName("PATCH /venues/{id} with ROLE_USER → 403")
-            fun `patch venue with user role returns 403`() {
+            fun patchVenue_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     patch("/venues/{venueId}", venueId)
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -356,7 +356,7 @@ class VenueControllerTest {
 
             @Test
             @DisplayName("DELETE /venues/{id} with ROLE_USER → 403")
-            fun `delete venue with user role returns 403`() {
+            fun deleteVenue_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     delete("/venues/{venueId}", venueId)
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -373,7 +373,7 @@ class VenueControllerTest {
 
             @Test
             @DisplayName("GET /venues → 200")
-            fun `get venues without auth returns 200`() {
+            fun getVenues_shouldReturnOk_whenNoAuth() {
                 val pageable = PageRequest.of(0, 20)
                 val page = PageImpl(listOf(venueResponse()), pageable, 1)
                 every { venueService.getVenues(0, 20, null) } returns page
@@ -384,7 +384,7 @@ class VenueControllerTest {
 
             @Test
             @DisplayName("GET /venues/{id} → 200")
-            fun `get venue without auth returns 200`() {
+            fun getVenue_shouldReturnOk_whenNoAuth() {
                 val detail = VenueDto.DetailResponse(
                     id = venueId,
                     name = "올림픽공원",

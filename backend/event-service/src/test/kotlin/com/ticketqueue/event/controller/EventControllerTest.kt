@@ -456,7 +456,7 @@ class EventControllerTest {
 
             @Test
             @DisplayName("POST /events with ROLE_USER → 403")
-            fun `post events with user role returns 403`() {
+            fun postEvents_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     post("/events")
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -470,7 +470,7 @@ class EventControllerTest {
 
             @Test
             @DisplayName("PATCH /events/{id} with ROLE_USER → 403")
-            fun `patch event with user role returns 403`() {
+            fun patchEvent_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     patch("/events/{eventId}", eventId)
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -484,7 +484,7 @@ class EventControllerTest {
 
             @Test
             @DisplayName("DELETE /events/{id} with ROLE_USER → 403")
-            fun `delete event with user role returns 403`() {
+            fun deleteEvent_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     delete("/events/{eventId}", eventId)
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -501,7 +501,7 @@ class EventControllerTest {
 
             @Test
             @DisplayName("GET /events → 200")
-            fun `get events without auth returns 200`() {
+            fun getEvents_shouldReturnOk_whenNoAuth() {
                 val pageable = PageRequest.of(0, 20)
                 val page = PageImpl(listOf(listResponse()), pageable, 1)
                 every { eventService.getEvents(0, 20, null, null, null) } returns page
@@ -512,7 +512,7 @@ class EventControllerTest {
 
             @Test
             @DisplayName("GET /events/{id} → 200")
-            fun `get event without auth returns 200`() {
+            fun getEvent_shouldReturnOk_whenNoAuth() {
                 every { eventService.getEvent(eventId) } returns detailResponse()
 
                 mockMvc.perform(get("/events/{eventId}", eventId))

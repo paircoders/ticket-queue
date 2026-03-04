@@ -405,7 +405,7 @@ class ScheduleControllerTest {
 
             @Test
             @DisplayName("POST /events/{id}/schedules with ROLE_USER → 403")
-            fun `post schedules with user role returns 403`() {
+            fun postSchedule_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     post("/events/{eventId}/schedules", eventId)
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -419,7 +419,7 @@ class ScheduleControllerTest {
 
             @Test
             @DisplayName("PATCH /events/schedules/{id}/status with ROLE_USER → 403")
-            fun `patch schedule status with user role returns 403`() {
+            fun patchScheduleStatus_shouldReturnForbidden_whenUserRole() {
                 mockMvc.perform(
                     patch("/events/schedules/{scheduleId}/status", scheduleId)
                         .header("X-User-Id", UUID.randomUUID().toString())
@@ -438,7 +438,7 @@ class ScheduleControllerTest {
 
             @Test
             @DisplayName("GET /events/{id}/schedules → 200")
-            fun `get schedules without auth returns 200`() {
+            fun getSchedules_shouldReturnOk_whenNoAuth() {
                 every { scheduleService.getSchedules(eventId) } returns listOf(listResponse())
 
                 mockMvc.perform(get("/events/{eventId}/schedules", eventId))
@@ -447,7 +447,7 @@ class ScheduleControllerTest {
 
             @Test
             @DisplayName("GET /events/schedules/{id} → 200")
-            fun `get schedule without auth returns 200`() {
+            fun getSchedule_shouldReturnOk_whenNoAuth() {
                 every { scheduleService.getSchedule(scheduleId) } returns detailResponse()
 
                 mockMvc.perform(get("/events/schedules/{scheduleId}", scheduleId))
