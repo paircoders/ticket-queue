@@ -22,4 +22,11 @@ class QueueDto {
         val estimatedWaitTime: Long, // 예상 대기 시간 (초)
         val token: String?           // WAITING 상태에서는 null
     )
+
+    data class StatusResponse(
+        val status: QueueStatus,
+        val rank: Long,              // 1-based 대기 순번 (ACTIVE 상태에서는 0)
+        val estimatedWaitTime: Long, // 예상 대기 시간 (초, ACTIVE 상태에서는 0)
+        val token: String?           // WAITING 상태에서는 null
+    )
 }

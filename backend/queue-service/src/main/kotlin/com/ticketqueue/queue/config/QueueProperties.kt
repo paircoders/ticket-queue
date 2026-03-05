@@ -7,7 +7,8 @@ data class QueueProperties(
     val batch: BatchProperties = BatchProperties(),
     val token: TokenProperties = TokenProperties(),
     val maxCapacity: Int = 50000,
-    val activeUser: ActiveUserProperties = ActiveUserProperties()
+    val activeUser: ActiveUserProperties = ActiveUserProperties(),
+    val rateLimit: RateLimitProperties = RateLimitProperties()
 ) {
     data class BatchProperties(
         val size: Int = 10,
@@ -20,5 +21,10 @@ data class QueueProperties(
 
     data class ActiveUserProperties(
         val ttl: Long = 600
+    )
+
+    data class RateLimitProperties(
+        val maxRequests: Int = 15,
+        val windowSeconds: Long = 60
     )
 }

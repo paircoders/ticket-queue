@@ -1,0 +1,176 @@
+package com.ticketqueue.queue.service
+
+import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.queue.config.QueueProperties
+import com.ticketqueue.queue.dto.QueueStatus
+import com.ticketqueue.queue.exception.QueueException
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.script.DefaultRedisScript
+import java.util.UUID
+
+@DisplayName("QueueService 단위 테스트")
+class QueueServiceTest {
+
+    private lateinit var stringRedisTemplate: StringRedisTemplate
+    private lateinit var queueEnterScript: DefaultRedisScript<List<*>>
+    private lateinit var queueStatusScript: DefaultRedisScript<List<*>>
+    private lateinit var rateLimitScript: DefaultRedisScript<Long>
+    private lateinit var queueProperties: QueueProperties
+    private lateinit var queueService: QueueService
+
+    private val userId = UUID.randomUUID()
+    private val scheduleId = UUID.randomUUID()
+
+    @BeforeEach
+    fun setUp() {
+        stringRedisTemplate = mockk()
+        queueEnterScript = mockk()
+        queueStatusScript = mockk()
+        rateLimitScript = mockk()
+        queueProperties = QueueProperties(
+            batch = QueueProperties.BatchProperties(size = 10, interval = 1000),
+            rateLimit = QueueProperties.RateLimitProperties(maxRequests = 15, windowSeconds = 60)
+        )
+        queueService = QueueService(
+            stringRedisTemplate,
+            queueEnterScript,
+            queueStatusScript,
+            rateLimitScript,
+            queueProperties
+        )
+    }
+
+    @Nested
+    @DisplayName("getQueueStatus")
+    inner class GetQueueStatus {
+
+        @Nested
+        @DisplayName("WAITING 상태")
+        inner class Waiting {
+
+            @Test
+            @DisplayName("rank와 estimatedWaitTime을 올바르게 반환한다")
+            fun returnsWaitingWithRankAndWaitTime() {
+                stubRateLimitAllow()
+                // ZRANK = 9 (0-based) → rank = 10 (1-based)
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(0L, 9L)
+
+                val result = queueService.getQueueStatus(userId, scheduleId)
+
+                assertEquals(QueueStatus.WAITING, result.status)
+                assertEquals(10L, result.rank)
+                assertEquals(1L, result.estimatedWaitTime) // ceil(10/10) * 1000ms = 1s
+                assertNull(result.token)
+            }
+
+            @Test
+            @DisplayName("첫 번째 대기자(rank=0)의 estimatedWaitTime은 1초이다")
+            fun firstInQueueHasOneSecondWait() {
+                stubRateLimitAllow()
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(0L, 0L)
+
+                val result = queueService.getQueueStatus(userId, scheduleId)
+
+                assertEquals(1L, result.rank)
+                assertEquals(1L, result.estimatedWaitTime)
+            }
+        }
+
+        @Nested
+        @DisplayName("ACTIVE 상태")
+        inner class Active {
+
+            @Test
+            @DisplayName("token을 반환하고 rank와 estimatedWaitTime은 0이다")
+            fun returnsActiveWithToken() {
+                val token = "queue-token-abc123"
+                stubRateLimitAllow()
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(1L, token)
+
+                val result = queueService.getQueueStatus(userId, scheduleId)
+
+                assertEquals(QueueStatus.ACTIVE, result.status)
+                assertEquals(0L, result.rank)
+                assertEquals(0L, result.estimatedWaitTime)
+                assertEquals(token, result.token)
+            }
+        }
+
+        @Nested
+        @DisplayName("NOT_IN_QUEUE 상태")
+        inner class NotInQueue {
+
+            @Test
+            @DisplayName("대기열에 없으면 NOT_IN_QUEUE 예외를 던진다")
+            fun throwsNotInQueue() {
+                stubRateLimitAllow()
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(2L, -1L)
+
+                val exception = assertThrows<QueueException> {
+                    queueService.getQueueStatus(userId, scheduleId)
+                }
+                assertEquals(ErrorCode.NOT_IN_QUEUE, exception.errorCode)
+            }
+        }
+
+        @Nested
+        @DisplayName("Rate Limit")
+        inner class RateLimit {
+
+            @Test
+            @DisplayName("한도 초과 시 RATE_LIMIT_EXCEEDED 예외를 던진다")
+            fun throwsRateLimitExceeded() {
+                every {
+                    stringRedisTemplate.execute(rateLimitScript, any(), *anyVararg<String>())
+                } returns 1L
+
+                val exception = assertThrows<QueueException> {
+                    queueService.getQueueStatus(userId, scheduleId)
+                }
+                assertEquals(ErrorCode.RATE_LIMIT_EXCEEDED, exception.errorCode)
+                // Rate limit 초과 시 status 스크립트는 실행되지 않아야 함
+                verify(exactly = 0) { stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>()) }
+            }
+
+            @Test
+            @DisplayName("Rate Limit Redis 장애 시 요청을 허용한다 (fail-open)")
+            fun failOpenWhenRedisError() {
+                every {
+                    stringRedisTemplate.execute(rateLimitScript, any(), *anyVararg<String>())
+                } throws RuntimeException("Redis connection refused")
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(0L, 4L)
+
+                val result = queueService.getQueueStatus(userId, scheduleId)
+
+                assertEquals(QueueStatus.WAITING, result.status)
+                assertEquals(5L, result.rank)
+            }
+        }
+    }
+
+    private fun stubRateLimitAllow() {
+        every {
+            stringRedisTemplate.execute(rateLimitScript, any(), *anyVararg<String>())
+        } returns 0L
+    }
+}

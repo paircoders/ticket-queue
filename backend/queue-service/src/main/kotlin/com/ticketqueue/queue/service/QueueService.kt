@@ -21,6 +21,8 @@ import java.util.UUID
 class QueueService(
     private val stringRedisTemplate: StringRedisTemplate,
     private val queueEnterScript: DefaultRedisScript<List<*>>,
+    private val queueStatusScript: DefaultRedisScript<List<*>>,
+    private val rateLimitScript: DefaultRedisScript<Long>,
     private val queueProperties: QueueProperties
 ) {
 
@@ -89,6 +91,88 @@ class QueueService(
                 throw QueueException(ErrorCode.ALREADY_APPROVED)
             }
             else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
+        }
+    }
+
+    /**
+     * 대기열 상태 조회 (REQ-QUEUE-002)
+     *
+     * Lua 스크립트 반환 코드:
+     * - 0: WAITING — 대기 중 (rank 반환)
+     * - 1: ACTIVE  — 배치 승인 완료 (token 반환)
+     * - 2: NOT_IN_QUEUE — 대기열에 없음
+     *
+     * Rate Limit: 15회/분 (REQ-QUEUE-008), Fail-open 정책
+     */
+    fun getQueueStatus(userId: UUID, scheduleId: UUID): QueueDto.StatusResponse {
+        checkRateLimit(userId)
+
+        val queueKey = "queue:$scheduleId"
+        val userTokenKey = "queue:user-token:$userId:$scheduleId"
+        val keys = listOf(queueKey, userTokenKey)
+
+        @Suppress("UNCHECKED_CAST")
+        val result = try {
+            stringRedisTemplate.execute(queueStatusScript, keys, userId.toString()) as List<*>
+        } catch (e: Exception) {
+            logger.error("Redis execute failed (status): scheduleId={}, userId={}", scheduleId, userId, e)
+            throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 서비스에 일시적인 오류가 발생했습니다.", e)
+        }
+
+        val code = (result.getOrNull(0) as? Long)?.toInt()
+            ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
+
+        return when (code) {
+            0 -> {
+                val rank = safeRank(result)
+                logger.debug("Queue status WAITING: userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
+                QueueDto.StatusResponse(
+                    status = QueueStatus.WAITING,
+                    rank = rank,
+                    estimatedWaitTime = calculateWaitTime(rank),
+                    token = null
+                )
+            }
+            1 -> {
+                val token = result.getOrNull(1) as? String
+                    ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "토큰 정보를 읽을 수 없습니다.")
+                logger.debug("Queue status ACTIVE: userId={}, scheduleId={}", userId, scheduleId)
+                QueueDto.StatusResponse(
+                    status = QueueStatus.ACTIVE,
+                    rank = 0,
+                    estimatedWaitTime = 0,
+                    token = token
+                )
+            }
+            2 -> {
+                logger.debug("Queue status NOT_IN_QUEUE: userId={}, scheduleId={}", userId, scheduleId)
+                throw QueueException(ErrorCode.NOT_IN_QUEUE)
+            }
+            else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
+        }
+    }
+
+    /**
+     * Rate Limit 검사 (REQ-QUEUE-008)
+     *
+     * Fail-open: Redis 장애 시 요청을 허용하여 Rate Limiter 오류가 서비스 장애로 이어지지 않도록 한다.
+     */
+    private fun checkRateLimit(userId: UUID) {
+        val rateLimitKey = "rate:queue-status:$userId"
+        val result = try {
+            stringRedisTemplate.execute(
+                rateLimitScript,
+                listOf(rateLimitKey),
+                queueProperties.rateLimit.maxRequests.toString(),
+                queueProperties.rateLimit.windowSeconds.toString()
+            )
+        } catch (e: Exception) {
+            logger.warn("Rate limit check failed (fail-open): userId={}", userId, e)
+            return
+        }
+        if (result == 1L) {
+            logger.warn("Rate limit exceeded: userId={}", userId)
+            throw QueueException(ErrorCode.RATE_LIMIT_EXCEEDED)
         }
     }
 

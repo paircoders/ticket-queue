@@ -18,6 +18,9 @@ queue:
   max-capacity: 50000
   active-user:
     ttl: 600
+  rate-limit:
+    max-requests: 15
+    window-seconds: 60
 
 management:
   endpoints:

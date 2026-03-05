@@ -64,4 +64,42 @@ class RedisConfig {
             setResultType(List::class.java)
         }
     }
+
+    /**
+     * 대기열 상태 조회 Lua 스크립트 (REQ-QUEUE-002)
+     *
+     * 토큰 발급 여부(ACTIVE)와 대기 순위(WAITING)를 단일 round-trip으로 확인한다.
+     *
+     * KEYS[1]: queue:{scheduleId}
+     * KEYS[2]: queue:user-token:{userId}:{scheduleId}
+     * ARGV[1]: userId
+     * @return [resultCode, value] 쌍
+     *   {0, rank}  - WAITING (rank = 0-based ZRANK)
+     *   {1, token} - ACTIVE (token 문자열)
+     *   {2, -1}    - NOT_IN_QUEUE
+     */
+    @Bean
+    fun queueStatusScript(): DefaultRedisScript<List<*>> {
+        return DefaultRedisScript<List<*>>().apply {
+            setLocation(ClassPathResource("lua/queue-status.lua"))
+            setResultType(List::class.java)
+        }
+    }
+
+    /**
+     * Rate Limit 검사 Lua 스크립트 (REQ-QUEUE-008)
+     *
+     * 고정 윈도우 방식으로 사용자별 요청 횟수를 원자적으로 카운트한다.
+     *
+     * KEYS[1]: rate:queue-status:{userId}
+     * ARGV[1]: maxRequests, ARGV[2]: windowSeconds
+     * @return 0 (허용) / 1 (한도 초과)
+     */
+    @Bean
+    fun rateLimitScript(): DefaultRedisScript<Long> {
+        return DefaultRedisScript<Long>().apply {
+            setLocation(ClassPathResource("lua/rate-limit.lua"))
+            setResultType(Long::class.java)
+        }
+    }
 }

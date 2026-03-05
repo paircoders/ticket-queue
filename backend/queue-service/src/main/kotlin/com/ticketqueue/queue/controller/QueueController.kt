@@ -6,9 +6,11 @@ import com.ticketqueue.queue.exception.QueueException
 import com.ticketqueue.queue.service.QueueService
 import jakarta.validation.Valid
 import org.springframework.security.core.Authentication
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -34,5 +36,15 @@ class QueueController(private val queueService: QueueService) {
         val scheduleId = request.scheduleId
             ?: throw QueueException(ErrorCode.INVALID_INPUT, "회차 ID는 필수입니다.")
         return queueService.enterQueue(userId, scheduleId)
+    }
+
+    @GetMapping("/status")
+    fun status(
+        @RequestParam scheduleId: UUID,
+        authentication: Authentication
+    ): QueueDto.StatusResponse {
+        val userId = runCatching { UUID.fromString(authentication.principal as String) }
+            .getOrElse { throw QueueException(ErrorCode.UNAUTHORIZED) }
+        return queueService.getQueueStatus(userId, scheduleId)
     }
 }
