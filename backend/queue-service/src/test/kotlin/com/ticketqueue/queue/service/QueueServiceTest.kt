@@ -185,6 +185,7 @@ class QueueServiceTest {
                 val counter = meterRegistry.find("queue.ratelimit.failopen.total").counter()
                 assertEquals(1.0, counter?.count())
             }
+
         }
 
         @Nested

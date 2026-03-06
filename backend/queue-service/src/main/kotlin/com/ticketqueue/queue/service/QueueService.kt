@@ -152,7 +152,13 @@ class QueueService(
      *
      * Fail-open: Redis 장애 시 요청을 허용하여 Rate Limiter 오류가 서비스 장애로 이어지지 않도록 한다.
      * Fail-open 발생 시 `queue.ratelimit.failopen.total` 카운터를 증가시켜 모니터링 알람 기준으로 사용한다.
+     *
+     * null 처리: Spring의 execute()는 @Nullable T를 반환한다. Kotlin-Java 제네릭 interop 특성상
+     * 컴파일러가 null 불가로 추론하지만, 런타임에서는 null이 반환될 수 있다.
+     * Kotlin의 암묵적 null assertion이 NPE를 발생시켜 catch 블록이 처리하나,
+     * null 반환 시 명시적 로그를 남기기 위해 null 체크를 추가한다.
      */
+    @Suppress("SENSELESS_COMPARISON")
     private fun checkRateLimit(userId: UUID) {
         val result = try {
             stringRedisTemplate.execute(
@@ -163,6 +169,11 @@ class QueueService(
             )
         } catch (e: Exception) {
             logger.warn(e) { "Rate limit check failed (fail-open): userId=$userId" }
+            rateLimitFailOpenCounter.increment()
+            return
+        }
+        if (result == null) {
+            logger.warn { "Rate limit script returned null (fail-open): userId=$userId" }
             rateLimitFailOpenCounter.increment()
             return
         }
