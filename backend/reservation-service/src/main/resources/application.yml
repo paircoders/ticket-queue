@@ -59,6 +59,10 @@ reservation:
   hold:
     ttl: 300    # 좌석 선점 유효 시간 (초, 5분)
   max-seats: 4  # 1회 최대 예매 가능 좌석 수
+  redis:
+    key-prefix: "reservation:"
+    hold-key-prefix: "seat:hold:"    # {hold-key-prefix}{scheduleId}:{seatId}
+    hold-seats-prefix: "hold_seats:" # {hold-seats-prefix}{scheduleId}
 
 # ============================================================
 # Transactional Outbox Pattern
@@ -113,4 +117,4 @@ management:
         include: health, info
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
