@@ -673,11 +673,13 @@ erDiagram
     reservations {
         uuid id PK
         uuid user_id "User Service 참조 (ID만)"
-        uuid event_schedule_id "Event Service 참조 (ID만)"
+        uuid schedule_id "Event Service 참조 (ID만, 비정규화 단축명)"
+        uuid event_id "Event Service 참조 (ID만, 비정규화로 조회 감소)"
         varchar ticket_number UK "티켓 번호"
         varchar status "PENDING/CONFIRMED/CANCELLED"
         decimal total_amount
         timestamp hold_expires_at "선점 만료 시간 (5분)"
+        uuid payment_id "Payment Service 참조 (CONFIRMED 후 저장)"
         timestamp created_at
         timestamp updated_at
     }
@@ -700,16 +702,18 @@ erDiagram
 
 **`reservations` 테이블:**
 - 예매 정보
-- **event_schedule_id**: 회차 ID (FK 없음, MSA 원칙)
+- **schedule_id**: 회차 ID (FK 없음, MSA 원칙) — 문서 원안의 `event_schedule_id`를 단축
+- **event_id**: 공연 ID (비정규화 저장) — Event Service 조회 횟수 감소 목적
 - **ticket_number**: 티켓 번호 (예매 확정 시 생성)
   - 포맷: `T` + `YYYYMMDD` + `-` + `난수 7자리` (예: `T20260601-X9A2B1C`)
-  - 유일성 보장: Unique Index 적용
+  - 유일성 보장: `UNIQUE` 제약 + 부분 Unique Index (`WHERE ticket_number IS NOT NULL`)
 - **status**:
   - PENDING: 좌석 선점 완료, 결제 대기
   - CONFIRMED: 결제 완료, 예매 확정
   - CANCELLED: 예매 취소
 - **hold_expires_at**: 선점 만료 시간 (현재 시간 + 5분)
-- **user_id, event_schedule_id**: 다른 서비스의 ID만 참조 (FK 없음, MSA 원칙)
+- **payment_id**: 결제 ID (CONFIRMED 후 저장, SAGA 추적용)
+- **user_id, schedule_id, event_id, payment_id**: 다른 서비스의 ID만 참조 (FK 없음, MSA 원칙)
 - **관련 요구사항**: REQ-RSV-001, REQ-RSV-004, REQ-RSV-006
 
 **SQL Schema:**
@@ -717,27 +721,17 @@ erDiagram
 <summary>SQL</summary>
 
 ```sql
--- 스키마 생성
-CREATE SCHEMA IF NOT EXISTS reservation_service;
-
--- updated_at 자동 업데이트 트리거 함수 (Reservation Service 전용)
-CREATE OR REPLACE FUNCTION reservation_service.update_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
 -- reservations 테이블
 CREATE TABLE reservation_service.reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,  -- FK 없음 (MSA 원칙)
-    event_schedule_id UUID NOT NULL,  -- FK 없음 (회차 ID)
-    ticket_number VARCHAR(50) UNIQUE,  -- 티켓 번호
+    user_id UUID NOT NULL,           -- FK 없음 (MSA 원칙)
+    schedule_id UUID NOT NULL,       -- FK 없음 (회차 ID, event_service.event_schedules 참조)
+    event_id UUID NOT NULL,          -- FK 없음 (공연 ID, 비정규화로 Event Service 조회 감소)
+    ticket_number VARCHAR(50) UNIQUE, -- 티켓 번호 (CONFIRMED 후 발급)
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     total_amount DECIMAL(10, 0) NOT NULL,
     hold_expires_at TIMESTAMP NOT NULL,
+    payment_id UUID,                 -- FK 없음 (CONFIRMED 후 저장, SAGA 추적용)
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
 
@@ -746,12 +740,14 @@ CREATE TABLE reservation_service.reservations (
 );
 
 -- 인덱스
-CREATE UNIQUE INDEX idx_reservations_ticket_number ON reservation_service.reservations(ticket_number);
-CREATE INDEX idx_reservations_user_status ON reservation_service.reservations(user_id, status);
-CREATE INDEX idx_reservations_schedule_created ON reservation_service.reservations(event_schedule_id, created_at DESC);
+CREATE INDEX idx_reservations_user_id ON reservation_service.reservations(user_id);
+CREATE INDEX idx_reservations_schedule_id ON reservation_service.reservations(schedule_id);
+CREATE INDEX idx_reservations_status ON reservation_service.reservations(status);
 CREATE INDEX idx_reservations_hold_expires ON reservation_service.reservations(hold_expires_at)
-    WHERE status = 'PENDING';  -- 부분 인덱스 (만료 처리용)
-CREATE INDEX idx_reservations_status_created ON reservation_service.reservations(status, created_at DESC);
+    WHERE status = 'PENDING';  -- 부분 인덱스 (만료 배치 처리용)
+CREATE INDEX idx_reservations_user_schedule ON reservation_service.reservations(user_id, schedule_id, status);
+CREATE UNIQUE INDEX idx_reservations_ticket_number ON reservation_service.reservations(ticket_number)
+    WHERE ticket_number IS NOT NULL;  -- 부분 Unique 인덱스 (NULL 제외)
 
 -- updated_at 트리거
 CREATE TRIGGER trg_reservations_updated_at
@@ -759,8 +755,11 @@ BEFORE UPDATE ON reservation_service.reservations
 FOR EACH ROW EXECUTE FUNCTION reservation_service.update_timestamp();
 
 -- 테이블 코멘트
-COMMENT ON TABLE reservation_service.reservations IS '예매 정보. event_schedule_id는 회차 ID.';
-COMMENT ON COLUMN reservation_service.reservations.ticket_number IS '티켓 번호 (예매 확정 시 생성).';
+COMMENT ON TABLE reservation_service.reservations IS '예매 정보. PENDING 상태에서 hold_expires_at 이내에 결제 완료 필요.';
+COMMENT ON COLUMN reservation_service.reservations.schedule_id IS '공연 회차 UUID (event_service.event_schedules 참조, 직접 FK 없음)';
+COMMENT ON COLUMN reservation_service.reservations.event_id IS '공연 UUID (event_service.events 참조, 비정규화 저장)';
+COMMENT ON COLUMN reservation_service.reservations.ticket_number IS '티켓 번호 (예매 확정 시 생성). 포맷: T{YYYYMMDD}-{난수7자리}';
+COMMENT ON COLUMN reservation_service.reservations.payment_id IS '결제 ID (결제 완료 후 저장, SAGA 추적용)';
 COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 만료 시간 (현재 + 5분). 배치 작업으로 자동 취소.';
 ```
 </details>
@@ -791,20 +790,26 @@ COMMENT ON COLUMN reservation_service.reservations.hold_expires_at IS '선점 �
 CREATE TABLE reservation_service.reservation_seats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     reservation_id UUID NOT NULL REFERENCES reservation_service.reservations(id) ON DELETE CASCADE,
-    seat_id UUID NOT NULL,  -- Event Service 참조 (FK 없음)
-    seat_number VARCHAR(10) NOT NULL,  -- 스냅샷
-    grade VARCHAR(10) NOT NULL,  -- 스냅샷
-    price DECIMAL(10, 0) NOT NULL,  -- 스냅샷
+    seat_id UUID NOT NULL,           -- Event Service 참조 (FK 없음)
+    seat_number VARCHAR(20) NOT NULL, -- 스냅샷
+    grade VARCHAR(10) NOT NULL,       -- 스냅샷
+    price DECIMAL(10, 0) NOT NULL,    -- 스냅샷
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
 
-    CONSTRAINT chk_reservation_seats_price CHECK (price >= 0)
+    CONSTRAINT chk_reservation_seats_grade CHECK (grade IN ('VIP', 'S', 'A', 'B')),
+    CONSTRAINT chk_reservation_seats_price CHECK (price >= 0),
+    CONSTRAINT uk_reservation_seats UNIQUE (reservation_id, seat_id)  -- 동일 예매 내 좌석 중복 방지
 );
 
 -- 인덱스
-CREATE INDEX idx_reservation_seats_reservation ON reservation_service.reservation_seats(reservation_id);
+CREATE INDEX idx_reservation_seats_reservation_id ON reservation_service.reservation_seats(reservation_id);
 CREATE INDEX idx_reservation_seats_seat ON reservation_service.reservation_seats(seat_id);
 
 -- 테이블 코멘트
 COMMENT ON TABLE reservation_service.reservation_seats IS '예매 좌석 스냅샷. 공연 정보 변경 시에도 예매 정보 유지.';
+COMMENT ON COLUMN reservation_service.reservation_seats.seat_number IS '좌석 번호 스냅샷 (예: A-1, B-10)';
+COMMENT ON COLUMN reservation_service.reservation_seats.grade IS '좌석 등급 스냅샷 (VIP/S/A/B)';
+COMMENT ON COLUMN reservation_service.reservation_seats.price IS '좌석 가격 스냅샷';
 ```
 </details>
 

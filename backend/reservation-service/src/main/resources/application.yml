@@ -1,6 +1,12 @@
+# ============================================================
+# Server
+# ============================================================
 server:
   port: 8084
 
+# ============================================================
+# Spring Core
+# ============================================================
 spring:
   application:
     name: reservation-service
@@ -9,22 +15,7 @@ spring:
       - "optional:classpath:/application-common-${spring.profiles.active}.yml"
       - "optional:aws-secretsmanager:reservation-svc/secure-config"
 
-outbox:
-  poller:
-    enabled: true
-    max-retry-count: 3
-    batch-size: 100
-    fixed-delay: 1000
-  cleanup:
-    enabled: true
-    aggregate-type: Reservation
-    retention-days: 7
-
-processed-event:
-  cleanup:
-    enabled: true
-    retention-days: 30
-
+  # --- JPA / Hibernate ---
   jpa:
     hibernate:
       ddl-auto: validate
@@ -33,16 +24,10 @@ processed-event:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: reservation_service
         format_sql: true
-        jdbc:
-          time_zone: UTC
     show-sql: false
     open-in-view: false
 
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
+  # --- Kafka ---
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
@@ -56,18 +41,50 @@ processed-event:
     listener:
       ack-mode: MANUAL_IMMEDIATE
 
+# ============================================================
+# Redisson (분산 락 - 좌석 선점용)
+# ============================================================
 redisson:
   single-server-config:
     address: redis://localhost:6379
+    password: ${valkey_password}
   lock:
-    wait-time: 15000  # 15 seconds
-    lease-time: 300000  # 5 minutes
+    wait-time: 15000   # ms - 락 획득 대기 시간 (15초)
+    lease-time: 300000 # ms - 락 보유 시간 (5분, 좌석 선점 TTL과 동일)
 
+# ============================================================
+# 예매 비즈니스 설정
+# ============================================================
 reservation:
   hold:
-    ttl: 300  # 5 minutes in seconds
-  max-seats: 4
+    ttl: 300    # 좌석 선점 유효 시간 (초, 5분)
+  max-seats: 4  # 1회 최대 예매 가능 좌석 수
 
+# ============================================================
+# Transactional Outbox Pattern
+# ============================================================
+outbox:
+  poller:
+    enabled: true
+    max-retry-count: 3
+    batch-size: 100
+    fixed-delay: 1000  # ms
+  cleanup:
+    enabled: true
+    aggregate-type: Reservation
+    retention-days: 7  # 발행 완료 이벤트 보관 기간
+
+# ============================================================
+# 멱등성 - Processed Events 정리
+# ============================================================
+processed-event:
+  cleanup:
+    enabled: true
+    retention-days: 30
+
+# ============================================================
+# OpenFeign (서비스 간 내부 통신)
+# ============================================================
 feign:
   client:
     config:
@@ -79,10 +96,16 @@ feign:
         connect-timeout: 2000
         read-timeout: 3000
 
+# ============================================================
+# 내부 서비스 API Key
+# ============================================================
 internal:
   api:
     key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
 
+# ============================================================
+# Actuator
+# ============================================================
 management:
   endpoints:
     web:

@@ -20,9 +20,3 @@ dependencies {
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.bundles.testcontainers)
 }
-
-dependencyManagement {
-    imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:${libs.versions.springCloud.get()}")
-    }
-}
