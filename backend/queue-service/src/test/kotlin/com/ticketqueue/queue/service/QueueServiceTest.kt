@@ -4,6 +4,7 @@ import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.queue.config.QueueProperties
 import com.ticketqueue.queue.dto.QueueStatus
 import com.ticketqueue.queue.exception.QueueException
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -26,6 +27,7 @@ class QueueServiceTest {
     private lateinit var queueStatusScript: DefaultRedisScript<List<*>>
     private lateinit var rateLimitScript: DefaultRedisScript<Long>
     private lateinit var queueProperties: QueueProperties
+    private lateinit var meterRegistry: SimpleMeterRegistry
     private lateinit var queueService: QueueService
 
     private val userId = UUID.randomUUID()
@@ -41,12 +43,14 @@ class QueueServiceTest {
             batch = QueueProperties.BatchProperties(size = 10, interval = 1000),
             rateLimit = QueueProperties.RateLimitProperties(maxRequests = 15, windowSeconds = 60)
         )
+        meterRegistry = SimpleMeterRegistry()
         queueService = QueueService(
             stringRedisTemplate,
             queueEnterScript,
             queueStatusScript,
             rateLimitScript,
-            queueProperties
+            queueProperties,
+            meterRegistry
         )
     }
 
@@ -164,6 +168,56 @@ class QueueServiceTest {
 
                 assertEquals(QueueStatus.WAITING, result.status)
                 assertEquals(5L, result.rank)
+            }
+
+            @Test
+            @DisplayName("Rate Limit Redis 장애 시 fail-open 카운터를 증가시킨다")
+            fun incrementsFailOpenCounterWhenRedisError() {
+                every {
+                    stringRedisTemplate.execute(rateLimitScript, any(), *anyVararg<String>())
+                } throws RuntimeException("Redis connection refused")
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(0L, 4L)
+
+                queueService.getQueueStatus(userId, scheduleId)
+
+                val counter = meterRegistry.find("queue.ratelimit.failopen.total").counter()
+                assertEquals(1.0, counter?.count())
+            }
+        }
+
+        @Nested
+        @DisplayName("Redis 실행 실패")
+        inner class RedisFailure {
+
+            @Test
+            @DisplayName("status 스크립트 실행 실패 시 INTERNAL_SERVER_ERROR를 던진다")
+            fun throwsInternalErrorWhenStatusScriptFails() {
+                stubRateLimitAllow()
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } throws RuntimeException("Redis connection refused")
+
+                val exception = assertThrows<QueueException> {
+                    queueService.getQueueStatus(userId, scheduleId)
+                }
+                assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
+            }
+
+            @Test
+            @DisplayName("ACTIVE 응답에서 token 위치에 String이 아닌 값이 오면 INTERNAL_SERVER_ERROR를 던진다")
+            fun throwsInternalErrorWhenTokenMalformed() {
+                stubRateLimitAllow()
+                // code=1 (ACTIVE)이지만 token 위치에 Long이 들어온 Lua 버그 시나리오
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(1L, 999L)
+
+                val exception = assertThrows<QueueException> {
+                    queueService.getQueueStatus(userId, scheduleId)
+                }
+                assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
             }
         }
     }

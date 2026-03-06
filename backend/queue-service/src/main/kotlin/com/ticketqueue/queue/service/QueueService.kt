@@ -2,10 +2,13 @@ package com.ticketqueue.queue.service
 
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.queue.config.QueueProperties
+import com.ticketqueue.queue.config.QueueRedisKeys
 import com.ticketqueue.queue.dto.QueueDto
 import com.ticketqueue.queue.dto.QueueStatus
 import com.ticketqueue.queue.exception.QueueException
-import org.slf4j.LoggerFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
@@ -23,10 +26,14 @@ class QueueService(
     private val queueEnterScript: DefaultRedisScript<List<*>>,
     private val queueStatusScript: DefaultRedisScript<List<*>>,
     private val rateLimitScript: DefaultRedisScript<Long>,
-    private val queueProperties: QueueProperties
+    private val queueProperties: QueueProperties,
+    private val meterRegistry: MeterRegistry
 ) {
 
-    private val logger = LoggerFactory.getLogger(QueueService::class.java)
+    private val logger = KotlinLogging.logger {}
+
+    private val rateLimitFailOpenCounter: Counter =
+        meterRegistry.counter("queue.ratelimit.failopen.total")
 
     /**
      * 대기열 진입 처리 (REQ-QUEUE-001)
@@ -42,10 +49,7 @@ class QueueService(
      *       Event Service 내부 API 호출 또는 Gateway 레벨 검증 필요 (GitHub Issue #163)
      */
     fun enterQueue(userId: UUID, scheduleId: UUID): QueueDto.EnterResponse {
-        val queueKey = "queue:$scheduleId"
-        val activeKey = "queue:active:$userId"
-        val keys = listOf(queueKey, activeKey)
-
+        val keys = listOf(QueueRedisKeys.queue(scheduleId), QueueRedisKeys.active(userId))
         val args = arrayOf(
             userId.toString(),
             System.currentTimeMillis().toString(),
@@ -54,13 +58,10 @@ class QueueService(
             scheduleId.toString()
         )
 
-        @Suppress("UNCHECKED_CAST")
-        val result = try {
-            stringRedisTemplate.execute(queueEnterScript, keys, *args) as List<*>
-        } catch (e: Exception) {
-            logger.error("Redis execute failed: scheduleId={}, userId={}", scheduleId, userId, e)
-            throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 서비스에 일시적인 오류가 발생했습니다.", e)
-        }
+        val result = executeLuaOrThrow(
+            queueEnterScript, keys, *args,
+            logContext = "enter: scheduleId=$scheduleId, userId=$userId"
+        )
 
         val code = (result.getOrNull(0) as? Long)?.toInt()
             ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
@@ -69,7 +70,7 @@ class QueueService(
             0, 1 -> {
                 val rank = safeRank(result)
                 val logMsg = if (code == 0) "Queue entered" else "Queue re-entered (idempotent)"
-                logger.info("$logMsg: userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
+                logger.info { "$logMsg: userId=$userId, scheduleId=$scheduleId, rank=$rank" }
                 QueueDto.EnterResponse(
                     status = QueueStatus.WAITING,
                     scheduleId = scheduleId,
@@ -79,15 +80,15 @@ class QueueService(
                 )
             }
             2 -> {
-                logger.warn("Queue enter rejected (already in another queue): userId={}, scheduleId={}", userId, scheduleId)
+                logger.warn { "Queue enter rejected (already in another queue): userId=$userId, scheduleId=$scheduleId" }
                 throw QueueException(ErrorCode.ALREADY_IN_QUEUE)
             }
             3 -> {
-                logger.warn("Queue enter rejected (queue full): scheduleId={}, capacity={}", scheduleId, queueProperties.maxCapacity)
+                logger.warn { "Queue enter rejected (queue full): scheduleId=$scheduleId, capacity=${queueProperties.maxCapacity}" }
                 throw QueueException(ErrorCode.QUEUE_FULL)
             }
             4 -> {
-                logger.info("Queue enter rejected (already approved): userId={}, scheduleId={}", userId, scheduleId)
+                logger.info { "Queue enter rejected (already approved): userId=$userId, scheduleId=$scheduleId" }
                 throw QueueException(ErrorCode.ALREADY_APPROVED)
             }
             else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
@@ -107,17 +108,11 @@ class QueueService(
     fun getQueueStatus(userId: UUID, scheduleId: UUID): QueueDto.StatusResponse {
         checkRateLimit(userId)
 
-        val queueKey = "queue:$scheduleId"
-        val userTokenKey = "queue:user-token:$userId:$scheduleId"
-        val keys = listOf(queueKey, userTokenKey)
-
-        @Suppress("UNCHECKED_CAST")
-        val result = try {
-            stringRedisTemplate.execute(queueStatusScript, keys, userId.toString()) as List<*>
-        } catch (e: Exception) {
-            logger.error("Redis execute failed (status): scheduleId={}, userId={}", scheduleId, userId, e)
-            throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 서비스에 일시적인 오류가 발생했습니다.", e)
-        }
+        val keys = listOf(QueueRedisKeys.queue(scheduleId), QueueRedisKeys.userToken(userId, scheduleId))
+        val result = executeLuaOrThrow(
+            queueStatusScript, keys, userId.toString(),
+            logContext = "status: scheduleId=$scheduleId, userId=$userId"
+        )
 
         val code = (result.getOrNull(0) as? Long)?.toInt()
             ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
@@ -125,7 +120,7 @@ class QueueService(
         return when (code) {
             0 -> {
                 val rank = safeRank(result)
-                logger.debug("Queue status WAITING: userId={}, scheduleId={}, rank={}", userId, scheduleId, rank)
+                logger.debug { "Queue status WAITING: userId=$userId, scheduleId=$scheduleId, rank=$rank" }
                 QueueDto.StatusResponse(
                     status = QueueStatus.WAITING,
                     rank = rank,
@@ -136,7 +131,7 @@ class QueueService(
             1 -> {
                 val token = result.getOrNull(1) as? String
                     ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "토큰 정보를 읽을 수 없습니다.")
-                logger.debug("Queue status ACTIVE: userId={}, scheduleId={}", userId, scheduleId)
+                logger.debug { "Queue status ACTIVE: userId=$userId, scheduleId=$scheduleId" }
                 QueueDto.StatusResponse(
                     status = QueueStatus.ACTIVE,
                     rank = 0,
@@ -145,7 +140,7 @@ class QueueService(
                 )
             }
             2 -> {
-                logger.debug("Queue status NOT_IN_QUEUE: userId={}, scheduleId={}", userId, scheduleId)
+                logger.debug { "Queue status NOT_IN_QUEUE: userId=$userId, scheduleId=$scheduleId" }
                 throw QueueException(ErrorCode.NOT_IN_QUEUE)
             }
             else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
@@ -156,23 +151,43 @@ class QueueService(
      * Rate Limit 검사 (REQ-QUEUE-008)
      *
      * Fail-open: Redis 장애 시 요청을 허용하여 Rate Limiter 오류가 서비스 장애로 이어지지 않도록 한다.
+     * Fail-open 발생 시 `queue.ratelimit.failopen.total` 카운터를 증가시켜 모니터링 알람 기준으로 사용한다.
      */
     private fun checkRateLimit(userId: UUID) {
-        val rateLimitKey = "rate:queue-status:$userId"
         val result = try {
             stringRedisTemplate.execute(
                 rateLimitScript,
-                listOf(rateLimitKey),
+                listOf(QueueRedisKeys.rateLimit(userId)),
                 queueProperties.rateLimit.maxRequests.toString(),
                 queueProperties.rateLimit.windowSeconds.toString()
             )
         } catch (e: Exception) {
-            logger.warn("Rate limit check failed (fail-open): userId={}", userId, e)
+            logger.warn(e) { "Rate limit check failed (fail-open): userId=$userId" }
+            rateLimitFailOpenCounter.increment()
             return
         }
         if (result == 1L) {
-            logger.warn("Rate limit exceeded: userId={}", userId)
+            logger.warn { "Rate limit exceeded: userId=$userId" }
             throw QueueException(ErrorCode.RATE_LIMIT_EXCEEDED)
+        }
+    }
+
+    /**
+     * Lua 스크립트를 실행하고 실패 시 INTERNAL_SERVER_ERROR를 던진다.
+     * enterQueue와 getQueueStatus의 공통 Redis 실행 패턴을 추출한 헬퍼.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun executeLuaOrThrow(
+        script: DefaultRedisScript<List<*>>,
+        keys: List<String>,
+        vararg args: String,
+        logContext: String
+    ): List<*> {
+        return try {
+            stringRedisTemplate.execute(script, keys, *args) as List<*>
+        } catch (e: Exception) {
+            logger.error(e) { "Redis execute failed ($logContext)" }
+            throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 서비스에 일시적인 오류가 발생했습니다.", e)
         }
     }
 
@@ -191,10 +206,10 @@ class QueueService(
         val batchSize = queueProperties.batch.size.toLong().coerceAtLeast(1)
         val intervalMs = queueProperties.batch.interval.coerceAtLeast(0)
         if (batchSize != queueProperties.batch.size.toLong() || intervalMs != queueProperties.batch.interval) {
-            logger.warn(
-                "Invalid queue batch config detected — batchSize={}, intervalMs={}. Using safe fallback values.",
-                queueProperties.batch.size, queueProperties.batch.interval
-            )
+            logger.warn {
+                "Invalid queue batch config detected — batchSize=${queueProperties.batch.size}, " +
+                    "intervalMs=${queueProperties.batch.interval}. Using safe fallback values."
+            }
         }
         val batchCount = (rank + batchSize - 1) / batchSize
         val waitMs = batchCount * intervalMs

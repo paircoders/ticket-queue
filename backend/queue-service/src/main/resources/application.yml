@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: queue-service
+  data:
+    redis:
+      lettuce:
+        pool:
+          max-active: 32   # 50K 사용자 폴링 부하에서 커넥션 풀 고갈 방지 (기본값 8은 불충분)
+          min-idle: 8
+          max-idle: 16
+          max-wait: 100ms
   config:
     import:
       - "optional:classpath:/application-common-${spring.profiles.active}.yml"
