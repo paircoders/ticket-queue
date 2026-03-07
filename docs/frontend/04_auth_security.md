@@ -285,14 +285,8 @@ export default function CaptchaStep({ onNext }: { onNext: (token: string) => voi
 **3단계: 본인인증 (PortOne Identity Verification)**
 
 ```typescript
-// components/domain/signup/VerifyStep.tsx
-'use client'
-
-import { useState } from 'react'
-import { toast } from 'sonner'
-import { ShieldCheckIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { requestIdentityVerification } from '@/lib/portone/identity-verification'
+// components/domain/signup/VerifyStep.tsx (요약)
+// 전체 구현: frontend/src/components/domain/signup/VerifyStep.tsx
 
 interface VerifyStepProps {
   onNext: (identityVerificationId: string) => void
@@ -300,61 +294,13 @@ interface VerifyStepProps {
 }
 
 export function VerifyStep({ onNext, onBack }: VerifyStepProps) {
-  const [isPending, setIsPending] = useState(false)
-  const [verified, setVerified] = useState(false)
-
-  async function handleVerify() {
-    setIsPending(true)
-    try {
-      const identityVerificationId = await requestIdentityVerification()
-      setVerified(true)
-      onNext(identityVerificationId)
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : '본인인증에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setIsPending(false)
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">본인인증</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          안전한 서비스 이용을 위해 본인인증이 필요합니다.
-        </p>
-      </div>
-
-      <div className="flex flex-col items-center gap-4 py-6 rounded-lg border bg-muted/30">
-        <ShieldCheckIcon
-          className={`w-12 h-12 ${verified ? 'text-primary' : 'text-muted-foreground'}`}
-        />
-        <p className="text-sm text-muted-foreground text-center">
-          {verified
-            ? '본인인증이 완료되었습니다.'
-            : '아래 버튼을 클릭하여 본인인증을 진행해주세요.'}
-        </p>
-        {!verified && (
-          <Button
-            variant="outline"
-            onClick={handleVerify}
-            loading={isPending}
-            disabled={isPending}
-          >
-            본인인증하기
-          </Button>
-        )}
-      </div>
-
-      <Button variant="outline" className="w-full" onClick={onBack}>
-        이전
-      </Button>
-    </div>
-  )
+  // 1. requestIdentityVerification() 호출로 PortOne 본인인증 팝업 실행
+  // 2. 성공 시 identityVerificationId를 onNext()로 다음 단계(InfoStep)에 전달
+  // 3. 실패/취소 시 toast.error()로 사용자에게 에러 메시지 표시
 }
 ```
+
+> 전체 구현은 `frontend/src/components/domain/signup/VerifyStep.tsx`를 참조하세요.
 
 **4단계: 정보 입력**
 
@@ -498,6 +444,28 @@ PortOne V2 SDK는 CDN 스크립트 대신 npm 패키지(`@portone/browser-sdk/v2
 // lib/portone/identity-verification.ts
 import PortOne from '@portone/browser-sdk/v2'
 
+// crypto.randomUUID() 미지원 환경 대비 fallback
+// (Chrome 92+, Firefox 95+, Safari 15.4+ 에서는 randomUUID 직접 사용)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 4122 variant
+  return [
+    ...[bytes[0], bytes[1], bytes[2], bytes[3]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[4], bytes[5]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[6], bytes[7]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[8], bytes[9]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]].map(b => b.toString(16).padStart(2, '0')),
+  ].join('')
+}
+
 export async function requestIdentityVerification(): Promise<string> {
   const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
   if (!storeId) {
@@ -509,7 +477,7 @@ export async function requestIdentityVerification(): Promise<string> {
     throw new Error('PortOne Channel Key가 설정되지 않았습니다.')
   }
 
-  const identityVerificationId = `identity-${crypto.randomUUID()}`
+  const identityVerificationId = `identity-${generateUUID()}`
 
   const response = await PortOne.requestIdentityVerification({
     storeId,
