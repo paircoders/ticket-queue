@@ -109,6 +109,7 @@ kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.
 kotest-extensions-spring = { module = "io.kotest.extensions:kotest-extensions-spring", version = "1.3.0" }
 spring-security-test = { module = "org.springframework.security:spring-security-test" }
 reactor-test = { module = "io.projectreactor:reactor-test" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
 
 [bundles]
 kotlin = ["kotlin-reflect", "kotlin-stdlib", "jackson-module-kotlin"]

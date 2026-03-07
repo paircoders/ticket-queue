@@ -15,7 +15,62 @@
 - **Consumer Lag:** 메시지 처리 지연이 발생하고 있는지 시각적으로 확인.
 - **Message Flow:** Producer에서 Consumer로 데이터가 흐르는 과정을 데모 시연.
 
-### 1.2 시스템 리소스 모니터링
+### 1.2 애플리케이션 메트릭 모니터링 (Prometheus + Grafana)
+
+**도구:** `prom/prometheus:v3.2.1` + `grafana/grafana:11.4.0`
+**목적:** 6개 마이크로서비스의 QPS, 레이턴시(P50/P95/P99), 에러율, JVM 상태 실시간 관측
+
+**접근 URL:**
+- Prometheus: `http://localhost:9090` (메트릭 쿼리 및 타겟 상태 확인)
+- Grafana: `http://localhost:3000` (로컬 전용 기본값: admin / admin — 공유/스테이징/운영 환경에서는 반드시 변경)
+  - 비밀번호 변경: Grafana UI → Server Admin → Users → admin → Change Password
+  - 또는 `docker/secrets/grafana_admin_pw.txt` 파일에 강력한 비밀번호 설정 후 컨테이너 재시작
+
+**메트릭 수집 방식:**
+- 각 서비스 `/actuator/prometheus` 엔드포인트에서 15초 간격 스크래핑
+- Micrometer Prometheus Registry를 통해 JVM, HTTP, DB, Kafka 메트릭 자동 노출
+- `host.docker.internal`을 통해 컨테이너 → 호스트 서비스 접근
+
+**자동 프로비저닝 대시보드 (4개):**
+
+| 대시보드 | 주요 메트릭 | 폴더 |
+|---------|-----------|------|
+| JVM & Spring Boot Overview | 힙 메모리, GC 일시정지, CPU, 스레드 수 | Ticket Queue |
+| HTTP Requests Overview | QPS, P50/P95/P99 레이턴시, 5xx 에러율, 상태코드별 분포 | Ticket Queue |
+| Resilience4j Circuit Breaker | CB 상태(CLOSED/OPEN/HALF_OPEN), 실패율, 호출 수 | Ticket Queue |
+| Infrastructure Overview | HikariCP 커넥션 풀, Kafka Consumer Lag, 처리량 | Ticket Queue |
+
+**서비스별 포트 매핑 (Prometheus 스크래핑 대상):**
+
+| 서비스 | 서비스 포트 | Management 포트 | 메트릭 경로 |
+|--------|-----------|----------------|-----------|
+| api-gateway | 8080 | 9080 | `/actuator/prometheus` |
+| user-service | 8081 | 9081 | `/actuator/prometheus` |
+| event-service | 8082 | 9082 | `/actuator/prometheus` |
+| queue-service | 8083 | 9083 | `/actuator/prometheus` |
+| reservation-service | 8084 | 9084 | `/actuator/prometheus` |
+| payment-service | 8085 | 9085 | `/actuator/prometheus` |
+
+> **보안 참고:** Actuator 엔드포인트는 management 전용 포트(908X)에서만 노출됩니다. 서비스 메인 포트(808X)로는 `/actuator/**` 접근이 불가합니다.
+
+**실행 방법:**
+
+```bash
+# Prometheus + Grafana 시작
+docker-compose up -d prometheus grafana
+
+# 타겟 상태 확인 (서비스 기동 후)
+echo "브라우저에서 접속: http://localhost:9090/targets"
+
+# Grafana 대시보드 확인
+echo "브라우저에서 접속: http://localhost:3000"
+```
+
+**관련 요구사항:** REQ-GW-012 (라우트별 요청 수, 응답 시간, 에러율 메트릭)
+
+---
+
+### 1.3 시스템 리소스 모니터링
 
 **도구:** `ctop` 또는 `docker stats`
 **목적:** 컨테이너별 CPU/Memory 사용량 실시간 확인
@@ -25,7 +80,7 @@
 docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 ```
 
-### 1.3 애플리케이션 로그
+### 1.4 애플리케이션 로그
 
 **도구:** `docker-compose logs`
 **전략:** 중앙화된 로깅 시스템(ELK) 구축 대신, 컨테이너 로그를 직접 확인하거나 파일로 저장하여 분석.

@@ -18,6 +18,7 @@ dependencies {
 
     // Actuator
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.micrometer.registry.prometheus)
 
     // Logging
     implementation(libs.kotlin.logging)

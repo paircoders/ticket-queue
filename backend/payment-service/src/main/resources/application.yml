@@ -87,10 +87,12 @@ internal:
     key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
 
 management:
+  server:
+    port: 9085
   endpoints:
     web:
       exposure:
-        include: health, info, circuitbreakers
+        include: health,info,circuitbreakers,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized

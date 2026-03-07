@@ -164,12 +164,18 @@ resilience4j:
         timeoutDuration: 60s     # Payment 60초
 
 management:
+  server:
+    port: 9080
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
   endpoint:
     health:
       show-details: when-authorized
     gateway:
       access: read_only
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
