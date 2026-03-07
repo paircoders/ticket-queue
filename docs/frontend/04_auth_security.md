@@ -285,36 +285,22 @@ export default function CaptchaStep({ onNext }: { onNext: (token: string) => voi
 **3단계: 본인인증 (PortOne Identity Verification)**
 
 ```typescript
-// components/domain/auth/signup/VerifyStep.tsx
-'use client'
+// components/domain/signup/VerifyStep.tsx (요약)
+// 전체 구현: frontend/src/components/domain/signup/VerifyStep.tsx
 
-import { usePortOne } from '@/hooks/usePortOne'
+interface VerifyStepProps {
+  onNext: (identityVerificationId: string) => void
+  onBack: () => void
+}
 
-export default function VerifyStep({ onNext }: { onNext: (verificationId: string) => void }) {
-  const { requestCertification } = usePortOne()
-
-  const handleVerify = async () => {
-    try {
-      const result = await requestCertification()
-      // identityVerificationId만 다음 단계로 전달
-      onNext(result.identityVerificationId)
-    } catch (error) {
-      toast.error('본인인증에 실패했습니다.')
-    }
-  }
-
-  return (
-    <div>
-      <h2>본인인증</h2>
-      <p>1인 1계정 정책을 위해 본인인증이 필요합니다.</p>
-
-      <Button onClick={handleVerify}>
-        본인인증하기
-      </Button>
-    </div>
-  )
+export function VerifyStep({ onNext, onBack }: VerifyStepProps) {
+  // 1. requestIdentityVerification() 호출로 PortOne 본인인증 팝업 실행
+  // 2. 성공 시 identityVerificationId를 onNext()로 다음 단계(InfoStep)에 전달
+  // 3. 실패/취소 시 toast.error()로 사용자에게 에러 메시지 표시
 }
 ```
+
+> 전체 구현은 `frontend/src/components/domain/signup/VerifyStep.tsx`를 참조하세요.
 
 **4단계: 정보 입력**
 
@@ -449,72 +435,88 @@ export default function RecaptchaWidget({ onVerify }: RecaptchaWidgetProps) {
 
 ## 4. 본인인증 (PortOne CI/DI) 연동 흐름
 
-### 4.1 PortOne SDK 초기화
+### 4.1 PortOne 본인인증 유틸리티
+
+PortOne V2 SDK는 CDN 스크립트 대신 npm 패키지(`@portone/browser-sdk/v2`)로 import합니다.
+환경변수는 `NEXT_PUBLIC_PORTONE_IMP_CODE` 대신 `NEXT_PUBLIC_PORTONE_STORE_ID`와 `NEXT_PUBLIC_PORTONE_CHANNEL_KEY`를 사용합니다.
 
 ```typescript
-// lib/portone/init.ts
-export function initPortOne() {
-  const script = document.createElement('script')
-  script.src = 'https://cdn.iamport.kr/v1/iamport.js'
-  script.async = true
-  document.body.appendChild(script)
+// lib/portone/identity-verification.ts
+import PortOne from '@portone/browser-sdk/v2'
+
+// crypto.randomUUID() 미지원 환경 대비 fallback
+// (Chrome 92+, Firefox 95+, Safari 15.4+ 에서는 randomUUID 직접 사용)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // RFC 4122 variant
+  return [
+    ...[bytes[0], bytes[1], bytes[2], bytes[3]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[4], bytes[5]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[6], bytes[7]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[8], bytes[9]].map(b => b.toString(16).padStart(2, '0')),
+    '-',
+    ...[bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]].map(b => b.toString(16).padStart(2, '0')),
+  ].join('')
 }
-```
 
-### 4.2 본인인증 Hook
-
-```typescript
-// hooks/usePortOne.ts
-'use client'
-
-export function usePortOne() {
-  useEffect(() => {
-    initPortOne()
-  }, [])
-
-  const requestCertification = () => {
-    return new Promise<{ ci: string; di: string }>((resolve, reject) => {
-      const IMP = window.IMP
-      IMP.init(process.env.NEXT_PUBLIC_PORTONE_IMP_CODE!)
-
-      IMP.certification(
-        {
-          merchant_uid: `cert_${Date.now()}`, // 고유 ID
-          company: 'Ticket Queue',
-          carrier: '', // 통신사 (빈 값이면 사용자 선택)
-          name: '', // 이름 (빈 값이면 사용자 입력)
-          phone: '', // 전화번호 (빈 값이면 사용자 입력)
-        },
-        async (response) => {
-          if (response.success) {
-            // 백엔드로 imp_uid 전송하여 CI/DI 수집
-            const { ci, di } = await verifyCertification(response.imp_uid)
-            resolve({ ci, di })
-          } else {
-            reject(new Error(response.error_msg))
-          }
-        }
-      )
-    })
+export async function requestIdentityVerification(): Promise<string> {
+  const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
+  if (!storeId) {
+    throw new Error('PortOne Store ID가 설정되지 않았습니다.')
   }
 
-  return { requestCertification }
+  const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
+  if (!channelKey) {
+    throw new Error('PortOne Channel Key가 설정되지 않았습니다.')
+  }
+
+  const identityVerificationId = `identity-${generateUUID()}`
+
+  const response = await PortOne.requestIdentityVerification({
+    storeId,
+    identityVerificationId,
+    channelKey,
+  })
+
+  if (response?.code !== undefined) {
+    if (response.code === 'IDENTITY_VERIFICATION_CANCELLED') {
+      throw new Error('본인인증이 취소되었습니다.')
+    }
+    throw new Error(response.message ?? '본인인증에 실패했습니다.')
+  }
+
+  return identityVerificationId
 }
 ```
 
-### 4.3 백엔드 CI/DI 수집 API 호출
+### 4.2 본인인증 함수 사용
+
+`requestIdentityVerification()`은 Hook이 아닌 순수 비동기 함수로, `VerifyStep` 컴포넌트에서 직접 호출합니다.
+함수는 성공 시 `identityVerificationId` 문자열을 반환하며, 이 값을 회원가입 API 요청에 포함합니다.
 
 ```typescript
-// lib/api/auth.ts
-import { apiClient } from './axios'
-
-export async function verifyCertification(impUid: string) {
-  const { data } = await apiClient.post('/auth/verify-certification', {
-    impUid,
-  })
-  return data // { ci, di }
-}
+// 사용 예시 (VerifyStep에서 직접 호출)
+const identityVerificationId = await requestIdentityVerification()
+onNext(identityVerificationId) // 다음 단계(InfoStep)로 전달
 ```
+
+### 4.3 백엔드 CI/DI 수집 흐름
+
+프론트엔드에서 별도의 CI/DI 수집 API를 호출하지 않습니다. 대신 다음 흐름으로 처리됩니다:
+
+1. 프론트엔드: `requestIdentityVerification()` 호출 → `identityVerificationId` 반환
+2. 프론트엔드: 회원가입 요청(`POST /auth/signup`)에 `identityVerificationId` 포함
+3. 백엔드(User Service): PortOne 서버 API를 직접 호출하여 `identityVerificationId`로 CI/DI 조회
+4. 백엔드: CI Hash로 1인 1계정 중복 검사 후 회원 저장
+
+이 방식은 V1의 `/auth/verify-certification` 엔드포인트를 제거하고, 회원가입 단일 요청으로 본인인증 검증을 완료합니다.
 
 ---
 
