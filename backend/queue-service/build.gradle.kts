@@ -11,6 +11,7 @@ dependencies {
 
     // Spring Boot
     implementation(libs.spring.boot.starter.data.redis)
+    runtimeOnly(libs.commons.pool2)  // Lettuce 커넥션 풀 활성화 (없으면 pool.* 설정 무시됨)
     implementation(libs.spring.boot.starter.security)
 
     // Test

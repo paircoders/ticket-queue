@@ -186,6 +186,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |-------------|------|------|-----|--------|
 | `queue:{scheduleId}` | Sorted Set | 대기열 (회차별) | 없음 | Queue |
 | `queue:token:{token}` | String (JSON) | Queue Token (대기열 통과 후 발급) | 10분 | Queue |
+| `queue:user-token:{userId}:{scheduleId}` | String | 역방향 토큰 조회 키 (ACTIVE 상태 판단, 배치 승인 시 SET 필요) ⚠️ Issue #44 | 10분 | Queue |
 | `queue:active:{userId}` | String | 중복 대기 방지 (scheduleId 저장) | 10분 | Queue |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (Redisson) | 5분 | Reservation |
 | `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |

@@ -31,6 +31,8 @@ enum class ErrorCode(
     ALREADY_APPROVED(HttpStatus.CONFLICT, "ALREADY_APPROVED", "이미 대기열 승인이 완료되었습니다. 좌석 선택 페이지로 이동해주세요."),
     QUEUE_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "QUEUE_TOKEN_EXPIRED", "대기열 토큰이 만료되었습니다."),
     QUEUE_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "QUEUE_TOKEN_INVALID", "유효하지 않은 대기열 토큰입니다."),
+    NOT_IN_QUEUE(HttpStatus.NOT_FOUND, "NOT_IN_QUEUE", "대기열에 참여하고 있지 않습니다."),
+    RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED", "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."),
 
     // Reservation
     SEAT_NOT_AVAILABLE(HttpStatus.CONFLICT, "SEAT_NOT_AVAILABLE", "해당 좌석은 선택할 수 없습니다."),

@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 @RestControllerAdvice
@@ -65,6 +66,15 @@ class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException::class)
     fun handleMissingServletRequestParameter(ex: MissingServletRequestParameterException): ResponseEntity<ErrorResponse> {
         val message = "필수 파라미터 '${ex.parameterName}'이(가) 누락되었습니다."
+        logger.warn { "[INVALID_INPUT] $message" }
+        return ResponseEntity
+            .status(ErrorCode.INVALID_INPUT.status)
+            .body(ErrorResponse.of(ErrorCode.INVALID_INPUT, message))
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleMethodArgumentTypeMismatch(ex: MethodArgumentTypeMismatchException): ResponseEntity<ErrorResponse> {
+        val message = "파라미터 '${ex.name}'의 값이 올바르지 않습니다."
         logger.warn { "[INVALID_INPUT] $message" }
         return ResponseEntity
             .status(ErrorCode.INVALID_INPUT.status)
