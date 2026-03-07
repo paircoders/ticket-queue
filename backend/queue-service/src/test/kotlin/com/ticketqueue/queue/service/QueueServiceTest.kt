@@ -186,6 +186,24 @@ class QueueServiceTest {
                 assertEquals(1.0, counter?.count())
             }
 
+            @Test
+            @DisplayName("Rate Limit 스크립트가 null을 반환하면 fail-open으로 요청을 허용한다")
+            fun failOpenWhenRateLimitReturnsNull() {
+                every {
+                    stringRedisTemplate.execute(rateLimitScript, any(), *anyVararg<String>())
+                } throws NullPointerException("execute() returned null (platform type implicit assertion)")
+                every {
+                    stringRedisTemplate.execute(queueStatusScript, any(), *anyVararg<String>())
+                } returns listOf(0L, 4L)
+
+                val result = queueService.getQueueStatus(userId, scheduleId)
+
+                assertEquals(QueueStatus.WAITING, result.status)
+                assertEquals(5L, result.rank)
+                val counter = meterRegistry.find("queue.ratelimit.failopen.total").counter()
+                assertEquals(1.0, counter?.count())
+            }
+
         }
 
         @Nested
