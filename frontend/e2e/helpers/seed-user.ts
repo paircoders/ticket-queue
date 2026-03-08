@@ -11,9 +11,20 @@ import * as crypto from 'crypto'
 import { Client } from 'pg'
 import * as bcrypt from 'bcryptjs'
 
-// docker/secrets/ 에서 가져온 실제 로컬 환경 암호화 키 (환경변수로 오버라이드 가능)
-const ENC_SECRET_KEY = process.env.ENC_SECRET_KEY ?? 'AUlt1REzHFuxIT6yvpbmwSI7CZy78lL5FENfLnwpRV4='
-const ENC_HASH_SALT = process.env.ENC_HASH_SALT ?? 'rKad3kiRzNWXVSvVa7mhxqXNVQqxNfKVSj2Jk6V7cGg='
+/**
+ * 필수 환경변수를 가져옵니다. 누락 시 명확한 에러와 함께 즉시 실패합니다.
+ * (.env.local 또는 CI 환경변수에 설정 필요)
+ */
+function getRequiredEnv(key: string): string {
+  const value = process.env[key]
+  if (!value) {
+    throw new Error(`[seed] 필수 환경변수 누락: ${key}. .env.local 또는 CI 설정을 확인하세요.`)
+  }
+  return value
+}
+
+const ENC_SECRET_KEY = getRequiredEnv('ENC_SECRET_KEY')
+const ENC_HASH_SALT = getRequiredEnv('ENC_HASH_SALT')
 
 // 테스트 계정 정보 (로그인 테스트에서도 동일하게 사용)
 export const TEST_USER = {
@@ -58,10 +69,6 @@ function aesGcmEncrypt(plainText: string, keyBase64: string): string {
  * 이미 존재하면 스킵합니다 (이메일 해시 기준).
  */
 export async function seedTestUser(): Promise<void> {
-  if (!process.env.ENC_SECRET_KEY || !process.env.ENC_HASH_SALT) {
-    console.log('[seed] ENC_SECRET_KEY/ENC_HASH_SALT 환경변수 미설정 — 기본값(로컬 개발용)을 사용합니다.')
-  }
-
   const { email, password, name, phone } = TEST_USER
 
   const passwordHash = await bcrypt.hash(password, 10)
@@ -73,11 +80,11 @@ export async function seedTestUser(): Promise<void> {
   const phoneEncrypted = aesGcmEncrypt(phone, ENC_SECRET_KEY)
 
   const client = new Client({
-    host: '192.168.50.111',
-    port: 5432,
-    database: 'ticket_queue',
-    user: 'user_svc_user',
-    password: 'user@1234',
+    host: getRequiredEnv('DB_HOST'),
+    port: parseInt(getRequiredEnv('DB_PORT'), 10),
+    database: getRequiredEnv('DB_NAME'),
+    user: getRequiredEnv('DB_USER'),
+    password: getRequiredEnv('DB_PASSWORD'),
     options: '-c search_path=user_service,common',
   })
 
@@ -101,7 +108,8 @@ export async function seedTestUser(): Promise<void> {
       console.log(`[seed] 테스트 유저 이미 존재, 스킵: ${email}`)
     }
   } catch (err) {
-    console.warn('[seed] DB 시딩 실패 (백엔드 미실행 상태일 수 있음):', (err as Error).message)
+    console.error('[seed] DB 시딩 실패:', (err as Error).message)
+    throw err
   } finally {
     await client.end().catch(() => {})
   }
