@@ -27,12 +27,12 @@ export function LoginForm({ returnUrl }: LoginFormProps) {
   const recaptchaRef = useRef<RecaptchaWidgetHandle>(null)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
-  // 개선 #4: 이미 인증된 사용자는 홈으로 리디렉트
+  // 개선 #4: 이미 인증된 사용자는 returnUrl 또는 홈으로 리디렉트
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/')
+      router.replace(returnUrl || '/')
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, returnUrl])
 
   const {
     control,

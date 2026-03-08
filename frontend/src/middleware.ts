@@ -32,8 +32,8 @@ const QUEUE_TOKEN_REQUIRED_PATHS = ['/reservation', '/payment']
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // 1. 공개 경로는 통과
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  // 1. 공개 경로는 통과 (정확한 매칭 또는 하위 경로 매칭)
+  if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'))) {
     return NextResponse.next()
   }
 
