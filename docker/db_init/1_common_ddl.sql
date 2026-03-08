@@ -62,3 +62,24 @@ COMMENT ON COLUMN common.processed_events.consumer_service IS '이벤트 처리 
 COMMENT ON COLUMN common.processed_events.aggregate_id IS '이벤트 발행 대상 엔티티 ID (추적용)';
 COMMENT ON COLUMN common.processed_events.event_type IS '이벤트 타입 (멱등성 검증용)';
 COMMENT ON COLUMN common.processed_events.processed_at IS '이벤트 처리 완료 일시';
+
+
+-- ============================================================
+-- Common 스키마 접근 권한 부여
+-- ============================================================
+
+-- 스키마 사용 권한
+GRANT USAGE ON SCHEMA common TO reservation_svc_user, event_svc_user, payment_svc_user;
+
+-- outbox_events: Producer 서비스 (Reservation, Payment)
+-- SELECT: Poller가 미발행 이벤트 조회
+-- INSERT: 비즈니스 트랜잭션 내 이벤트 저장
+-- UPDATE: Poller가 published=true, published_at, retry_count 갱신
+-- DELETE: Cleanup Batch가 7일 지난 발행 완료 이벤트 삭제
+GRANT SELECT, INSERT, UPDATE, DELETE ON common.outbox_events TO reservation_svc_user, payment_svc_user;
+
+-- processed_events: Consumer 서비스 (Reservation, Event)
+-- INSERT: 이벤트 처리 전 중복 방지 레코드 삽입 (PK 위반 시 중복으로 간주)
+-- SELECT: 처리 여부 확인
+-- DELETE: Cleanup Batch가 30일 지난 레코드 삭제
+GRANT SELECT, INSERT, DELETE ON common.processed_events TO reservation_svc_user, event_svc_user;
