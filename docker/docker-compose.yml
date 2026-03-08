@@ -171,7 +171,7 @@ services:
     image: grafana/grafana:11.4.0
     container_name: ticket-grafana
     ports:
-      - "3000:3000"
+      - "3001:3001"
     environment:
       - TZ=Asia/Seoul
       - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}

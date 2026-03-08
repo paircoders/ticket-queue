@@ -11,9 +11,9 @@ import * as crypto from 'crypto'
 import { Client } from 'pg'
 import * as bcrypt from 'bcryptjs'
 
-// docker/secrets/ 에서 가져온 실제 로컬 환경 암호화 키
-const ENC_SECRET_KEY = 'AUlt1REzHFuxIT6yvpbmwSI7CZy78lL5FENfLnwpRV4='
-const ENC_HASH_SALT = 'rKad3kiRzNWXVSvVa7mhxqXNVQqxNfKVSj2Jk6V7cGg='
+// docker/secrets/ 에서 가져온 실제 로컬 환경 암호화 키 (환경변수로 오버라이드 가능)
+const ENC_SECRET_KEY = process.env.ENC_SECRET_KEY ?? 'AUlt1REzHFuxIT6yvpbmwSI7CZy78lL5FENfLnwpRV4='
+const ENC_HASH_SALT = process.env.ENC_HASH_SALT ?? 'rKad3kiRzNWXVSvVa7mhxqXNVQqxNfKVSj2Jk6V7cGg='
 
 // 테스트 계정 정보 (로그인 테스트에서도 동일하게 사용)
 export const TEST_USER = {
@@ -58,6 +58,10 @@ function aesGcmEncrypt(plainText: string, keyBase64: string): string {
  * 이미 존재하면 스킵합니다 (이메일 해시 기준).
  */
 export async function seedTestUser(): Promise<void> {
+  if (!process.env.ENC_SECRET_KEY || !process.env.ENC_HASH_SALT) {
+    console.log('[seed] ENC_SECRET_KEY/ENC_HASH_SALT 환경변수 미설정 — 기본값(로컬 개발용)을 사용합니다.')
+  }
+
   const { email, password, name, phone } = TEST_USER
 
   const passwordHash = await bcrypt.hash(password, 10)

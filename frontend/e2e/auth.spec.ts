@@ -114,19 +114,7 @@ test.describe('PR #180 — 로그인 페이지 및 인증 흐름', () => {
     await page.getByRole('button', { name: '로그인' }).click()
     await expect(page).toHaveURL('/', { timeout: 15000 })
 
-    // 2단계: localStorage auth-storage에 isAuthenticated: true 주입
-    // Zustand partialize는 user만 persist하므로 수동으로 추가
-    // → page.goto('/login') 시 Zustand가 isAuthenticated: true로 hydrate
-    await page.evaluate(() => {
-      const raw = localStorage.getItem('auth-storage')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        parsed.state.isAuthenticated = true
-        localStorage.setItem('auth-storage', JSON.stringify(parsed))
-      }
-    })
-
-    // 3단계: /login 재방문 (full reload) — Zustand가 isAuthenticated: true로 복원
+    // 2단계: /login 재방문 (full reload) — onRehydrateStorage가 user 존재 여부로 isAuthenticated 복원
     await page.goto('/login')
 
     // LoginForm useEffect: if (isAuthenticated) → router.replace('/')

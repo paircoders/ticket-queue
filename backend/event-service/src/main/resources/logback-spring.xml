@@ -10,6 +10,7 @@
     <springProfile name="local">
         <root level="INFO">
             <appender-ref ref="TEXT_CONSOLE"/>
+            <appender-ref ref="TEXT_ROLLING_FILE"/>
         </root>
         <!-- Service-specific logger levels -->
         <logger name="com.ticketqueue.event" level="DEBUG"/>
