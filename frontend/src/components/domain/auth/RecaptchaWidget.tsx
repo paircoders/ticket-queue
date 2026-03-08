@@ -39,13 +39,15 @@ export const RecaptchaWidget = forwardRef<RecaptchaWidgetHandle, RecaptchaWidget
     }
 
     return (
-      <ReCAPTCHA
-        ref={recaptchaRef}
-        sitekey={siteKey}
-        onChange={onChange}
-        onExpired={handleExpired}
-        onErrored={handleError}
-      />
+      <div data-testid="recaptcha-container">
+        <ReCAPTCHA
+          ref={recaptchaRef}
+          sitekey={siteKey}
+          onChange={onChange}
+          onExpired={handleExpired}
+          onErrored={handleError}
+        />
+      </div>
     )
   }
 )

@@ -46,7 +46,7 @@ test.describe('PR #180 — 로그인 페이지 및 인증 흐름', () => {
 
     // reCAPTCHA: mock grecaptcha.render()가 호출되는 컨테이너 확인
     // (CI 환경에서 실제 Google iframe은 flaky — mock 위젯 div로 대체)
-    await expect(page.locator('.flex.justify-center > div').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('[data-testid="recaptcha-container"]').first()).toBeVisible({ timeout: 5000 })
 
     // 로그인 버튼
     await expect(page.getByRole('button', { name: '로그인' })).toBeVisible()
@@ -91,8 +91,8 @@ test.describe('PR #180 — 로그인 페이지 및 인증 흐름', () => {
     await fillLoginForm(page, TEST_USER.email, TEST_USER.password)
 
     // reCAPTCHA mock이 자동으로 onChange를 호출하므로 별도 클릭 불필요
-    // 토큰이 설정될 시간 확보
-    await page.waitForTimeout(300)
+    // 토큰이 설정될 때까지 대기
+    await page.waitForFunction(() => window.grecaptcha?.getResponse?.() === 'e2e-test-token')
 
     await page.getByRole('button', { name: '로그인' }).click()
 
@@ -109,7 +109,7 @@ test.describe('PR #180 — 로그인 페이지 및 인증 흐름', () => {
     // 1단계: 로그인 → 홈(/)으로 이동
     await page.goto('/login')
     await fillLoginForm(page, TEST_USER.email, TEST_USER.password)
-    await page.waitForTimeout(300)
+    await page.waitForFunction(() => window.grecaptcha?.getResponse?.() === 'e2e-test-token')
     await page.getByRole('button', { name: '로그인' }).click()
     await expect(page).toHaveURL('/', { timeout: 15000 })
 
@@ -138,7 +138,7 @@ test.describe('PR #180 — 로그인 페이지 및 인증 흐름', () => {
 
     // 로그인 진행
     await fillLoginForm(page, TEST_USER.email, TEST_USER.password)
-    await page.waitForTimeout(300)
+    await page.waitForFunction(() => window.grecaptcha?.getResponse?.() === 'e2e-test-token')
     await page.getByRole('button', { name: '로그인' }).click()
 
     // 로그인 성공 후 원래 경로(/queue)로 복귀
