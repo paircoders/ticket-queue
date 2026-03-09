@@ -3,6 +3,7 @@ export interface EventSummary {
   title: string
   artist: string
   venueName: string
+  posterUrl?: string
   startDate: string
   endDate: string
   status: string
@@ -57,4 +58,5 @@ export interface EventListParams {
   size?: number
   status?: string
   city?: string
+  keyword?: string
 }
