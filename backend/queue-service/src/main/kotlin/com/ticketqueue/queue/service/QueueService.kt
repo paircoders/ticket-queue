@@ -25,6 +25,7 @@ class QueueService(
     private val stringRedisTemplate: StringRedisTemplate,
     private val queueEnterScript: DefaultRedisScript<List<*>>,
     private val queueStatusScript: DefaultRedisScript<List<*>>,
+    private val queueLeaveScript: DefaultRedisScript<List<*>>,
     private val rateLimitScript: DefaultRedisScript<Long>,
     private val queueProperties: QueueProperties,
     private val meterRegistry: MeterRegistry
@@ -142,6 +143,39 @@ class QueueService(
             2 -> {
                 logger.debug { "Queue status NOT_IN_QUEUE: userId=$userId, scheduleId=$scheduleId" }
                 throw QueueException(ErrorCode.NOT_IN_QUEUE)
+            }
+            else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
+        }
+    }
+
+    /**
+     * 대기열 이탈 처리 (REQ-QUEUE-003)
+     *
+     * Lua 스크립트 반환 코드:
+     * - 0: NOT_IN_QUEUE — 대기열에 없거나 다른 회차에 대기 중
+     * - 1: 이탈 성공
+     */
+    fun leaveQueue(userId: UUID, scheduleId: UUID): QueueDto.LeaveResponse {
+        val keys = listOf(
+            QueueRedisKeys.queue(scheduleId),
+            QueueRedisKeys.active(userId),
+            QueueRedisKeys.userToken(userId, scheduleId)
+        )
+        val args = arrayOf(userId.toString(), scheduleId.toString())
+
+        val result = executeLuaOrThrow(
+            queueLeaveScript, keys, *args,
+            logContext = "leave: scheduleId=$scheduleId, userId=$userId"
+        )
+
+        val code = (result.getOrNull(0) as? Long)?.toInt()
+            ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
+
+        return when (code) {
+            0 -> throw QueueException(ErrorCode.NOT_IN_QUEUE)
+            1 -> {
+                logger.info { "Queue left: userId=$userId, scheduleId=$scheduleId" }
+                QueueDto.LeaveResponse(message = "Removed from queue")
             }
             else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
         }

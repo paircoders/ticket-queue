@@ -25,6 +25,7 @@ class QueueServiceTest {
     private lateinit var stringRedisTemplate: StringRedisTemplate
     private lateinit var queueEnterScript: DefaultRedisScript<List<*>>
     private lateinit var queueStatusScript: DefaultRedisScript<List<*>>
+    private lateinit var queueLeaveScript: DefaultRedisScript<List<*>>
     private lateinit var rateLimitScript: DefaultRedisScript<Long>
     private lateinit var queueProperties: QueueProperties
     private lateinit var meterRegistry: SimpleMeterRegistry
@@ -38,6 +39,7 @@ class QueueServiceTest {
         stringRedisTemplate = mockk()
         queueEnterScript = mockk()
         queueStatusScript = mockk()
+        queueLeaveScript = mockk()
         rateLimitScript = mockk()
         queueProperties = QueueProperties(
             batch = QueueProperties.BatchProperties(size = 10, interval = 1000),
@@ -48,6 +50,7 @@ class QueueServiceTest {
             stringRedisTemplate,
             queueEnterScript,
             queueStatusScript,
+            queueLeaveScript,
             rateLimitScript,
             queueProperties,
             meterRegistry
@@ -238,6 +241,62 @@ class QueueServiceTest {
                 }
                 assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("leaveQueue")
+    inner class LeaveQueue {
+
+        @Test
+        @DisplayName("대기열 이탈 성공 시 LeaveResponse를 반환한다")
+        fun returnsLeaveResponseOnSuccess() {
+            every {
+                stringRedisTemplate.execute(queueLeaveScript, any(), *anyVararg<String>())
+            } returns listOf(1L)
+
+            val result = queueService.leaveQueue(userId, scheduleId)
+
+            assertEquals("Removed from queue", result.message)
+        }
+
+        @Test
+        @DisplayName("대기열에 없으면 NOT_IN_QUEUE 예외를 던진다")
+        fun throwsNotInQueueWhenNotInQueue() {
+            every {
+                stringRedisTemplate.execute(queueLeaveScript, any(), *anyVararg<String>())
+            } returns listOf(0L)
+
+            val exception = assertThrows<QueueException> {
+                queueService.leaveQueue(userId, scheduleId)
+            }
+            assertEquals(ErrorCode.NOT_IN_QUEUE, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("Redis 실행 실패 시 INTERNAL_SERVER_ERROR를 던진다")
+        fun throwsInternalErrorWhenRedisFailure() {
+            every {
+                stringRedisTemplate.execute(queueLeaveScript, any(), *anyVararg<String>())
+            } throws RuntimeException("Redis connection refused")
+
+            val exception = assertThrows<QueueException> {
+                queueService.leaveQueue(userId, scheduleId)
+            }
+            assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("예상치 못한 반환 코드 시 INTERNAL_SERVER_ERROR를 던진다")
+        fun throwsInternalErrorOnUnexpectedCode() {
+            every {
+                stringRedisTemplate.execute(queueLeaveScript, any(), *anyVararg<String>())
+            } returns listOf(99L)
+
+            val exception = assertThrows<QueueException> {
+                queueService.leaveQueue(userId, scheduleId)
+            }
+            assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
         }
     }
 

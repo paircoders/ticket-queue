@@ -87,6 +87,27 @@ class RedisConfig {
     }
 
     /**
+     * 대기열 이탈 Lua 스크립트 (REQ-QUEUE-003)
+     *
+     * WAITING/ACTIVE 상태를 모두 처리하며, 관련 Redis 키를 원자적으로 삭제한다.
+     *
+     * KEYS[1]: queue:{scheduleId}
+     * KEYS[2]: queue:active:{userId}
+     * KEYS[3]: queue:user-token:{userId}:{scheduleId}
+     * ARGV[1]: userId, ARGV[2]: scheduleId
+     * @return [resultCode]
+     *   {0} — NOT_IN_QUEUE (대기열에 없거나 다른 회차 대기 중)
+     *   {1} — 이탈 성공
+     */
+    @Bean
+    fun queueLeaveScript(): DefaultRedisScript<List<*>> {
+        return DefaultRedisScript<List<*>>().apply {
+            setLocation(ClassPathResource("lua/queue-leave.lua"))
+            setResultType(List::class.java)
+        }
+    }
+
+    /**
      * Rate Limit 검사 Lua 스크립트 (REQ-QUEUE-008)
      *
      * 고정 윈도우 방식으로 사용자별 요청 횟수를 원자적으로 카운트한다.
