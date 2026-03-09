@@ -1,0 +1,24 @@
+spring:
+  config:
+    import: ""  # base application.yml의 aws-secretsmanager import 비활성화
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+
+internal:
+  api:
+    key: test-internal-api-key
+
+queue:
+  batch:
+    size: 10
+    interval: 1000
+  token:
+    ttl: 600
+  max-capacity: 50000
+  active-user:
+    ttl: 600
+  rate-limit:
+    max-requests: 15
+    window-seconds: 60
