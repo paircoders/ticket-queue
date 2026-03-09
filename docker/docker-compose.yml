@@ -171,12 +171,18 @@ services:
     image: grafana/grafana:11.4.0
     container_name: ticket-grafana
     ports:
-      - "3000:3000"
+      - "3001:3001"
     environment:
       - TZ=Asia/Seoul
+      - GF_SERVER_HTTP_PORT=3001
       - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_pw
       - GF_USERS_ALLOW_SIGN_UP=false
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

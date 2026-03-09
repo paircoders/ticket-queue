@@ -1,6 +1,32 @@
 # Local development profile
 # 로컬 개발 환경 전용 설정
 
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins:
+                  - "https://ticketing.vercel.app"
+                  - "http://localhost:3000"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowed-headers:
+                  - Authorization
+                  - Content-Type
+                  - X-Queue-Token
+                exposed-headers:
+                  - X-Queue-Token
+                allow-credentials: true
+                max-age: 3600
+
 management:
   endpoints:
     web:

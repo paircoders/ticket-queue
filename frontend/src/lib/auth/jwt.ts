@@ -10,8 +10,9 @@ import { jwtVerify, type JWTPayload as JoseJWTPayload } from 'jose'
  * Access Token Payload 타입
  */
 export interface JWTPayload extends JoseJWTPayload {
-  userId: string
+  sub: string
   email: string
+  role?: string
   iat?: number
   exp?: number
 }
@@ -40,14 +41,21 @@ export async function verifyAccessToken(token: string): Promise<JWTPayload> {
     throw new Error('JWT_SECRET 환경변수가 설정되지 않았습니다.')
   }
 
-  const secretKey = new TextEncoder().encode(secret)
+  // 백엔드(JJWT)는 Base64.getDecoder().decode(secret)으로 키를 생성하므로
+  // 프론트엔드도 동일하게 Base64 디코딩된 바이트를 사용해야 한다
+  let secretKey: Uint8Array
+  try {
+    secretKey = Uint8Array.from(atob(secret), (c) => c.charCodeAt(0))
+  } catch {
+    throw new Error('Invalid Base64 secret for JWT key')
+  }
 
   try {
     const { payload } = await jwtVerify(token, secretKey)
 
-    // 타입 안전성 검증
+    // 타입 안전성 검증 (백엔드는 표준 sub 클레임을 사용)
     if (
-      typeof payload.userId !== 'string' ||
+      typeof payload.sub !== 'string' ||
       typeof payload.email !== 'string'
     ) {
       throw new Error('Invalid Access Token payload structure')

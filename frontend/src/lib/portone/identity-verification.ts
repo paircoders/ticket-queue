@@ -32,7 +32,7 @@ export async function requestIdentityVerification(): Promise<string> {
     throw new Error('PortOne Channel Key가 설정되지 않았습니다.')
   }
 
-  const identityVerificationId = `identity-${generateUUID()}`
+  const identityVerificationId = `iv${generateUUID().replace(/-/g, '').slice(0, 18)}`
 
   const response = await PortOne.requestIdentityVerification({
     storeId,

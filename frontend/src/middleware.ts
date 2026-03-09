@@ -32,8 +32,8 @@ const QUEUE_TOKEN_REQUIRED_PATHS = ['/reservation', '/payment']
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // 1. 공개 경로는 통과
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  // 1. 공개 경로는 통과 (정확한 매칭 또는 하위 경로 매칭)
+  if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'))) {
     return NextResponse.next()
   }
 
@@ -41,16 +41,20 @@ export async function middleware(request: NextRequest) {
   const accessToken = request.cookies.get('accessToken')?.value
 
   if (!accessToken) {
-    // Access Token 없음 → /login 리디렉트
-    return NextResponse.redirect(new URL('/login', request.url))
+    // Access Token 없음 → /login 리디렉트 (returnUrl 포함)
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('returnUrl', pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
   // 3. Access Token 검증
   try {
     await verifyAccessToken(accessToken)
   } catch {
-    // Access Token 만료 또는 유효하지 않음 → /login 리디렉트
-    return NextResponse.redirect(new URL('/login', request.url))
+    // Access Token 만료 또는 유효하지 않음 → /login 리디렉트 (returnUrl 포함)
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('returnUrl', pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
   // 4. Queue Token 필요 경로 체크
