@@ -25,8 +25,24 @@ local scheduleId = ARGV[2]
 -- Step 1: active 키 확인 (Single Source of Truth)
 local existingScheduleId = redis.call('GET', activeKey)
 if not existingScheduleId then
-    -- active 키 없음 → 대기열에 없음
-    return {0}
+    -- active 키 만료 → ZSET 멤버십과 토큰 존재 여부로 fallback 판단
+    local inQueue = redis.call('ZRANK', queueKey, userId)
+    local hasToken = redis.call('GET', userTokenKey)
+
+    if inQueue == false and not hasToken then
+        -- 진짜 대기열에 없음
+        return {0}
+    end
+
+    -- ZSET 또는 토큰이 존재 → 정리 후 이탈 처리
+    if inQueue ~= false then
+        redis.call('ZREM', queueKey, userId)
+    end
+    if hasToken then
+        redis.call('DEL', 'queue:token:' .. hasToken)
+        redis.call('DEL', userTokenKey)
+    end
+    return {1}
 end
 if existingScheduleId ~= scheduleId then
     -- 다른 회차에 대기 중 → 이 회차에서는 이탈 불가
