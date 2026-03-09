@@ -3,8 +3,21 @@ import './globals.css'
 import { Providers } from '@/providers'
 
 export const metadata: Metadata = {
-  title: 'Ticket Queue - 콘서트 티켓팅 시스템',
-  description: '대규모 트래픽을 처리하는 공정한 티켓팅 서비스',
+  title: {
+    default: 'Ticket Queue | 공정한 티켓팅 플랫폼',
+    template: '%s | Ticket Queue',
+  },
+  description: '대기열 시스템으로 공정한 티켓 예매를 경험하세요.',
+  keywords: ['티켓팅', '공연', '콘서트', '예매', '대기열'],
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'ko_KR',
+    siteName: 'Ticket Queue',
+  },
 }
 
 export default function RootLayout({
