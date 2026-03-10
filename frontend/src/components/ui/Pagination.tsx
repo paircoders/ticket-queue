@@ -32,53 +32,61 @@ export function Pagination({ currentPage, totalPages, createPageUrl }: Paginatio
 
   return (
     <nav aria-label="페이지 네비게이션" className="flex items-center justify-center gap-1 mt-8">
-      <Link
-        href={createPageUrl(currentPage - 1)}
-        aria-disabled={currentPage === 1}
-        className={cn(
-          'inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors',
-          currentPage === 1
-            ? 'pointer-events-none border-border text-muted-foreground opacity-50'
-            : 'border-border bg-background hover:bg-accent hover:text-accent-foreground',
-        )}
-      >
-        ←
-      </Link>
+      {currentPage === 1 ? (
+        <span
+          aria-disabled="true"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors pointer-events-none border-border text-muted-foreground opacity-50"
+        >
+          ←
+        </span>
+      ) : (
+        <Link
+          href={createPageUrl(currentPage - 1)}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors border-border bg-background hover:bg-accent hover:text-accent-foreground"
+        >
+          ←
+        </Link>
+      )}
 
       {pages.map((page, idx) =>
         page === 'ellipsis' ? (
           <span key={`ellipsis-${idx}`} className="inline-flex h-9 w-9 items-center justify-center text-sm text-muted-foreground">
             …
           </span>
+        ) : page === currentPage ? (
+          <span
+            key={page}
+            aria-current="page"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-primary bg-primary text-primary-foreground"
+          >
+            {page}
+          </span>
         ) : (
           <Link
             key={page}
             href={createPageUrl(page)}
-            aria-current={page === currentPage ? 'page' : undefined}
-            className={cn(
-              'inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors',
-              page === currentPage
-                ? 'border-primary bg-primary text-primary-foreground pointer-events-none'
-                : 'border-border bg-background hover:bg-accent hover:text-accent-foreground',
-            )}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-border bg-background hover:bg-accent hover:text-accent-foreground"
           >
             {page}
           </Link>
         ),
       )}
 
-      <Link
-        href={createPageUrl(currentPage + 1)}
-        aria-disabled={currentPage === totalPages}
-        className={cn(
-          'inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors',
-          currentPage === totalPages
-            ? 'pointer-events-none border-border text-muted-foreground opacity-50'
-            : 'border-border bg-background hover:bg-accent hover:text-accent-foreground',
-        )}
-      >
-        →
-      </Link>
+      {currentPage === totalPages ? (
+        <span
+          aria-disabled="true"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors pointer-events-none border-border text-muted-foreground opacity-50"
+        >
+          →
+        </span>
+      ) : (
+        <Link
+          href={createPageUrl(currentPage + 1)}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors border-border bg-background hover:bg-accent hover:text-accent-foreground"
+        >
+          →
+        </Link>
+      )}
     </nav>
   )
 }

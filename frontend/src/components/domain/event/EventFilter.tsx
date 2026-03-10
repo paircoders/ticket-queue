@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils'
 const STATUS_OPTIONS = [
   { value: '', label: '전체' },
   { value: 'OPEN', label: '예매중' },
-  { value: 'READY', label: '준비중' },
-  { value: 'CLOSED', label: '종료' },
+  { value: 'PREPARING', label: '준비중' },
+  { value: 'ENDED', label: '종료' },
   { value: 'CANCELLED', label: '취소' },
 ]
 

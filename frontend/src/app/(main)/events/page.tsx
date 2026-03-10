@@ -40,6 +40,17 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
     })
     events = data.list
     totalPages = Math.ceil(data.totalElements / PAGE_SIZE)
+
+    if (page > totalPages && totalPages > 0) {
+      const corrected = await getEventsServer({
+        page: totalPages - 1,
+        size: PAGE_SIZE,
+        keyword: keyword || undefined,
+        status: status || undefined,
+      })
+      events = corrected.list
+      totalPages = Math.ceil(corrected.totalElements / PAGE_SIZE)
+    }
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Failed to fetch events', error)
