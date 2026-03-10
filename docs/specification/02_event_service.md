@@ -144,7 +144,7 @@ Event Service는 공연, 공연장, 좌석 정보를 관리하며 조회 성능�
 
 ### 1.4 회차별 좌석 정보 조회
 - **URL:** `GET /events/schedules/{scheduleId}/seats`
-- **Auth:** Bearer Token
+- **Auth:** None
 
 **Response (200 OK)**
 ```json
