@@ -518,6 +518,19 @@ class EventControllerTest {
                 mockMvc.perform(get("/events/{eventId}", eventId))
                     .andExpect(status().isOk)
             }
+
+            @Test
+            @DisplayName("GET /events/schedules/{scheduleId}/seats → 200")
+            fun getSeats_shouldReturnOk_whenNoAuth() {
+                val scheduleId = UUID.randomUUID()
+                every { seatService.getSeats(scheduleId) } returns SeatDto.SeatsResponse(
+                    scheduleId = scheduleId,
+                    grades = emptyList()
+                )
+
+                mockMvc.perform(get("/events/schedules/{scheduleId}/seats", scheduleId))
+                    .andExpect(status().isOk)
+            }
         }
     }
 }

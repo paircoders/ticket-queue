@@ -305,6 +305,33 @@ class EventServiceTest {
         }
 
         @Test
+        @DisplayName("gradeMapping 값이 유효하지 않은 등급 문자열이면 INVALID_SEAT_TEMPLATE_MAPPING 예외가 발생한다")
+        fun invalidGradeStringInSeatTemplateMapping() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+            val templateWithInvalidGrade = SeatTemplateDto(
+                rows = listOf("A"),
+                seatsPerRow = 1,
+                gradeMapping = mapOf("A" to "PLATINUM")
+            )
+            val request = EventDto.CreateRequest(
+                title = "BTS World Tour", artist = "BTS",
+                venueId = venueId, hallId = hallId,
+                priceByGrade = priceByGrade, schedules = listOf(scheduleRequest)
+            )
+            every { venueRepository.findById(venueId) } returns Optional.of(venue)
+            every { hallRepository.findById(hallId) } returns Optional.of(hall)
+            every { objectMapper.readValue(any<String>(), SeatTemplateDto::class.java) } returns templateWithInvalidGrade
+            every { eventRepository.save(any()) } returns event
+            every { eventScheduleRepository.save(any()) } returns schedule
+
+            val exception = assertThrows<EventException> { eventService.createEvent(request) }
+            assertEquals(ErrorCode.INVALID_SEAT_TEMPLATE_MAPPING, exception.errorCode)
+        }
+
+        @Test
         @DisplayName("행-등급 매핑이 누락되면 INVALID_SEAT_TEMPLATE_MAPPING 예외가 발생한다")
         fun invalidSeatTemplateMapping() {
             val venue = createVenue()
