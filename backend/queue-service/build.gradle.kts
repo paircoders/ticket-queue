@@ -17,4 +17,7 @@ dependencies {
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.spring.security.test)
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
 }

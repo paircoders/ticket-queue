@@ -16,4 +16,5 @@ object QueueRedisKeys {
     fun userToken(userId: Any, scheduleId: Any): String = "queue:user-token:$userId:$scheduleId"
     fun active(userId: Any): String = "queue:active:$userId"
     fun rateLimit(userId: Any): String = "rate:queue-status:$userId"
+    fun token(token: Any): String = "queue:token:$token"
 }

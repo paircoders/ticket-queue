@@ -28,6 +28,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ContextConfiguration
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -187,6 +188,81 @@ class QueueControllerTest {
             fun returnsUnauthorizedWhenNoAuthHeader() {
                 val response = mockMvc.perform(
                     get("/queue/status")
+                        .param("scheduleId", scheduleId.toString())
+                ).andReturn().response
+
+                response.status.shouldBe(HttpStatus.UNAUTHORIZED.value())
+                objectMapper.readTree(response.contentAsString)["code"].asText().shouldBe("UNAUTHORIZED")
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /queue/leave")
+    inner class DeleteQueueLeave {
+
+        @Test
+        @DisplayName("200 OK - 대기열 이탈 성공")
+        fun returnsOkOnLeaveSuccess() {
+            every { queueService.leaveQueue(any(), scheduleId) } returns QueueDto.LeaveResponse("Removed from queue")
+
+            mockMvc.perform(
+                delete("/queue/leave")
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .param("scheduleId", scheduleId.toString())
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.message").value("Removed from queue"))
+        }
+
+        @Test
+        @DisplayName("404 Not Found - 대기열에 없는 사용자")
+        fun returnsNotFoundWhenNotInQueue() {
+            every { queueService.leaveQueue(any(), scheduleId) } throws QueueException(ErrorCode.NOT_IN_QUEUE)
+
+            mockMvc.perform(
+                delete("/queue/leave")
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .param("scheduleId", scheduleId.toString())
+            )
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.code").value("NOT_IN_QUEUE"))
+        }
+
+        @Test
+        @DisplayName("400 Bad Request - scheduleId 파라미터 누락")
+        fun returnsBadRequestWhenScheduleIdMissing() {
+            mockMvc.perform(
+                delete("/queue/leave")
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+            )
+                .andExpect(status().isBadRequest)
+        }
+
+        @Test
+        @DisplayName("400 Bad Request - 유효하지 않은 UUID 형식")
+        fun returnsBadRequestWhenScheduleIdInvalidUuid() {
+            mockMvc.perform(
+                delete("/queue/leave")
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .param("scheduleId", "not-a-uuid")
+            )
+                .andExpect(status().isBadRequest)
+        }
+
+        @Nested
+        @DisplayName("Security")
+        inner class Security {
+
+            @Test
+            @DisplayName("401 Unauthorized - 인증 헤더 없이 요청")
+            fun returnsUnauthorizedWhenNoAuthHeader() {
+                val response = mockMvc.perform(
+                    delete("/queue/leave")
                         .param("scheduleId", scheduleId.toString())
                 ).andReturn().response
 
