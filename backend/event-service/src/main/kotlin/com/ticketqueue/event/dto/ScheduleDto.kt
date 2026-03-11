@@ -142,4 +142,10 @@ class ScheduleDto {
         val currentStatus: ScheduleStatus,
         val updatedAt: LocalDateTime
     )
+
+    /** 회차 판매 가능 여부 응답 (내부 API용 — Queue Service에서 대기열 진입 전 검증) */
+    data class SellableResponse(
+        val sellable: Boolean,
+        val reason: String? = null
+    )
 }

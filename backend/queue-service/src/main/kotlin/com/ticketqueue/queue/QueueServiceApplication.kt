@@ -1,11 +1,13 @@
 package com.ticketqueue.queue
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.cloud.openfeign.EnableFeignClients
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
 import org.springframework.boot.runApplication
 
+@EnableFeignClients(basePackages = ["com.ticketqueue.queue"])
 @SpringBootApplication(
     scanBasePackages = ["com.ticketqueue.queue", "com.ticketqueue.common"],
     exclude = [

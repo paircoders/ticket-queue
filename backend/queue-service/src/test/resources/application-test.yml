@@ -6,6 +6,12 @@ spring:
       secretsmanager:
         enabled: false
 
+feign:
+  client:
+    config:
+      event-service:
+        url: http://localhost:8082
+
 internal:
   api:
     key: test-internal-api-key

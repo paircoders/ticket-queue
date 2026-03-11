@@ -17,6 +17,12 @@ spring:
       - "optional:classpath:/application-common-${spring.profiles.active}.yml"
       - "optional:aws-secretsmanager:queue-svc/secure-config"
 
+feign:
+  client:
+    config:
+      event-service:
+        url: http://localhost:8082
+
 queue:
   batch:
     size: 10

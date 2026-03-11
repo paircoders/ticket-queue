@@ -29,7 +29,8 @@ class QueueService(
     private val rateLimitScript: DefaultRedisScript<Long>,
     private val batchApproveScript: DefaultRedisScript<Long>,
     private val queueProperties: QueueProperties,
-    private val meterRegistry: MeterRegistry
+    private val meterRegistry: MeterRegistry,
+    private val scheduleValidator: ScheduleValidator
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -49,11 +50,9 @@ class QueueService(
      * - 2: 다른 회차 대기 중 → ALREADY_IN_QUEUE
      * - 3: 대기열 가득 참 → QUEUE_FULL
      * - 4: 이미 배치 승인 완료 → ALREADY_APPROVED
-     *
-     * TODO: scheduleId 유효성 검증 미구현 — 존재하지 않거나 판매 상태가 아닌 회차에 대한 대기열 생성 가능
-     *       Event Service 내부 API 호출 또는 Gateway 레벨 검증 필요 (GitHub Issue #163)
      */
     fun enterQueue(userId: UUID, scheduleId: UUID): QueueDto.EnterResponse {
+        scheduleValidator.validateSchedule(scheduleId)
         val keys = listOf(
             QueueRedisKeys.queue(scheduleId),
             QueueRedisKeys.active(userId),
