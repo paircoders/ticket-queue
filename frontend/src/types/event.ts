@@ -13,33 +13,37 @@ export interface EventDetail {
   id: string
   title: string
   artist: string
-  description: string
-  venue: { id: string; name: string }
-  halls: { id: string; name: string }
+  description: string | null
+  venueId: string
+  venueName: string
+  hallId: string
+  hallName: string
+  status: string
   schedules: ScheduleDate[]
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ScheduleDate {
   date: string
-  isSoldOut: boolean
   times: ScheduleTime[]
 }
 
 export interface ScheduleTime {
   id: string
-  sequence: number
-  time: string
+  playSequence: number
+  eventStartAt: string
+  eventEndAt: string
   saleStartAt: string
   saleEndAt: string
   status: string
+  isSoldOut: boolean
 }
 
 export interface Seat {
   id: string
   seatNumber: string
-  status: string
-  grade: string
-  price: number
+  status: 'AVAILABLE' | 'SOLD'
 }
 
 export interface SeatGrade {

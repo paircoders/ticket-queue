@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Music } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from './StatusBadge'
 import { cn } from '@/lib/utils'
 import type { EventSummary } from '@/types/event'
 
@@ -19,17 +19,6 @@ function formatDateRange(startDate: string, endDate: string): string {
     `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
   if (startDate === endDate) return fmt(start)
   return `${fmt(start)} ~ ${fmt(end)}`
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'danger' }> = {
-    OPEN: { label: '예매중', variant: 'success' },
-    PREPARING: { label: '준비중', variant: 'warning' },
-    ENDED: { label: '종료', variant: 'secondary' },
-    CANCELLED: { label: '취소', variant: 'danger' },
-  }
-  const { label, variant } = map[status] ?? { label: status, variant: 'outline' }
-  return <Badge variant={variant}>{label}</Badge>
 }
 
 export function EventCard({ event, priority = false }: EventCardProps) {
