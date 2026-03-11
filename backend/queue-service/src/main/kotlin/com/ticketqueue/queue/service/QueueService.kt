@@ -27,6 +27,7 @@ class QueueService(
     private val queueStatusScript: DefaultRedisScript<List<*>>,
     private val queueLeaveScript: DefaultRedisScript<List<*>>,
     private val rateLimitScript: DefaultRedisScript<Long>,
+    private val batchApproveScript: DefaultRedisScript<Long>,
     private val queueProperties: QueueProperties,
     private val meterRegistry: MeterRegistry
 ) {
@@ -35,6 +36,9 @@ class QueueService(
 
     private val rateLimitFailOpenCounter: Counter =
         meterRegistry.counter("queue.ratelimit.failopen.total")
+
+    private val batchApproveCounter: Counter =
+        meterRegistry.counter("queue.batch.approved.total")
 
     /**
      * 대기열 진입 처리 (REQ-QUEUE-001)
@@ -50,7 +54,11 @@ class QueueService(
      *       Event Service 내부 API 호출 또는 Gateway 레벨 검증 필요 (GitHub Issue #163)
      */
     fun enterQueue(userId: UUID, scheduleId: UUID): QueueDto.EnterResponse {
-        val keys = listOf(QueueRedisKeys.queue(scheduleId), QueueRedisKeys.active(userId))
+        val keys = listOf(
+            QueueRedisKeys.queue(scheduleId),
+            QueueRedisKeys.active(userId),
+            QueueRedisKeys.activeSchedules()
+        )
         val args = arrayOf(
             userId.toString(),
             System.currentTimeMillis().toString(),
@@ -178,6 +186,59 @@ class QueueService(
                 QueueDto.LeaveResponse(message = "Removed from queue")
             }
             else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
+        }
+    }
+
+    /**
+     * 배치 승인 처리 (REQ-QUEUE-005)
+     *
+     * 대기열 Sorted Set에서 상위 batchSize명을 원자적으로 추출하고 Queue Token을 발급한다.
+     * Token UUID는 Lua 내부에서 생성 불가하므로 Kotlin에서 사전 생성하여 ARGV로 전달한다.
+     *
+     * @return 실제 승인된 사용자 수 (대기열이 비어 있으면 0)
+     */
+    fun batchApprove(scheduleId: UUID): Long {
+        val batchSize = queueProperties.batch.size
+        val tokens = (1..batchSize).map { UUID.randomUUID().toString() }
+
+        val keys = listOf(
+            QueueRedisKeys.queue(scheduleId),
+            QueueRedisKeys.activeSchedules()
+        )
+        val fixedArgs = arrayOf(
+            batchSize.toString(),
+            scheduleId.toString(),
+            queueProperties.token.ttl.toString(),
+            queueProperties.activeUser.ttl.toString(),
+            System.currentTimeMillis().toString()
+        )
+        val args = fixedArgs + tokens.toTypedArray()
+
+        return try {
+            val approved = stringRedisTemplate.execute(batchApproveScript, keys, *args) ?: 0L
+            if (approved > 0) {
+                logger.info { "Batch approve completed: scheduleId=$scheduleId, approved=$approved" }
+                batchApproveCounter.increment(approved.toDouble())
+            }
+            approved
+        } catch (e: Exception) {
+            logger.error(e) { "Batch approve failed: scheduleId=$scheduleId" }
+            throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "배치 승인 처리 중 오류가 발생했습니다.", e)
+        }
+    }
+
+    /**
+     * 활성 대기열 scheduleId 목록 조회
+     *
+     * SMEMBERS queue:active-schedules 를 통해 현재 대기 중인 회차 ID를 반환한다.
+     * Redis 장애 시 빈 Set을 반환하여 배치 승인 스케줄러가 중단되지 않도록 한다.
+     */
+    fun getActiveScheduleIds(): Set<String> {
+        return try {
+            stringRedisTemplate.opsForSet().members(QueueRedisKeys.activeSchedules()) ?: emptySet()
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to get active schedule IDs" }
+            emptySet()
         }
     }
 

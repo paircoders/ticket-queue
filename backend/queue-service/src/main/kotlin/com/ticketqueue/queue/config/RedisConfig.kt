@@ -32,17 +32,19 @@ class RedisConfig {
     /**
      * 배치 승인 Lua 스크립트 (REQ-QUEUE-005)
      *
-     * Sorted Set에서 상위 N명을 원자적으로 추출 및 제거한다.
+     * Sorted Set에서 상위 N명을 원자적으로 추출하고 Queue Token을 발급한다.
      *
      * KEYS[1]: queue:{scheduleId}
-     * ARGV[1]: batchSize (기본 10)
-     * @return 승인된 userId 목록
+     * KEYS[2]: queue:active-schedules
+     * ARGV[1]: batchSize, ARGV[2]: scheduleId, ARGV[3]: tokenTtl
+     * ARGV[4]: activeUserTtl, ARGV[5]: issuedAt, ARGV[6..]: 사전 생성된 token UUID
+     * @return 실제 승인된 사용자 수 (Long)
      */
     @Bean
-    fun batchApproveScript(): DefaultRedisScript<List<*>> {
-        return DefaultRedisScript<List<*>>().apply {
+    fun batchApproveScript(): DefaultRedisScript<Long> {
+        return DefaultRedisScript<Long>().apply {
             setLocation(ClassPathResource("lua/batch-approve.lua"))
-            setResultType(List::class.java)
+            setResultType(Long::class.java)
         }
     }
 

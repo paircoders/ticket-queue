@@ -27,6 +27,7 @@ class QueueServiceTest {
     private lateinit var queueStatusScript: DefaultRedisScript<List<*>>
     private lateinit var queueLeaveScript: DefaultRedisScript<List<*>>
     private lateinit var rateLimitScript: DefaultRedisScript<Long>
+    private lateinit var batchApproveScript: DefaultRedisScript<Long>
     private lateinit var queueProperties: QueueProperties
     private lateinit var meterRegistry: SimpleMeterRegistry
     private lateinit var queueService: QueueService
@@ -41,6 +42,7 @@ class QueueServiceTest {
         queueStatusScript = mockk()
         queueLeaveScript = mockk()
         rateLimitScript = mockk()
+        batchApproveScript = mockk()
         queueProperties = QueueProperties(
             batch = QueueProperties.BatchProperties(size = 10, interval = 1000),
             rateLimit = QueueProperties.RateLimitProperties(maxRequests = 15, windowSeconds = 60)
@@ -52,6 +54,7 @@ class QueueServiceTest {
             queueStatusScript,
             queueLeaveScript,
             rateLimitScript,
+            batchApproveScript,
             queueProperties,
             meterRegistry
         )
@@ -297,6 +300,79 @@ class QueueServiceTest {
                 queueService.leaveQueue(userId, scheduleId)
             }
             assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
+        }
+    }
+
+    @Nested
+    @DisplayName("batchApprove")
+    inner class BatchApprove {
+
+        @Test
+        @DisplayName("승인 성공 시 승인 수를 반환하고 메트릭 카운터를 증가시킨다")
+        fun returnsApprovedCountAndIncrementsMetric() {
+            every {
+                stringRedisTemplate.execute(batchApproveScript, any(), *anyVararg<String>())
+            } returns 5L
+
+            val result = queueService.batchApprove(scheduleId)
+
+            assertEquals(5L, result)
+            val counter = meterRegistry.find("queue.batch.approved.total").counter()
+            assertEquals(5.0, counter?.count())
+        }
+
+        @Test
+        @DisplayName("대기열이 비어 있으면 0을 반환하고 메트릭을 증가시키지 않는다")
+        fun returnsZeroAndDoesNotIncrementMetricWhenEmpty() {
+            every {
+                stringRedisTemplate.execute(batchApproveScript, any(), *anyVararg<String>())
+            } returns 0L
+
+            val result = queueService.batchApprove(scheduleId)
+
+            assertEquals(0L, result)
+            // counter가 존재하지 않거나 count=0이어야 함
+            val counter = meterRegistry.find("queue.batch.approved.total").counter()
+            assertEquals(0.0, counter?.count() ?: 0.0)
+        }
+
+        @Test
+        @DisplayName("Redis 실행 실패 시 INTERNAL_SERVER_ERROR를 던진다")
+        fun throwsInternalErrorWhenRedisFailure() {
+            every {
+                stringRedisTemplate.execute(batchApproveScript, any(), *anyVararg<String>())
+            } throws RuntimeException("Redis connection refused")
+
+            val exception = assertThrows<QueueException> {
+                queueService.batchApprove(scheduleId)
+            }
+            assertEquals(ErrorCode.INTERNAL_SERVER_ERROR, exception.errorCode)
+        }
+
+        @Test
+        @DisplayName("batchSize만큼의 token UUID를 ARGV에 전달한다")
+        fun passesCorrectNumberOfTokenUuidsAsArgs() {
+            val capturedArgs = mutableListOf<String>()
+            every {
+                stringRedisTemplate.execute(batchApproveScript, any(), *anyVararg<String>())
+            } answers {
+                // invocation.args: [script, keys, arg1, arg2, ...]
+                // vararg는 배열로 전달됨
+                val varargs = it.invocation.args[2] as Array<*>
+                capturedArgs.addAll(varargs.map { a -> a.toString() })
+                3L
+            }
+
+            queueService.batchApprove(scheduleId)
+
+            // fixedArgs(5개) + tokens(batchSize=10개) = 15개
+            val batchSize = queueProperties.batch.size
+            assertEquals(5 + batchSize, capturedArgs.size)
+            // 마지막 batchSize개의 args가 유효한 UUID 형식인지 검증
+            val tokenArgs = capturedArgs.drop(5)
+            tokenArgs.forEach { token ->
+                UUID.fromString(token) // 파싱 실패 시 IllegalArgumentException
+            }
         }
     }
 
