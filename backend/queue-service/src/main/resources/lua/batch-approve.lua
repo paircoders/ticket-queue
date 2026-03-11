@@ -26,6 +26,11 @@ local tokenTtl     = tonumber(ARGV[3])
 local activeUserTtl = tonumber(ARGV[4])
 local issuedAt     = ARGV[5]
 
+-- TTL 유효성 검증: ZREM 이전에 실패하여 데이터 유실 방지
+if not tokenTtl or tokenTtl <= 0 or not activeUserTtl or activeUserTtl <= 0 then
+    return redis.error_reply('INVALID_TTL: tokenTtl and activeUserTtl must be positive integers')
+end
+
 -- Step 1: 대기열 상위 N명 조회
 local members = redis.call('ZRANGE', queueKey, 0, batchSize - 1)
 
@@ -49,8 +54,8 @@ for i, userId in ipairs(members) do
     -- queue:user-token:{userId}:{scheduleId} — 역방향 토큰 조회 키 (queue-status.lua가 ACTIVE 판단에 사용)
     redis.call('SET', 'queue:user-token:' .. userId .. ':' .. scheduleId, token, 'EX', tokenTtl)
 
-    -- queue:active:{userId} TTL 갱신 — 배치 승인 후에도 이탈 시 정리 가능하도록 유지
-    redis.call('EXPIRE', 'queue:active:' .. userId, activeUserTtl)
+    -- queue:active:{userId} TTL 갱신 — EXPIRE는 키 부재 시 무시되므로 SET EX로 재설정
+    redis.call('SET', 'queue:active:' .. userId, scheduleId, 'EX', activeUserTtl)
 end
 
 -- Step 5: 대기열이 비었으면 active-schedules에서 제거

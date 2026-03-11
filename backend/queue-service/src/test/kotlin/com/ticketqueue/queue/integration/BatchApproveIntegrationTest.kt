@@ -3,7 +3,7 @@ package com.ticketqueue.queue.integration
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.queue.scheduler.BatchApproveScheduler
 import com.ticketqueue.queue.service.QueueService
-import io.kotest.matchers.longs.shouldBeGreaterThan
+import io.kotest.matchers.longs.shouldBeBetween
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.BeforeEach
@@ -77,7 +77,8 @@ class BatchApproveIntegrationTest {
 
     @BeforeEach
     fun flushRedis() {
-        stringRedisTemplate.connectionFactory!!.connection.use { it.serverCommands().flushAll() }
+        requireNotNull(stringRedisTemplate.connectionFactory) { "RedisConnectionFactory is not configured" }
+            .connection.use { it.serverCommands().flushAll() }
     }
 
     private fun enterRequest(uid: UUID = userId, sid: UUID = scheduleId) = post("/queue/enter")
@@ -106,7 +107,7 @@ class BatchApproveIntegrationTest {
         stringRedisTemplate.hasKey(tokenKey) shouldBe true
 
         val ttl = stringRedisTemplate.getExpire(tokenKey, TimeUnit.SECONDS)
-        ttl shouldBeGreaterThan 0L
+        ttl.shouldBeBetween(590L, 600L)
     }
 
     @Test
@@ -120,7 +121,7 @@ class BatchApproveIntegrationTest {
         stringRedisTemplate.hasKey(userTokenKey) shouldBe true
 
         val ttl = stringRedisTemplate.getExpire(userTokenKey, TimeUnit.SECONDS)
-        ttl shouldBeGreaterThan 0L
+        ttl.shouldBeBetween(590L, 600L)
     }
 
     @Test
