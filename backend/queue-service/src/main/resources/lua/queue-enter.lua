@@ -3,8 +3,9 @@
 
   ZCARD, ZADD, SET 간의 Race Condition을 단일 원자적 실행으로 해결한다.
 
-  KEYS[1] = queue:{scheduleId}      -- 대기열 Sorted Set
-  KEYS[2] = queue:active:{userId}   -- 중복 대기 방지 키
+  KEYS[1] = queue:{scheduleId}          -- 대기열 Sorted Set
+  KEYS[2] = queue:active:{userId}       -- 중복 대기 방지 키
+  KEYS[3] = queue:active-schedules      -- 활성 회차 추적 SET (배치 승인 대상 탐색용)
 
   ARGV[1] = userId                  -- 대기열에 추가할 사용자 ID
   ARGV[2] = timestamp               -- score (진입 시각, Unix ms)
@@ -20,8 +21,9 @@
     {4, -1}   : 이미 배치 승인 완료 — Sorted Set에 존재하지 않음 (ALREADY_APPROVED)
 ]]
 
-local queueKey    = KEYS[1]
-local activeKey   = KEYS[2]
+local queueKey        = KEYS[1]
+local activeKey       = KEYS[2]
+local activeSchedules = KEYS[3]
 
 local userId       = ARGV[1]
 local timestamp    = ARGV[2]
@@ -57,6 +59,10 @@ end
 -- Step 3: 대기열 진입 (REQ-QUEUE-001)
 -- NX 옵션: 이미 존재하는 멤버는 score 변경 없이 무시
 redis.call('ZADD', queueKey, 'NX', timestamp, userId)
+
+-- Step 3-1: 활성 회차 목록에 등록 (배치 승인 스케줄러가 SMEMBERS로 조회)
+-- SADD는 멱등적이므로 동일 scheduleId 중복 등록 무해
+redis.call('SADD', activeSchedules, scheduleId)
 
 -- Step 4: 중복 대기 방지 키 등록
 redis.call('SET', activeKey, scheduleId, 'EX', activeUserTtl)

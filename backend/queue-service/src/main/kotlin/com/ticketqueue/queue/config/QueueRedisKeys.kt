@@ -17,4 +17,13 @@ object QueueRedisKeys {
     fun active(userId: Any): String = "queue:active:$userId"
     fun rateLimit(userId: Any): String = "rate:queue-status:$userId"
     fun token(token: Any): String = "queue:token:$token"
+
+    /**
+     * 활성 대기열 scheduleId 추적 SET 키 (REQ-QUEUE-005)
+     *
+     * SCAN/KEYS 명령 대신 이 SET을 사용하여 배치 승인 대상 회차를 O(1)으로 조회한다.
+     * - 대기열 진입 시: SADD (queue-enter.lua)
+     * - 대기열 비워질 때: SREM (batch-approve.lua)
+     */
+    fun activeSchedules(): String = "queue:active-schedules"
 }
