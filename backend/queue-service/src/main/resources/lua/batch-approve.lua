@@ -48,7 +48,7 @@ for i, userId in ipairs(members) do
     local token = ARGV[5 + i]  -- ARGV[6] = 첫 번째 토큰, ARGV[7] = 두 번째 토큰, ...
 
     -- queue:token:{token} — 토큰 메타데이터 (다른 서비스에서 검증용)
-    local tokenData = '{"userId":"' .. userId .. '","scheduleId":"' .. scheduleId .. '","issuedAt":"' .. issuedAt .. '"}'
+    local tokenData = cjson.encode({ userId = userId, scheduleId = scheduleId, issuedAt = issuedAt })
     redis.call('SET', 'queue:token:' .. token, tokenData, 'EX', tokenTtl)
 
     -- queue:user-token:{userId}:{scheduleId} — 역방향 토큰 조회 키 (queue-status.lua가 ACTIVE 판단에 사용)

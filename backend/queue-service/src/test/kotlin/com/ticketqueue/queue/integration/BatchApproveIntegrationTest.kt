@@ -168,6 +168,11 @@ class BatchApproveIntegrationTest {
         userIds.forEach { uid ->
             val userTokenKey = "queue:user-token:$uid:$scheduleId"
             stringRedisTemplate.hasKey(userTokenKey) shouldBe true
+
+            // queue:active:{userId} 키 검증
+            val activeKey = "queue:active:$uid"
+            stringRedisTemplate.hasKey(activeKey) shouldBe true
+            stringRedisTemplate.opsForValue().get(activeKey) shouldBe scheduleId.toString()
         }
     }
 }
