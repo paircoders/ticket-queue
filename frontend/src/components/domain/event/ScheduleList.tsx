@@ -14,6 +14,7 @@ function formatDate(dateStr: string): string {
 
 function formatTime(datetimeStr: string): string {
   const timePart = datetimeStr.split('T')[1]
+  if (!timePart) return '--:--'
   const [hours, minutes] = timePart.split(':')
   return `${hours}:${minutes}`
 }

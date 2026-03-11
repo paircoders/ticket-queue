@@ -45,7 +45,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
   if (firstTime) {
     try {
       const seatsData = await getScheduleSeatsServer(firstTime.id)
-      grades = seatsData.grades
+      grades = seatsData?.grades ?? []
     } catch {
       // 좌석 정보 조회 실패 시 빈 배열로 렌더링
     }

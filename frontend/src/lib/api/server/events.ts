@@ -35,9 +35,10 @@ export const getEventDetailServer = cache(async (id: string): Promise<EventDetai
   return res.json()
 })
 
-export async function getScheduleSeatsServer(scheduleId: string): Promise<SeatsResponse> {
+export async function getScheduleSeatsServer(scheduleId: string): Promise<SeatsResponse | null> {
   const url = `${API_BASE_URL}/events/schedules/${scheduleId}/seats`
   const res = await fetch(url, { next: { revalidate: 60 } })
+  if (res.status === 404) return null
   if (!res.ok) throw new Error(`Failed to fetch seats: ${res.status}`)
   return res.json()
 }
