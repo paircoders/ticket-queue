@@ -41,8 +41,8 @@ export async function seedTestEvent(): Promise<void> {
     host: getRequiredEnv('DB_HOST'),
     port: parseInt(getRequiredEnv('DB_PORT'), 10),
     database: getRequiredEnv('DB_NAME'),
-    user: getRequiredEnv('DB_USER'),
-    password: getRequiredEnv('DB_PASSWORD'),
+    user: process.env.EVENT_DB_USER || getRequiredEnv('DB_USER'),
+    password: process.env.EVENT_DB_PASSWORD || getRequiredEnv('DB_PASSWORD'),
     options: '-c search_path=event_service',
   })
 
@@ -76,14 +76,15 @@ export async function seedTestEvent(): Promise<void> {
     await client.query(
       `INSERT INTO event_service.halls (id, venue_id, name, capacity, seat_template)
        VALUES ($1, $2, $3, $4, $5::jsonb)
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT DO NOTHING`,
       [TEST_EVENT_IDS.hallId, TEST_EVENT_IDS.venueId, TEST_EVENT.hallName, 6, seatTemplate],
     )
 
     // 3. Event 삽입
     await client.query(
       `INSERT INTO event_service.events (id, title, artist, description, venue_id, hall_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'OPEN')`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'OPEN')
+       ON CONFLICT DO NOTHING`,
       [
         TEST_EVENT_IDS.eventId,
         TEST_EVENT.title,
@@ -98,13 +99,14 @@ export async function seedTestEvent(): Promise<void> {
     await client.query(
       `INSERT INTO event_service.event_schedules
          (id, event_id, play_sequence, event_start_at, event_end_at, sale_start_at, sale_end_at, status)
-       VALUES ($1, $2, 1, $3, $4, $5, $6, 'UPCOMING')`,
+       VALUES ($1, $2, 1, $3, $4, $5, $6, 'UPCOMING')
+       ON CONFLICT DO NOTHING`,
       [
         TEST_EVENT_IDS.schedule1Id,
         TEST_EVENT_IDS.eventId,
         '2026-06-01T19:00:00',
         '2026-06-01T22:00:00',
-        '2026-05-01T20:00:00',
+        '2026-01-01T00:00:00',
         '2026-05-31T23:59:59',
       ],
     )
@@ -113,13 +115,14 @@ export async function seedTestEvent(): Promise<void> {
     await client.query(
       `INSERT INTO event_service.event_schedules
          (id, event_id, play_sequence, event_start_at, event_end_at, sale_start_at, sale_end_at, status)
-       VALUES ($1, $2, 2, $3, $4, $5, $6, 'UPCOMING')`,
+       VALUES ($1, $2, 2, $3, $4, $5, $6, 'UPCOMING')
+       ON CONFLICT DO NOTHING`,
       [
         TEST_EVENT_IDS.schedule2Id,
         TEST_EVENT_IDS.eventId,
         '2026-06-02T17:00:00',
         '2026-06-02T20:00:00',
-        '2026-05-02T20:00:00',
+        '2026-01-01T00:00:00',
         '2026-06-01T23:59:59',
       ],
     )
@@ -136,7 +139,8 @@ export async function seedTestEvent(): Promise<void> {
     for (const [seatNumber, grade, price, status] of schedule1Seats) {
       await client.query(
         `INSERT INTO event_service.seats (event_schedule_id, seat_number, grade, price, status)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT DO NOTHING`,
         [TEST_EVENT_IDS.schedule1Id, seatNumber, grade, price, status],
       )
     }
@@ -153,7 +157,8 @@ export async function seedTestEvent(): Promise<void> {
     for (const [seatNumber, grade, price, status] of schedule2Seats) {
       await client.query(
         `INSERT INTO event_service.seats (event_schedule_id, seat_number, grade, price, status)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT DO NOTHING`,
         [TEST_EVENT_IDS.schedule2Id, seatNumber, grade, price, status],
       )
     }

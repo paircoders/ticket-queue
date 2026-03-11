@@ -89,6 +89,8 @@ test.describe('Issue #116 — 공연 상세 페이지 (SSR + SEO + JSON-LD)', ()
       '@type': 'Place',
       name: TEST_EVENT.venueName,
     })
+    expect(jsonLd.eventStatus).toBe('https://schema.org/EventScheduled')
+    expect(jsonLd.eventAttendanceMode).toBe('https://schema.org/OfflineEventAttendanceMode')
   })
 
   // ────────────────────────────────────────────────────────
@@ -155,6 +157,6 @@ test.describe('Issue #116 — 공연 상세 페이지 (SSR + SEO + JSON-LD)', ()
     await page.goto(NOT_FOUND_URL)
 
     await expect(page.locator('h1')).toHaveText('404')
-    await expect(page.getByText('페이지를 찾을 수 없습니다')).toBeVisible()
+    await expect(page.locator('main')).toContainText('페이지를 찾을 수 없습니다')
   })
 })
