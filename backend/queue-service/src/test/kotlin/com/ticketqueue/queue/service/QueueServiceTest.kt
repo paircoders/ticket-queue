@@ -6,6 +6,7 @@ import com.ticketqueue.queue.dto.QueueStatus
 import com.ticketqueue.queue.exception.QueueException
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -30,6 +31,7 @@ class QueueServiceTest {
     private lateinit var batchApproveScript: DefaultRedisScript<Long>
     private lateinit var queueProperties: QueueProperties
     private lateinit var meterRegistry: SimpleMeterRegistry
+    private lateinit var scheduleValidator: ScheduleValidator
     private lateinit var queueService: QueueService
 
     private val userId = UUID.randomUUID()
@@ -48,6 +50,7 @@ class QueueServiceTest {
             rateLimit = QueueProperties.RateLimitProperties(maxRequests = 15, windowSeconds = 60)
         )
         meterRegistry = SimpleMeterRegistry()
+        scheduleValidator = mockk()
         queueService = QueueService(
             stringRedisTemplate,
             queueEnterScript,
@@ -56,8 +59,76 @@ class QueueServiceTest {
             rateLimitScript,
             batchApproveScript,
             queueProperties,
-            meterRegistry
+            meterRegistry,
+            scheduleValidator
         )
+    }
+
+    @Nested
+    @DisplayName("enterQueue")
+    inner class EnterQueue {
+
+        @Test
+        @DisplayName("정상 진입 시 WAITING 상태와 순위를 반환한다")
+        fun returnsWaitingOnSuccess() {
+            justRun { scheduleValidator.validateSchedule(scheduleId) }
+            every {
+                stringRedisTemplate.execute(queueEnterScript, any(), *anyVararg<String>())
+            } returns listOf(0L, 4L)
+
+            val result = queueService.enterQueue(userId, scheduleId)
+
+            assertEquals(QueueStatus.WAITING, result.status)
+            assertEquals(5L, result.rank)
+            assertNull(result.token)
+        }
+
+        @Test
+        @DisplayName("동일 회차 중복 진입(멱등성)이면 기존 순위를 반환한다")
+        fun returnsExistingRankOnDuplicate() {
+            justRun { scheduleValidator.validateSchedule(scheduleId) }
+            every {
+                stringRedisTemplate.execute(queueEnterScript, any(), *anyVararg<String>())
+            } returns listOf(1L, 9L)
+
+            val result = queueService.enterQueue(userId, scheduleId)
+
+            assertEquals(QueueStatus.WAITING, result.status)
+            assertEquals(10L, result.rank)
+        }
+
+        @Test
+        @DisplayName("유효하지 않은 scheduleId이면 scheduleValidator에서 SCHEDULE_NOT_FOUND 예외")
+        fun throwsScheduleNotFoundOnInvalidSchedule() {
+            every { scheduleValidator.validateSchedule(scheduleId) } throws
+                QueueException(ErrorCode.SCHEDULE_NOT_FOUND)
+
+            val ex = assertThrows<QueueException> { queueService.enterQueue(userId, scheduleId) }
+            assertEquals(ErrorCode.SCHEDULE_NOT_FOUND, ex.errorCode)
+            verify(exactly = 0) { stringRedisTemplate.execute(queueEnterScript, any(), *anyVararg<String>()) }
+        }
+
+        @Test
+        @DisplayName("판매 미시작 회차이면 scheduleValidator에서 TICKET_SALE_NOT_STARTED 예외")
+        fun throwsTicketSaleNotStarted() {
+            every { scheduleValidator.validateSchedule(scheduleId) } throws
+                QueueException(ErrorCode.TICKET_SALE_NOT_STARTED)
+
+            val ex = assertThrows<QueueException> { queueService.enterQueue(userId, scheduleId) }
+            assertEquals(ErrorCode.TICKET_SALE_NOT_STARTED, ex.errorCode)
+        }
+
+        @Test
+        @DisplayName("다른 회차 대기 중이면 ALREADY_IN_QUEUE 예외")
+        fun throwsAlreadyInQueue() {
+            justRun { scheduleValidator.validateSchedule(scheduleId) }
+            every {
+                stringRedisTemplate.execute(queueEnterScript, any(), *anyVararg<String>())
+            } returns listOf(2L)
+
+            val ex = assertThrows<QueueException> { queueService.enterQueue(userId, scheduleId) }
+            assertEquals(ErrorCode.ALREADY_IN_QUEUE, ex.errorCode)
+        }
     }
 
     @Nested

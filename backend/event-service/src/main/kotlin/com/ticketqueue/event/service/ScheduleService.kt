@@ -8,6 +8,7 @@ import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.ScheduleDto
 import com.ticketqueue.event.dto.SeatTemplateDto
 import com.ticketqueue.event.entity.EventSchedule
+import com.ticketqueue.event.entity.ScheduleStatus
 import com.ticketqueue.event.entity.Seat
 import com.ticketqueue.event.entity.SeatGrade
 import com.ticketqueue.event.exception.EventException
@@ -241,6 +242,34 @@ class ScheduleService(
                 Seat(eventSchedule = schedule, seatNumber = "${row}-${seatIndex}", grade = grade, price = price)
             }
         }
+    }
+
+    /**
+     * 회차의 티켓 판매 가능 여부를 반환한다 (내부 API용 — Queue Service 검증 전용)
+     *
+     * - 회차 없음: SCHEDULE_NOT_FOUND 예외 (404)
+     * - CANCELLED/ENDED 상태: sellable=false, reason=SCHEDULE_NOT_AVAILABLE
+     * - 판매 시작 전: sellable=false, reason=TICKET_SALE_NOT_STARTED
+     * - 판매 종료 후: sellable=false, reason=TICKET_SALE_ENDED
+     * - 그 외: sellable=true
+     */
+    fun checkSellable(scheduleId: UUID): ScheduleDto.SellableResponse {
+        val schedule = eventScheduleRepository.findById(scheduleId)
+            .orElseThrow { EventException(ErrorCode.SCHEDULE_NOT_FOUND) }
+
+        if (schedule.status == ScheduleStatus.CANCELLED || schedule.status == ScheduleStatus.ENDED) {
+            return ScheduleDto.SellableResponse(sellable = false, reason = "SCHEDULE_NOT_AVAILABLE")
+        }
+
+        val now = LocalDateTime.now()
+        if (now.isBefore(schedule.saleStartAt)) {
+            return ScheduleDto.SellableResponse(sellable = false, reason = "TICKET_SALE_NOT_STARTED")
+        }
+        if (now.isAfter(schedule.saleEndAt)) {
+            return ScheduleDto.SellableResponse(sellable = false, reason = "TICKET_SALE_ENDED")
+        }
+
+        return ScheduleDto.SellableResponse(sellable = true)
     }
 
     internal fun invalidateScheduleDetailCache(scheduleId: UUID) {
