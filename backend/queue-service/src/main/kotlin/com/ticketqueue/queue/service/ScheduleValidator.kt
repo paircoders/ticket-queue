@@ -73,7 +73,7 @@ class ScheduleValidator(
         val response = try {
             eventServiceClient.checkSellable(scheduleId)
         } catch (e: BusinessException) {
-            if (e.errorCode == ErrorCode.RESOURCE_NOT_FOUND) {
+            if (e.errorCode == ErrorCode.RESOURCE_NOT_FOUND || e.errorCode == ErrorCode.SCHEDULE_NOT_FOUND) {
                 throw QueueException(ErrorCode.SCHEDULE_NOT_FOUND)
             }
             logger.error(e) { "Event service call failed (fail-closed): scheduleId=$scheduleId" }

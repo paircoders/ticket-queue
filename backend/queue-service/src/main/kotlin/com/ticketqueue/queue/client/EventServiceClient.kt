@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import java.util.UUID
 
-@FeignClient(name = "event-service", url = "\${feign.client.config.event-service.url}")
+@FeignClient(name = "event-service", url = "\${spring.cloud.openfeign.client.config.event-service.url}")
 interface EventServiceClient {
 
     @GetMapping("/internal/schedules/{scheduleId}/sellable")

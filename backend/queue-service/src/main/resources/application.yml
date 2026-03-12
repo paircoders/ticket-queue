@@ -16,14 +16,14 @@ spring:
     import:
       - "optional:classpath:/application-common-${spring.profiles.active}.yml"
       - "optional:aws-secretsmanager:queue-svc/secure-config"
-
-feign:
-  client:
-    config:
-      event-service:
-        url: ${EVENT_SERVICE_URL:http://localhost:8082}
-        connectTimeout: 3000
-        readTimeout: 5000
+  cloud:
+    openfeign:
+      client:
+        config:
+          event-service:
+            url: ${EVENT_SERVICE_URL:http://localhost:8082}
+            connectTimeout: 2000
+            readTimeout: 3000
 
 queue:
   batch:

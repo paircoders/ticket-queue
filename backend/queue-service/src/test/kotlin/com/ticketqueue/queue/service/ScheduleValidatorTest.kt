@@ -100,6 +100,16 @@ class ScheduleValidatorTest {
         }
 
         @Test
+        @DisplayName("Feign이 SCHEDULE_NOT_FOUND 예외를 던지면 SCHEDULE_NOT_FOUND 예외")
+        fun throwsScheduleNotFoundOnFeignScheduleNotFound() {
+            every { eventServiceClient.checkSellable(scheduleId) } throws
+                BusinessException(ErrorCode.SCHEDULE_NOT_FOUND)
+
+            val ex = assertThrows<QueueException> { scheduleValidator.validateSchedule(scheduleId) }
+            assert(ex.errorCode == ErrorCode.SCHEDULE_NOT_FOUND)
+        }
+
+        @Test
         @DisplayName("Feign 호출 실패(네트워크 오류)이면 INTERNAL_SERVER_ERROR 예외 (fail-closed)")
         fun throwsInternalErrorOnFeignFailure() {
             every { eventServiceClient.checkSellable(scheduleId) } throws
