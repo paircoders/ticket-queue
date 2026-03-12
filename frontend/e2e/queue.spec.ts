@@ -104,7 +104,7 @@ test.describe('대기열 페이지', () => {
   })
 
   // ────────────────────────────────────────────────────────
-  // 테스트 3: ACTIVE 시 자동 리디렉트
+  // 테스트 3: ACTIVE 시 자동 리디렉트 + X-Queue-Token 헤더 검증
   // ────────────────────────────────────────────────────────
   test('ACTIVE 상태가 되면 좌석 선택 페이지로 자동 리디렉트된다', async ({ page }) => {
     let callCount = 0
@@ -136,6 +136,21 @@ test.describe('대기열 페이지', () => {
       }
     })
 
+    // reservation 엔드포인트 mock (X-Queue-Token 헤더 검증용)
+    await page.route('**/reservations/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      })
+    })
+
+    // 리디렉트 후 첫 reservation API 요청 캡처
+    const reservationRequestPromise = page.waitForRequest(
+      (req) => req.url().includes('/reservations/'),
+      { timeout: 15000 }
+    )
+
     await page.goto(QUEUE_PAGE)
 
     // 첫 폴링 WAITING 확인
@@ -143,6 +158,10 @@ test.describe('대기열 페이지', () => {
 
     // 두 번째 폴링 후 리디렉트 확인 (5초 + 처리 시간)
     await expect(page).toHaveURL(`/reservation/${SCHEDULE_ID}`, { timeout: 15000 })
+
+    // X-Queue-Token 헤더 검증 (reservation 요청에 포함되는지 확인)
+    const reservationRequest = await reservationRequestPromise
+    expect(reservationRequest.headers()['x-queue-token']).toBe(validQueueToken)
 
     // queueToken 쿠키가 저장됐는지 검증
     const cookies = await page.context().cookies()
@@ -264,6 +283,37 @@ test.describe('대기열 페이지', () => {
     const timer = page.locator('p.font-mono')
     await expect(timer).toBeVisible()
     await expect(timer).toHaveClass(/text-red-600/)
+  })
+
+  // ────────────────────────────────────────────────────────
+  // 테스트 7: TTL 만료 시 홈으로 리디렉트
+  // ────────────────────────────────────────────────────────
+  test('TTL이 만료되면 홈으로 리디렉트된다', async ({ page }) => {
+    await mockQueueStatus(page, {
+      status: 'WAITING',
+      rank: 10,
+      estimatedWaitTime: 50,
+      token: null,
+    })
+
+    // 먼저 페이지를 로드해 localStorage 도메인 컨텍스트를 활성화
+    await page.goto(QUEUE_PAGE)
+    await expect(page.getByText('10번째')).toBeVisible({ timeout: 10000 })
+
+    // enteredAt을 11분 전으로 조작 (이미 만료된 상태)
+    const elevenMinutesAgo = Date.now() - 11 * 60 * 1000
+    await page.evaluate((enteredAt) => {
+      const stored = JSON.parse(localStorage.getItem('queue-storage') ?? '{"state":{}}')
+      stored.state = { ...(stored.state ?? {}), enteredAt }
+      localStorage.setItem('queue-storage', JSON.stringify(stored))
+    }, elevenMinutesAgo)
+
+    // 페이지 새로고침으로 persist 값 로드
+    await page.reload()
+    await expect(page.getByText('10번째')).toBeVisible({ timeout: 10000 })
+
+    // 타이머가 즉시 만료 → onExpire 콜백 → 홈으로 리디렉트
+    await expect(page).not.toHaveURL(QUEUE_PAGE, { timeout: 5000 })
   })
 })
 

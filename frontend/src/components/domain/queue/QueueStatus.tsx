@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useQueueStatus } from '@/hooks/use-queue-status'
 import { useQueueStore } from '@/stores/queue-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { setQueueTokenCookie } from '@/lib/auth/cookies'
 import { QueueSkeleton } from './QueueSkeleton'
 import { QueueError } from './QueueError'
@@ -19,7 +20,7 @@ interface QueueStatusProps {
 
 export function QueueStatus({ scheduleId }: QueueStatusProps) {
   const router = useRouter()
-  const { data, isLoading, error } = useQueueStatus(scheduleId)
+  const { data, isLoading, error, refetch } = useQueueStatus(scheduleId)
 
   const enteredAt = useQueueStore((s) => s.enteredAt)
   const storedScheduleId = useQueueStore((s) => s.scheduleId)
@@ -44,22 +45,53 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
   // 첫 폴링 시 enteredAt 설정 (persist로 새로고침 대응)
   useEffect(() => {
     if (data && enteredAt === null) {
-      setEnteredAt(Date.now())
+      setEnteredAt(Date.now(), scheduleId)
     }
-  }, [data, enteredAt, setEnteredAt])
+  }, [data, enteredAt, scheduleId, setEnteredAt])
 
   // ACTIVE 전환 감지 → 쿠키 + Zustand 저장 → 리디렉트
   useEffect(() => {
     if (data?.status === 'ACTIVE' && data.token) {
       const activate = async () => {
-        await setQueueTokenCookie(data.token!)
-        setQueueToken(data.token!, scheduleId)
-        toast.success('대기열을 통과했습니다!')
-        router.push(`/reservation/${scheduleId}`)
+        try {
+          await setQueueTokenCookie(data.token!)
+          setQueueToken(data.token!, scheduleId)
+          toast.success('대기열을 통과했습니다!')
+          router.push(`/reservation/${scheduleId}`)
+        } catch (err) {
+          console.error('대기열 활성화 처리 중 오류 발생:', err)
+          toast.error('처리 중 오류가 발생했습니다. 잠시 후 다시 시도합니다.')
+          refetch()
+        }
       }
       activate()
     }
-  }, [data?.status, data?.token, scheduleId, router, setQueueToken])
+  }, [data?.status, data?.token, scheduleId, router, setQueueToken, refetch])
+
+  // TTL 만료 시 홈으로 리디렉트
+  const handleTimerExpire = useCallback(() => {
+    clearQueue()
+    toast.warning('대기열 시간이 만료되었습니다. 다시 대기열에 진입해 주세요.')
+    router.replace('/')
+  }, [clearQueue, router])
+
+  // 브라우저 닫기/이탈 시 대기열 leave 요청 (keepalive)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const accessToken = useAuthStore.getState().accessToken
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
+      fetch(`${baseUrl}/queue/leave?scheduleId=${scheduleId}`, {
+        method: 'DELETE',
+        keepalive: true,
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      })
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [scheduleId])
 
   if (isLoading) {
     return <QueueSkeleton />
@@ -80,7 +112,9 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
       <QueuePosition position={data.rank} />
       <EstimatedTime estimatedWaitSeconds={data.estimatedWaitTime} />
       <QueueProgress position={data.rank} totalInQueue={totalInQueue} />
-      {enteredAt !== null && <QueueTimer enteredAt={enteredAt} />}
+      {enteredAt !== null && (
+        <QueueTimer enteredAt={enteredAt} onExpire={handleTimerExpire} />
+      )}
     </div>
   )
 }

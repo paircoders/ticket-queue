@@ -9,7 +9,7 @@ interface QueueState {
 
   setQueueToken: (token: string, scheduleId: string) => void
   setPosition: (position: number) => void
-  setEnteredAt: (timestamp: number) => void
+  setEnteredAt: (timestamp: number, scheduleId: string) => void
   clearQueue: () => void
 }
 
@@ -28,7 +28,7 @@ export const useQueueStore = create<QueueState>()(
           enteredAt: state.scheduleId !== scheduleId ? null : state.enteredAt,
         })),
       setPosition: (position) => set({ position }),
-      setEnteredAt: (timestamp) => set({ enteredAt: timestamp }),
+      setEnteredAt: (timestamp, scheduleId) => set({ enteredAt: timestamp, scheduleId }),
       clearQueue: () =>
         set({ queueToken: null, scheduleId: null, position: null, enteredAt: null }),
     }),
