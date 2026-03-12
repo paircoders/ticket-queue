@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.core.SetOperations
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.util.UUID
@@ -444,6 +445,44 @@ class QueueServiceTest {
             tokenArgs.forEach { token ->
                 UUID.fromString(token) // 파싱 실패 시 IllegalArgumentException
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("cleanupEndedSchedule")
+    inner class CleanupEndedSchedule {
+
+        private lateinit var setOps: SetOperations<String, String>
+
+        @BeforeEach
+        fun setUpSetOps() {
+            setOps = mockk()
+            every { stringRedisTemplate.opsForSet() } returns setOps
+            every { setOps.remove(any(), any()) } returns 1L
+        }
+
+        @Test
+        @DisplayName("대기열 키가 존재하면 delete가 true를 반환하고 메서드도 true를 반환한다")
+        fun returnsTrueWhenQueueKeyExisted() {
+            every { stringRedisTemplate.delete(any<String>()) } returns true
+
+            val result = queueService.cleanupEndedSchedule(scheduleId)
+
+            assertEquals(true, result)
+            verify(exactly = 1) { setOps.remove("queue:active-schedules", scheduleId.toString()) }
+            verify(exactly = 1) { stringRedisTemplate.delete("queue:$scheduleId") }
+        }
+
+        @Test
+        @DisplayName("대기열 키가 없으면 delete가 false를 반환하고 메서드도 false를 반환한다")
+        fun returnsFalseWhenQueueKeyAbsent() {
+            every { stringRedisTemplate.delete(any<String>()) } returns false
+
+            val result = queueService.cleanupEndedSchedule(scheduleId)
+
+            assertEquals(false, result)
+            verify(exactly = 1) { setOps.remove("queue:active-schedules", scheduleId.toString()) }
+            verify(exactly = 1) { stringRedisTemplate.delete("queue:$scheduleId") }
         }
     }
 

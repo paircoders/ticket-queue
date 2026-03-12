@@ -227,6 +227,23 @@ class QueueService(
     }
 
     /**
+     * 종료된 회차의 대기열 Redis 키를 정리한다.
+     *
+     * 삭제 대상:
+     * 1. queue:{scheduleId} — 대기열 Sorted Set (TTL 없음, 반드시 삭제)
+     * 2. queue:active-schedules에서 SREM — 정합성 보장
+     *
+     * TTL 10분으로 자동 만료되는 키(queue:active:{userId}, queue:token:{token},
+     * queue:user-token:{userId}:{scheduleId})는 24시간 후 이미 만료됨 → 삭제 불필요
+     *
+     * @return true if the queue key existed and was deleted
+     */
+    fun cleanupEndedSchedule(scheduleId: UUID): Boolean {
+        stringRedisTemplate.opsForSet().remove(QueueRedisKeys.activeSchedules(), scheduleId.toString())
+        return stringRedisTemplate.delete(QueueRedisKeys.queue(scheduleId))
+    }
+
+    /**
      * 활성 대기열 scheduleId 목록 조회
      *
      * SMEMBERS queue:active-schedules 를 통해 현재 대기 중인 회차 ID를 반환한다.

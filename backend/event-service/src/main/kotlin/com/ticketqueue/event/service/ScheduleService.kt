@@ -272,6 +272,14 @@ class ScheduleService(
         return ScheduleDto.SellableResponse(sellable = true)
     }
 
+    /**
+     * 종료/취소 후 24시간 이상 경과한 회차 ID 목록을 반환한다 (내부 API용 — Queue Service 정리 배치 전용)
+     */
+    fun getCleanupTargetScheduleIds(): List<UUID> {
+        val cutoffTime = LocalDateTime.now().minusHours(24)
+        return eventScheduleRepository.findCleanupTargetScheduleIds(cutoffTime)
+    }
+
     internal fun invalidateScheduleDetailCache(scheduleId: UUID) {
         try {
             redisTemplate.delete("$SCHEDULE_DETAIL_PREFIX$scheduleId")

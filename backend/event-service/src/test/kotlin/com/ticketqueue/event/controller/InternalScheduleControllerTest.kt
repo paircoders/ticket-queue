@@ -43,6 +43,35 @@ class InternalScheduleControllerTest {
     }
 
     @Nested
+    @DisplayName("GET /internal/schedules/ended")
+    inner class GetEndedScheduleIds {
+
+        @Test
+        @DisplayName("200 OK - 종료된 회차 ID 목록을 반환한다")
+        fun success() {
+            val id1 = UUID.randomUUID()
+            val id2 = UUID.randomUUID()
+            every { scheduleService.getCleanupTargetScheduleIds() } returns listOf(id1, id2)
+
+            mockMvc.perform(get("/internal/schedules/ended"))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.scheduleIds").isArray)
+                .andExpect(jsonPath("$.scheduleIds.length()").value(2))
+        }
+
+        @Test
+        @DisplayName("200 OK - 종료된 회차가 없으면 빈 목록을 반환한다")
+        fun empty() {
+            every { scheduleService.getCleanupTargetScheduleIds() } returns emptyList()
+
+            mockMvc.perform(get("/internal/schedules/ended"))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.scheduleIds").isArray)
+                .andExpect(jsonPath("$.scheduleIds.length()").value(0))
+        }
+    }
+
+    @Nested
     @DisplayName("GET /internal/schedules/{scheduleId}/sellable")
     inner class CheckSellable {
 

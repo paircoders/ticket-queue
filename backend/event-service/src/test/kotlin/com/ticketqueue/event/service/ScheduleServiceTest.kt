@@ -512,6 +512,34 @@ class ScheduleServiceTest {
     }
 
     @Nested
+    @DisplayName("getCleanupTargetScheduleIds")
+    inner class GetCleanupTargetScheduleIds {
+
+        @Test
+        @DisplayName("repository가 반환한 UUID 목록을 그대로 반환한다")
+        fun success() {
+            val id1 = UUID.randomUUID()
+            val id2 = UUID.randomUUID()
+
+            every { eventScheduleRepository.findCleanupTargetScheduleIds(any()) } returns listOf(id1, id2)
+
+            val result = scheduleService.getCleanupTargetScheduleIds()
+
+            assertEquals(listOf(id1, id2), result)
+        }
+
+        @Test
+        @DisplayName("정리 대상 회차가 없으면 빈 목록을 반환한다")
+        fun empty() {
+            every { eventScheduleRepository.findCleanupTargetScheduleIds(any()) } returns emptyList()
+
+            val result = scheduleService.getCleanupTargetScheduleIds()
+
+            assertTrue(result.isEmpty())
+        }
+    }
+
+    @Nested
     @DisplayName("changeScheduleStatus")
     inner class ChangeScheduleStatus {
 

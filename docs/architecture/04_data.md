@@ -1149,7 +1149,7 @@ EXISTS queue:active:user-abc
 ```
 
 **대기열 정리 배치 작업:**
-- **실행 주기**: 매일 03:00 UTC
+- **실행 주기**: 매일 03:00 KST (Asia/Seoul)
 - **정리 조건**: 공연 회차 종료 + 24시간 경과
 - **로직**:
   1. PostgreSQL에서 종료된 회차 조회 (`event_schedules.status = 'ENDED' AND event_end_at < now() - INTERVAL '24 hours'`)
