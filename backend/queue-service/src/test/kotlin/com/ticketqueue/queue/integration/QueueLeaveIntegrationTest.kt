@@ -1,7 +1,10 @@
 package com.ticketqueue.queue.integration
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.ninjasquad.springmockk.MockkBean
+import com.ticketqueue.queue.client.EventServiceClient
 import io.kotest.matchers.shouldBe
+import io.mockk.every
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -51,6 +54,10 @@ class QueueLeaveIntegrationTest {
         }
     }
 
+    // ScheduleValidator → EventServiceClient HTTP 호출 차단
+    @MockkBean
+    private lateinit var eventServiceClient: EventServiceClient
+
     @Autowired
     private lateinit var mockMvc: MockMvc
 
@@ -61,8 +68,11 @@ class QueueLeaveIntegrationTest {
     private lateinit var objectMapper: ObjectMapper
 
     @BeforeEach
-    fun flushRedis() {
+    fun setUp() {
         stringRedisTemplate.connectionFactory!!.connection.use { it.serverCommands().flushAll() }
+
+        every { eventServiceClient.checkSellable(any()) } returns
+            EventServiceClient.SellableResponse(sellable = true, reason = null)
     }
 
     // ── 헬퍼 ──────────────────────────────────────────────────────────────────

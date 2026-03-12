@@ -6,7 +6,9 @@ import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.queue.client.EventServiceClient
 import com.ticketqueue.queue.exception.QueueException
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.BeforeEach
@@ -117,6 +119,27 @@ class ScheduleValidatorTest {
 
             verify(exactly = 1) { eventServiceClient.checkSellable(scheduleId) }
         }
+
+        @Test
+        @DisplayName("Feign 성공 응답 후 Redis 캐시에 저장한다")
+        fun cachesSellableResponseAfterFeignCall() {
+            every { eventServiceClient.checkSellable(scheduleId) } returns
+                EventServiceClient.SellableResponse(sellable = true, reason = null)
+
+            scheduleValidator.validateSchedule(scheduleId)
+
+            verify { valueOps.set(cacheKey, any(), any<java.time.Duration>()) }
+        }
+
+        @Test
+        @DisplayName("알 수 없는 reason이면 SCHEDULE_NOT_FOUND 예외를 던진다")
+        fun throwsScheduleNotFoundOnUnknownReason() {
+            every { eventServiceClient.checkSellable(scheduleId) } returns
+                EventServiceClient.SellableResponse(sellable = false, reason = "SOMETHING_WEIRD")
+
+            val ex = assertThrows<QueueException> { scheduleValidator.validateSchedule(scheduleId) }
+            assert(ex.errorCode == ErrorCode.SCHEDULE_NOT_FOUND)
+        }
     }
 
     @Nested
@@ -147,6 +170,19 @@ class ScheduleValidatorTest {
             val ex = assertThrows<QueueException> { scheduleValidator.validateSchedule(scheduleId) }
             assert(ex.errorCode == ErrorCode.TICKET_SALE_ENDED)
             verify(exactly = 0) { eventServiceClient.checkSellable(any()) }
+        }
+
+        @Test
+        @DisplayName("손상된 JSON 캐시는 캐시 미스로 처리하고 Feign을 호출한다")
+        fun fallsBackToFeignOnCorruptedCache() {
+            every { valueOps.get(cacheKey) } returns "corrupted-json{"
+            every { stringRedisTemplate.delete(cacheKey) } returns true
+            every { eventServiceClient.checkSellable(scheduleId) } returns
+                EventServiceClient.SellableResponse(sellable = true, reason = null)
+
+            assertDoesNotThrow { scheduleValidator.validateSchedule(scheduleId) }
+
+            verify(exactly = 1) { eventServiceClient.checkSellable(scheduleId) }
         }
     }
 

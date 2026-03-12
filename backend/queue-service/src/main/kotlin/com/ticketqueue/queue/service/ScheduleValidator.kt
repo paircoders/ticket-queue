@@ -1,5 +1,6 @@
 package com.ticketqueue.queue.service
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.BusinessException
 import com.ticketqueue.common.exception.ErrorCode
@@ -54,9 +55,18 @@ class ScheduleValidator(
         }
 
         if (cached != null) {
-            val response = objectMapper.readValue(cached, EventServiceClient.SellableResponse::class.java)
-            if (response.sellable) return
-            throwValidationError(response.reason)
+            try {
+                val response = objectMapper.readValue(cached, EventServiceClient.SellableResponse::class.java)
+                if (response.sellable) return
+                throwValidationError(response.reason)
+            } catch (e: JsonProcessingException) {
+                logger.warn(e) { "Corrupted JSON in cache for schedule sellable: scheduleId=$scheduleId — treating as cache miss" }
+                try {
+                    stringRedisTemplate.delete(cacheKey)
+                } catch (deleteEx: Exception) {
+                    logger.warn(deleteEx) { "Failed to delete corrupted cache entry: scheduleId=$scheduleId" }
+                }
+            }
         }
 
         // 2. Event Service 호출 (캐시 미스)
@@ -91,7 +101,11 @@ class ScheduleValidator(
         when (reason) {
             "TICKET_SALE_NOT_STARTED" -> throw QueueException(ErrorCode.TICKET_SALE_NOT_STARTED)
             "TICKET_SALE_ENDED" -> throw QueueException(ErrorCode.TICKET_SALE_ENDED)
-            else -> throw QueueException(ErrorCode.SCHEDULE_NOT_FOUND)
+            "SCHEDULE_NOT_AVAILABLE" -> throw QueueException(ErrorCode.SCHEDULE_NOT_FOUND)
+            else -> {
+                logger.warn { "Unknown sellable reason: $reason — defaulting to SCHEDULE_NOT_FOUND" }
+                throw QueueException(ErrorCode.SCHEDULE_NOT_FOUND)
+            }
         }
     }
 }

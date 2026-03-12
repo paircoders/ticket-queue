@@ -1,11 +1,14 @@
 package com.ticketqueue.queue.integration
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.ticketqueue.queue.client.EventServiceClient
 import com.ticketqueue.queue.scheduler.BatchApproveScheduler
 import com.ticketqueue.queue.service.QueueService
 import io.kotest.matchers.longs.shouldBeBetween
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import com.ninjasquad.springmockk.MockkBean
+import io.mockk.every
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -60,6 +63,10 @@ class BatchApproveIntegrationTest {
     @MockitoBean
     private lateinit var batchApproveScheduler: BatchApproveScheduler
 
+    // ScheduleValidator → EventServiceClient HTTP 호출 차단
+    @MockkBean
+    private lateinit var eventServiceClient: EventServiceClient
+
     @Autowired
     private lateinit var mockMvc: MockMvc
 
@@ -76,9 +83,12 @@ class BatchApproveIntegrationTest {
     private val scheduleId = UUID.randomUUID()
 
     @BeforeEach
-    fun flushRedis() {
+    fun setUp() {
         requireNotNull(stringRedisTemplate.connectionFactory) { "RedisConnectionFactory is not configured" }
             .connection.use { it.serverCommands().flushAll() }
+
+        every { eventServiceClient.checkSellable(any()) } returns
+            EventServiceClient.SellableResponse(sellable = true, reason = null)
     }
 
     private fun enterRequest(uid: UUID = userId, sid: UUID = scheduleId) = post("/queue/enter")
