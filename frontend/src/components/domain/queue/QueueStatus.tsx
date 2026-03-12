@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useQueueStatus } from '@/hooks/use-queue-status'
@@ -12,6 +12,9 @@ import { QueuePosition } from './QueuePosition'
 import { EstimatedTime } from './EstimatedTime'
 import { QueueProgress } from './QueueProgress'
 import { QueueTimer } from './QueueTimer'
+
+const QUEUE_TTL_MS = 10 * 60 * 1000
+const MAX_ACTIVATE_RETRIES = 3
 
 interface QueueStatusProps {
   scheduleId: string
@@ -27,32 +30,40 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
   const clearQueue = useQueueStore((s) => s.clearQueue)
   const setQueueToken = useQueueStore((s) => s.setQueueToken)
 
-  // scheduleId가 변경됐을 때 stale 상태 초기화
-  const initialTotalInQueueRef = useRef<number | null>(null)
+  const [initialTotalInQueue, setInitialTotalInQueue] = useState<number | null>(null)
+
+  // scheduleId가 변경됐을 때 Zustand 상태 초기화 (Zustand setter는 effect에서 허용)
   useEffect(() => {
     if (storedScheduleId !== null && storedScheduleId !== scheduleId) {
       clearQueue()
-      initialTotalInQueueRef.current = null
     }
   }, [scheduleId, storedScheduleId, clearQueue])
 
-  // 첫 응답의 rank를 progress 계산용 기준값으로 캡처
-  if (data && initialTotalInQueueRef.current === null) {
-    initialTotalInQueueRef.current = data.rank
+  // 첫 응답의 rank를 progress 계산용 기준값으로 캡처 (derived state during render)
+  // scheduleId가 변경된 경우 reset, 아직 캡처 전이고 data가 있으면 최초 rank 저장
+  if (storedScheduleId !== null && storedScheduleId !== scheduleId && initialTotalInQueue !== null) {
+    setInitialTotalInQueue(null)
+  } else if (data && initialTotalInQueue === null) {
+    setInitialTotalInQueue(data.rank)
   }
 
   // 첫 폴링 시 enteredAt 설정 (persist로 새로고침 대응)
+  // 만료된 enteredAt은 리셋 (새로고침 후 10분 이상 경과 방어)
   useEffect(() => {
-    if (data && enteredAt === null) {
+    if (!data) return
+    if (enteredAt === null) {
+      setEnteredAt(Date.now(), scheduleId)
+    } else if (Date.now() - enteredAt > QUEUE_TTL_MS) {
       setEnteredAt(Date.now(), scheduleId)
     }
   }, [data, enteredAt, scheduleId, setEnteredAt])
 
   const [activateRetry, setActivateRetry] = useState(0)
+  const [activateFailed, setActivateFailed] = useState(false)
 
   // ACTIVE 전환 감지 → 쿠키 + Zustand 저장 → 리디렉트
   useEffect(() => {
-    if (data?.status === 'ACTIVE' && data.token) {
+    if (data?.status === 'ACTIVE' && data.token && !activateFailed) {
       const activate = async () => {
         try {
           await setQueueTokenCookie(data.token!)
@@ -61,13 +72,18 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
           router.push(`/reservation/${scheduleId}`)
         } catch (err) {
           console.error('대기열 활성화 처리 중 오류 발생:', err)
-          toast.error('처리 중 오류가 발생했습니다. 잠시 후 다시 시도합니다.')
-          setTimeout(() => setActivateRetry((c) => c + 1), 2000)
+          if (activateRetry + 1 >= MAX_ACTIVATE_RETRIES) {
+            setActivateFailed(true)
+            toast.error('대기열 통과 처리에 실패했습니다. 아래 버튼을 눌러 다시 시도해 주세요.')
+          } else {
+            toast.error('처리 중 오류가 발생했습니다. 잠시 후 다시 시도합니다.')
+            setTimeout(() => setActivateRetry((c) => c + 1), 2000)
+          }
         }
       }
       activate()
     }
-  }, [data?.status, data?.token, scheduleId, router, setQueueToken, activateRetry])
+  }, [data?.status, data?.token, scheduleId, router, setQueueToken, activateRetry, activateFailed])
 
   // TTL 만료 시 홈으로 리디렉트
   const handleTimerExpire = useCallback(() => {
@@ -88,7 +104,7 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
     return null
   }
 
-  const totalInQueue = initialTotalInQueueRef.current ?? data.rank
+  const totalInQueue = initialTotalInQueue ?? data.rank
 
   return (
     <div className="space-y-6">
@@ -97,6 +113,17 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
       <QueueProgress position={data.rank} totalInQueue={totalInQueue} />
       {enteredAt !== null && (
         <QueueTimer enteredAt={enteredAt} onExpire={handleTimerExpire} />
+      )}
+      {activateFailed && (
+        <div className="text-center space-y-2">
+          <p className="text-sm text-red-600">대기열 통과 처리에 실패했습니다.</p>
+          <button
+            onClick={() => { setActivateFailed(false); setActivateRetry(0) }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            다시 시도
+          </button>
+        </div>
       )}
     </div>
   )
