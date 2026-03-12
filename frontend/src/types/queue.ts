@@ -1,9 +1,11 @@
+export type QueueStatus = 'WAITING' | 'ACTIVE'
+
 export interface QueueEnterRequest {
   scheduleId: string
 }
 
 export interface QueueEnterResponse {
-  status: string
+  status: QueueStatus
   scheduleId: string
   rank: number
   estimatedWaitTime: number
@@ -11,7 +13,7 @@ export interface QueueEnterResponse {
 }
 
 export interface QueueStatusResponse {
-  status: string
+  status: QueueStatus
   rank: number
   estimatedWaitTime: number
   token: string | null
