@@ -143,6 +143,12 @@ test.describe('대기열 페이지', () => {
 
     // 두 번째 폴링 후 리디렉트 확인 (5초 + 처리 시간)
     await expect(page).toHaveURL(`/reservation/${SCHEDULE_ID}`, { timeout: 15000 })
+
+    // queueToken 쿠키가 저장됐는지 검증
+    const cookies = await page.context().cookies()
+    const queueTokenCookie = cookies.find((c) => c.name === 'queueToken')
+    expect(queueTokenCookie).toBeDefined()
+    expect(queueTokenCookie?.value).toBe(validQueueToken)
   })
 
   // ────────────────────────────────────────────────────────
@@ -161,6 +167,12 @@ test.describe('대기열 페이지', () => {
     let deleteCallCount = 0
     await page.route('**/queue/leave**', async (route) => {
       if (route.request().method() === 'DELETE') {
+        // scheduleId 쿼리 파라미터 검증
+        const url = new URL(route.request().url())
+        expect(url.searchParams.get('scheduleId')).toBe(SCHEDULE_ID)
+        // Authorization 헤더 검증
+        const authHeader = route.request().headers()['authorization']
+        expect(authHeader).toMatch(/^Bearer /)
         deleteCallCount++
         await route.fulfill({
           status: 200,

@@ -22,7 +22,11 @@ export const useQueueStore = create<QueueState>()(
       enteredAt: null,
 
       setQueueToken: (token, scheduleId) =>
-        set({ queueToken: token, scheduleId }),
+        set((state) => ({
+          queueToken: token,
+          scheduleId,
+          enteredAt: state.scheduleId !== scheduleId ? null : state.enteredAt,
+        })),
       setPosition: (position) => set({ position }),
       setEnteredAt: (timestamp) => set({ enteredAt: timestamp }),
       clearQueue: () =>

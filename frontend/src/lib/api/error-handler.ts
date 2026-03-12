@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { toast } from 'sonner'
 import type { ApiErrorResponse } from '@/types/api'
+import { ERROR_CODES } from './error-codes'
 
 export function handleApiError(error: unknown): void {
   if (!axios.isAxiosError(error)) {
@@ -50,25 +51,25 @@ function handleConflictError(
   message: string | undefined
 ): void {
   switch (code) {
-    case 'SEAT_ALREADY_HELD':
+    case ERROR_CODES.SEAT_ALREADY_HELD:
       toast.error('이미 선점된 좌석입니다.')
       break
-    case 'MAX_SEATS_EXCEEDED':
+    case ERROR_CODES.MAX_SEATS_EXCEEDED:
       toast.error('최대 4장까지만 예매할 수 있습니다.')
       break
-    case 'ALREADY_EXISTS_EMAIL':
+    case ERROR_CODES.ALREADY_EXISTS_EMAIL:
       toast.error('이미 사용 중인 이메일입니다.')
       break
-    case 'DUPLICATE_IDENTITY':
+    case ERROR_CODES.DUPLICATE_IDENTITY:
       toast.error('이미 가입된 본인인증 정보입니다.')
       break
-    case 'DUPLICATE_PAYMENT':
+    case ERROR_CODES.DUPLICATE_PAYMENT:
       toast.error('이미 처리된 결제입니다.')
       break
-    case 'ALREADY_IN_QUEUE':
+    case ERROR_CODES.ALREADY_IN_QUEUE:
       toast.error('이미 대기열에 등록되어 있습니다.')
       break
-    case 'ALREADY_APPROVED':
+    case ERROR_CODES.ALREADY_APPROVED:
       toast.error('이미 대기열을 통과한 상태입니다.')
       break
     default:
@@ -81,7 +82,7 @@ function handleServiceUnavailableError(
   code: string | undefined,
   message: string | undefined
 ): void {
-  if (code === 'QUEUE_FULL') {
+  if (code === ERROR_CODES.QUEUE_FULL) {
     toast.error('대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요.')
     return
   }

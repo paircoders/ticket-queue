@@ -22,11 +22,21 @@ export function QueueStatus({ scheduleId }: QueueStatusProps) {
   const { data, isLoading, error } = useQueueStatus(scheduleId)
 
   const enteredAt = useQueueStore((s) => s.enteredAt)
+  const storedScheduleId = useQueueStore((s) => s.scheduleId)
   const setEnteredAt = useQueueStore((s) => s.setEnteredAt)
+  const clearQueue = useQueueStore((s) => s.clearQueue)
   const setQueueToken = useQueueStore((s) => s.setQueueToken)
 
-  // 첫 응답의 rank를 progress 계산용 기준값으로 캡처
+  // scheduleId가 변경됐을 때 stale 상태 초기화
   const initialTotalInQueueRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (storedScheduleId !== null && storedScheduleId !== scheduleId) {
+      clearQueue()
+    }
+    initialTotalInQueueRef.current = null
+  }, [scheduleId, storedScheduleId, clearQueue])
+
+  // 첫 응답의 rank를 progress 계산용 기준값으로 캡처
   if (data && initialTotalInQueueRef.current === null) {
     initialTotalInQueueRef.current = data.rank
   }

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import axios from 'axios'
 import type { ApiErrorResponse } from '@/types/api'
+import { ERROR_CODES } from '@/lib/api/error-codes'
 
 interface QueueErrorProps {
   error: Error
@@ -13,15 +14,14 @@ function getErrorMessage(error: Error): { title: string; description: string } {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as ApiErrorResponse | undefined
     const code = data?.code
-    const status = error.response?.status
 
-    if (status === 404 || code === 'NOT_IN_QUEUE') {
+    if (code === ERROR_CODES.NOT_IN_QUEUE) {
       return {
         title: '대기열에 없습니다',
         description: '대기열에 등록되어 있지 않습니다. 공연 페이지로 이동하여 대기열에 다시 진입해주세요.',
       }
     }
-    if (code === 'ALREADY_APPROVED') {
+    if (code === ERROR_CODES.ALREADY_APPROVED) {
       return {
         title: '이미 승인된 상태입니다',
         description: '대기열을 통과했습니다. 좌석 선택 페이지로 이동해주세요.',
@@ -40,7 +40,7 @@ export function QueueError({ error, scheduleId }: QueueErrorProps) {
 
   const isApproved =
     axios.isAxiosError(error) &&
-    (error.response?.data as ApiErrorResponse | undefined)?.code === 'ALREADY_APPROVED'
+    (error.response?.data as ApiErrorResponse | undefined)?.code === ERROR_CODES.ALREADY_APPROVED
 
   return (
     <div className="text-center space-y-4">

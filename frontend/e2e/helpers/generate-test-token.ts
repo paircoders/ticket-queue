@@ -57,7 +57,7 @@ export async function generateTestAccessToken(overrides?: {
     sub: overrides?.sub ?? 'e2e-test-user-id',
     email: overrides?.email ?? 'e2e-test@example.com',
     role: overrides?.role ?? 'USER',
-    jti: 'e2e-test-jti',
+    jti: crypto.randomUUID(),
   }
 
   return new SignJWT(payload)
