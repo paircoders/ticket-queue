@@ -33,7 +33,7 @@ export function handleApiError(error: unknown): void {
       toast.error('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.')
       break
     case 503:
-      toast.error('서비스를 일시적으로 사용할 수 없습니다.')
+      handleServiceUnavailableError(code, message)
       break
     default:
       if (status && status >= 500) {
@@ -65,8 +65,25 @@ function handleConflictError(
     case 'DUPLICATE_PAYMENT':
       toast.error('이미 처리된 결제입니다.')
       break
+    case 'ALREADY_IN_QUEUE':
+      toast.error('이미 대기열에 등록되어 있습니다.')
+      break
+    case 'ALREADY_APPROVED':
+      toast.error('이미 대기열을 통과한 상태입니다.')
+      break
     default:
       toast.error(message ?? '요청이 충돌했습니다. 다시 시도해주세요.')
       break
   }
+}
+
+function handleServiceUnavailableError(
+  code: string | undefined,
+  message: string | undefined
+): void {
+  if (code === 'QUEUE_FULL') {
+    toast.error('대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요.')
+    return
+  }
+  toast.error(message ?? '서비스를 일시적으로 사용할 수 없습니다.')
 }

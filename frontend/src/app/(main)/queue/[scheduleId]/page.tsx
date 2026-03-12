@@ -1,18 +1,28 @@
 'use client'
 
 import { use } from 'react'
+import { QueueStatus, QueueInfo, LeaveQueueButton } from '@/components/domain/queue'
 
 export default function QueuePage({ params }: { params: Promise<{ scheduleId: string }> }) {
   const { scheduleId } = use(params)
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-spacing-xl">
-      <div className="max-w-2xl text-center">
-        <h1 className="mb-spacing-lg text-4xl font-bold text-gray-900">대기열</h1>
-        <p className="text-gray-600">
-          회차 ID: <span className="font-mono">{scheduleId}</span>
-        </p>
-        <p className="mt-spacing-md text-gray-500">대기열에서 순서를 기다리는 중입니다.</p>
+    <main className="min-h-[calc(100vh-theme(spacing.32))] flex flex-col justify-center p-6">
+      <div className="w-full max-w-[32rem] mx-auto space-y-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">대기열</h1>
+          <p className="mt-1 text-sm text-gray-500">잠시만 기다려 주세요. 곧 입장 가능합니다.</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <QueueStatus scheduleId={scheduleId} />
+        </div>
+
+        <div className="bg-gray-50 rounded-xl p-4">
+          <QueueInfo />
+        </div>
+
+        <LeaveQueueButton scheduleId={scheduleId} />
       </div>
     </main>
   )
