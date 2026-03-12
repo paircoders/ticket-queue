@@ -18,10 +18,13 @@ import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.repository.EventRepository
 import com.ticketqueue.event.repository.EventScheduleRepository
 import com.ticketqueue.event.repository.SeatRepository
+import com.ticketqueue.common.util.DateTimeUtils
+import io.mockk.capture
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -520,12 +523,19 @@ class ScheduleServiceTest {
         fun success() {
             val id1 = UUID.randomUUID()
             val id2 = UUID.randomUUID()
+            val cutoffSlot = slot<LocalDateTime>()
 
-            every { eventScheduleRepository.findCleanupTargetScheduleIds(any()) } returns listOf(id1, id2)
+            every { eventScheduleRepository.findCleanupTargetScheduleIds(capture(cutoffSlot)) } returns listOf(id1, id2)
 
+            val beforeCall = DateTimeUtils.now().minusHours(24)
             val result = scheduleService.getCleanupTargetScheduleIds()
+            val afterCall = DateTimeUtils.now().minusHours(24)
 
             assertEquals(listOf(id1, id2), result)
+            assertTrue(
+                !cutoffSlot.captured.isBefore(beforeCall) && !cutoffSlot.captured.isAfter(afterCall),
+                "cutoff 시간은 24시간 전 기준이어야 한다 (허용 오차 내)"
+            )
         }
 
         @Test

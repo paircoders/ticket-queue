@@ -3,8 +3,10 @@ package com.ticketqueue.queue.scheduler
 import com.ticketqueue.queue.client.EventServiceClient
 import com.ticketqueue.queue.service.QueueService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.slf4j.MDC
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 /**
  * 종료된 회차의 대기열 Redis 키 정리 배치 (Issue #125)
@@ -26,36 +28,42 @@ class QueueCleanupScheduler(
 
     @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Seoul")
     fun executeCleanup() {
-        logger.info { "Queue cleanup batch started" }
+        MDC.put("traceId", UUID.randomUUID().toString())
+        try {
+            logger.info { "Queue cleanup batch started" }
 
-        val scheduleIds = try {
-            eventServiceClient.getEndedScheduleIds().scheduleIds
-        } catch (e: Exception) {
-            logger.error(e) { "Queue cleanup batch failed: unable to fetch ended schedules from Event Service" }
-            return
-        }
-
-        if (scheduleIds.isEmpty()) {
-            logger.info { "Queue cleanup batch completed: no ended schedules to clean up" }
-            return
-        }
-
-        var deletedCount = 0
-        var failedCount = 0
-
-        for (scheduleId in scheduleIds) {
-            try {
-                val deleted = queueService.cleanupEndedSchedule(scheduleId)
-                if (deleted) deletedCount++
-                logger.debug { "Queue cleanup: scheduleId=$scheduleId, queueExisted=$deleted" }
+            val scheduleIds = try {
+                eventServiceClient.getEndedScheduleIds().scheduleIds
             } catch (e: Exception) {
-                failedCount++
-                logger.error(e) { "Queue cleanup failed for scheduleId=$scheduleId, continuing with remaining schedules" }
+                logger.error(e) { "Queue cleanup batch failed: unable to fetch ended schedules from Event Service" }
+                return
             }
-        }
 
-        logger.info {
-            "Queue cleanup batch completed: total=${scheduleIds.size}, deleted=$deletedCount, failed=$failedCount"
+            if (scheduleIds.isEmpty()) {
+                logger.info { "Queue cleanup batch completed: no ended schedules to clean up" }
+                return
+            }
+
+            var deletedCount = 0
+            var skippedCount = 0
+            var failedCount = 0
+
+            for (scheduleId in scheduleIds) {
+                try {
+                    val deleted = queueService.cleanupEndedSchedule(scheduleId)
+                    if (deleted) deletedCount++ else skippedCount++
+                    logger.debug { "Queue cleanup: scheduleId=$scheduleId, queueExisted=$deleted" }
+                } catch (e: Exception) {
+                    failedCount++
+                    logger.error(e) { "Queue cleanup failed for scheduleId=$scheduleId, continuing with remaining schedules" }
+                }
+            }
+
+            logger.info {
+                "Queue cleanup batch completed: total=${scheduleIds.size}, deleted=$deletedCount, skipped=$skippedCount, failed=$failedCount"
+            }
+        } finally {
+            MDC.remove("traceId")
         }
     }
 }

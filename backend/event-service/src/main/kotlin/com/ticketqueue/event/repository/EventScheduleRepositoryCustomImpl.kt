@@ -21,6 +21,7 @@ class EventScheduleRepositoryCustomImpl(
                 schedule.status.`in`(ScheduleStatus.ENDED, ScheduleStatus.CANCELLED),
                 schedule.eventEndAt.lt(cutoffTime)
             )
+            .orderBy(schedule.eventEndAt.asc())
             .limit(1000)
             .fetch()
     }

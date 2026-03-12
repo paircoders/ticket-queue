@@ -57,6 +57,17 @@ class InternalScheduleControllerTest {
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$.scheduleIds").isArray)
                 .andExpect(jsonPath("$.scheduleIds.length()").value(2))
+                .andExpect(jsonPath("$.scheduleIds[0]").value(id1.toString()))
+                .andExpect(jsonPath("$.scheduleIds[1]").value(id2.toString()))
+        }
+
+        @Test
+        @DisplayName("500 Internal Server Error - 서비스 예외 발생 시 에러 응답을 반환한다")
+        fun serviceError() {
+            every { scheduleService.getCleanupTargetScheduleIds() } throws RuntimeException("DB error")
+
+            mockMvc.perform(get("/internal/schedules/ended"))
+                .andExpect(status().isInternalServerError)
         }
 
         @Test

@@ -1149,11 +1149,14 @@ EXISTS queue:active:user-abc
 ```
 
 **대기열 정리 배치 작업:**
-- **실행 주기**: 매일 03:00 KST (Asia/Seoul)
-- **정리 조건**: 공연 회차 종료 + 24시간 경과
+- **실행 주기**: 매일 03:00 KST (`cron = "0 0 3 * * *", zone = "Asia/Seoul"`)
+- **정리 조건**: 공연 회차 종료/취소 + 24시간 경과
 - **로직**:
-  1. PostgreSQL에서 종료된 회차 조회 (`event_schedules.status = 'ENDED' AND event_end_at < now() - INTERVAL '24 hours'`)
-  2. 해당 회차의 Redis 대기열 삭제 (`DEL queue:{scheduleId}`)
+  1. Event Service 내부 API(`/internal/schedules/ended`) 경유로 정리 대상 회차 ID 조회
+     - 조건: `event_schedules.status IN ('ENDED', 'CANCELLED') AND event_end_at < now() - INTERVAL '24 hours'`
+     - 최대 1000건, `event_end_at ASC` 정렬 (오래된 것부터 처리)
+  2. `queue:active-schedules` Set에서 해당 scheduleId 제거 (`SREM`)
+  3. 해당 회차의 Redis 대기열 Sorted Set 삭제 (`DEL queue:{scheduleId}`)
 - **목적**: Redis 메모리 절약, 고아 데이터 제거
 
 **관련 요구사항:** REQ-QUEUE-001, REQ-QUEUE-003, REQ-QUEUE-004, REQ-QUEUE-011
