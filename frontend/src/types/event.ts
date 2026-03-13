@@ -43,7 +43,11 @@ export interface ScheduleTime {
 export interface Seat {
   id: string
   seatNumber: string
-  status: 'AVAILABLE' | 'SOLD'
+  status: 'AVAILABLE' | 'HOLD' | 'SOLD'
+  row: number
+  col: number
+  grade: string
+  price: number
 }
 
 export interface SeatGrade {

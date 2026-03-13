@@ -6,6 +6,14 @@ import { handleApiError } from './error-handler'
 import { redirectTo } from '@/lib/navigation'
 import type { RefreshResponse } from '@/types/auth'
 
+function getCookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${name}=`))
+  return match ? decodeURIComponent(match.split('=')[1]) : null
+}
+
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean
 }
@@ -27,8 +35,9 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${accessToken}`
   }
 
-  if (queueToken) {
-    config.headers['X-Queue-Token'] = queueToken
+  const resolvedQueueToken = queueToken ?? getCookieValue('queue-token')
+  if (resolvedQueueToken) {
+    config.headers['X-Queue-Token'] = resolvedQueueToken
   }
 
   return config
@@ -59,6 +68,21 @@ apiClient.interceptors.response.use(
 
     if (!originalRequest) {
       return Promise.reject(error)
+    }
+
+    // Handle 401 - Queue Token 만료 처리 (Access Token 갱신보다 먼저 확인)
+    if (error.response?.status === 401) {
+      const errorCode = (error.response?.data as { code?: string } | undefined)?.code
+
+      if (errorCode === 'QUEUE_TOKEN_EXPIRED' || errorCode === 'QUEUE_TOKEN_INVALID') {
+        if (typeof window !== 'undefined') {
+          const pathMatch = window.location.pathname.match(/\/reservation\/([^/]+)/)
+          const scheduleId = pathMatch?.[1]
+          const redirectUrl = scheduleId ? `/queue/${scheduleId}` : '/'
+          window.location.href = redirectUrl
+        }
+        return Promise.reject(error)
+      }
     }
 
     // Handle 401 - token refresh

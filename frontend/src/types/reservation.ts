@@ -1,3 +1,12 @@
+export interface ReservationSeat {
+  seatId: string
+  row: number
+  col: number
+  grade: string
+  price: number
+  status: 'AVAILABLE' | 'HOLD' | 'SOLD'
+}
+
 export interface HoldRequest {
   scheduleId: string
   seatIds: string[]
@@ -5,9 +14,10 @@ export interface HoldRequest {
 
 export interface HoldResponse {
   reservationId: string
-  status: string
-  totalAmount: number
+  scheduleId: string
+  seatIds: string[]
   holdExpiresAt: string
+  totalPrice: number
 }
 
 export interface UpdateHoldRequest {
@@ -22,15 +32,7 @@ export interface UpdateHoldResponse {
 }
 
 export interface RealtimeSeatsResponse {
-  scheduleId: string
-  seats: {
-    total: number
-    available: number
-    sold: number
-    hold: number
-  }
-  sold: string[]
-  hold: string[]
+  seats: ReservationSeat[]
 }
 
 export interface ReservationSeatInfo {
