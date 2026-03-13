@@ -10,7 +10,8 @@ import { HoldTimer } from '@/components/domain/reservation/HoldTimer'
 
 export default function ReservationPage({ params }: { params: Promise<{ scheduleId: string }> }) {
   const { scheduleId } = use(params)
-  const { setScheduleId, holdExpiresAt } = useReservationStore()
+  const setScheduleId = useReservationStore((s) => s.setScheduleId)
+  const holdExpiresAt = useReservationStore((s) => s.holdExpiresAt)
   const [hasPollingError, setHasPollingError] = useState(false)
   const holdMutation = useHoldSeat(scheduleId)
 
@@ -69,7 +70,6 @@ export default function ReservationPage({ params }: { params: Promise<{ schedule
 
           <div className="w-full md:w-80 shrink-0">
             <ReservationSummary
-              scheduleId={scheduleId}
               isPollingError={hasPollingError}
               isHoldPending={holdMutation.isPending}
               onHold={(seatIds) => holdMutation.mutate({ seatIds })}

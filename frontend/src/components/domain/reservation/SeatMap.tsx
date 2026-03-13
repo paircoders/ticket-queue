@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useSeatsWithAutoDeselect } from '@/hooks/use-seats'
 import { useReservationStore } from '@/stores/reservation-store'
@@ -56,17 +56,19 @@ function rowToAlpha(row: number): string {
 }
 
 export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapProps) {
-  const { data, isLoading, isError, refetch, failureCount } = useSeatsWithAutoDeselect(scheduleId)
-  const { selectedSeats, addSeat, removeSeat } = useReservationStore()
+  const { data, isLoading, isError, isRefetchError, refetch, failureCount } = useSeatsWithAutoDeselect(scheduleId)
+  const selectedSeats = useReservationStore((s) => s.selectedSeats)
+  const addSeat = useReservationStore((s) => s.addSeat)
+  const removeSeat = useReservationStore((s) => s.removeSeat)
 
   // Notify parent when polling fails repeatedly
   useEffect(() => {
-    if (isError && failureCount >= 2) {
+    if ((isError || isRefetchError) && failureCount >= 2) {
       onPollingError(true)
-    } else if (!isError) {
+    } else if (!isError && !isRefetchError) {
       onPollingError(false)
     }
-  }, [isError, failureCount, onPollingError])
+  }, [isError, isRefetchError, failureCount, onPollingError])
 
   const handleSeatClick = (seatId: string) => {
     const seat = data?.seats.find((s) => s.seatId === seatId)
@@ -92,6 +94,10 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
     }
   }
 
+  const seatsByRow = useMemo(() => groupSeatsByRow(data?.seats ?? []), [data?.seats])
+  const sortedRows = useMemo(() => Array.from(seatsByRow.keys()).sort((a, b) => a - b), [seatsByRow])
+  const selectedIds = useMemo(() => new Set(selectedSeats.map((s) => s.id)), [selectedSeats])
+
   if (isLoading) {
     return (
       <div className="w-full overflow-x-auto p-4">
@@ -115,7 +121,7 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
     )
   }
 
-  const allSeatsTaken = data?.seats.every((s) => s.status !== 'AVAILABLE')
+  const allSeatsTaken = data?.seats && data.seats.every((s) => s.status !== 'AVAILABLE')
 
   if (allSeatsTaken) {
     return (
@@ -130,9 +136,6 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
       </div>
     )
   }
-
-  const seatsByRow = groupSeatsByRow(data?.seats ?? [])
-  const sortedRows = Array.from(seatsByRow.keys()).sort((a, b) => a - b)
 
   return (
     <div
@@ -170,7 +173,7 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
                     grade={seat.grade}
                     price={seat.price}
                     status={seat.status}
-                    isSelected={selectedSeats.some((s) => s.id === seat.seatId)}
+                    isSelected={selectedIds.has(seat.seatId)}
                     isHoldPending={isHoldPending}
                     onClick={handleSeatClick}
                   />

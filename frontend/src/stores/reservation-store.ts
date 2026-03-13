@@ -49,7 +49,18 @@ export const useReservationStore = create<ReservationState>((set) => ({
 
   clearSeats: () => set({ selectedSeats: [], totalPrice: 0 }),
 
-  setScheduleId: (id) => set({ scheduleId: id, selectedSeats: [], totalPrice: 0 }),
+  setScheduleId: (id) =>
+    set((state) =>
+      state.scheduleId === id
+        ? state
+        : {
+            scheduleId: id,
+            selectedSeats: [],
+            totalPrice: 0,
+            holdExpiresAt: null,
+            reservationId: null,
+          }
+    ),
 
   setHoldResult: (reservationId, holdExpiresAt) => set({ reservationId, holdExpiresAt }),
 

@@ -52,9 +52,9 @@ export function SeatButton({
   return (
     <button
       type="button"
-      disabled={isDisabled}
-      aria-disabled={isDisabled ? 'true' : undefined}
-      aria-pressed={!isDisabled ? isSelected : undefined}
+      disabled={isDisabled || isHoldPending}
+      aria-pressed={isSelected}
+      aria-busy={isHoldPending ? 'true' : undefined}
       aria-label={ariaLabel}
       onClick={handleClick}
       className={cn(

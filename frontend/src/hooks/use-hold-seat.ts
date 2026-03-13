@@ -3,6 +3,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import type { AxiosError } from 'axios'
 import { apiClient } from '@/lib/api/axios'
 import { useReservationStore } from '@/stores/reservation-store'
 import { ERROR_CODES } from '@/lib/api/error-codes'
@@ -12,7 +13,7 @@ export function useHoldSeat(scheduleId: string) {
   const router = useRouter()
   const { setHoldResult, resetReservation } = useReservationStore()
 
-  return useMutation<HoldResponse, Error, { seatIds: string[] }>({
+  return useMutation<HoldResponse, AxiosError<{ code?: string }>, { seatIds: string[] }>({
     mutationFn: async ({ seatIds }) => {
       const response = await apiClient.post<HoldResponse>('/reservations/hold', {
         scheduleId,
@@ -28,16 +29,22 @@ export function useHoldSeat(scheduleId: string) {
       setHoldResult(data.reservationId, data.holdExpiresAt)
       router.push(`/payment/${data.reservationId}`)
     },
-    onError: (error: any) => {
+    onError: (error) => {
       const code = error?.response?.data?.code
       if (code === ERROR_CODES.SEAT_ALREADY_HELD) {
         toast.error('이미 선점된 좌석이 포함되어 있습니다.')
+        resetReservation()
+      } else if (code === ERROR_CODES.HOLD_EXPIRED) {
+        toast.error('좌석 선점 시간이 만료되었습니다. 좌석을 다시 선택해 주세요.')
+        resetReservation()
+      } else if (code === ERROR_CODES.RESERVATION_NOT_FOUND) {
+        toast.error('예매 정보를 찾을 수 없습니다. 좌석을 다시 선택해 주세요.')
+        resetReservation()
       } else if (code === ERROR_CODES.MAX_SEATS_EXCEEDED) {
         toast.error('최대 4장까지 선택 가능합니다.')
       } else {
         toast.error('좌석 선점에 실패했습니다. 다시 시도해 주세요.')
       }
-      resetReservation()
     },
   })
 }

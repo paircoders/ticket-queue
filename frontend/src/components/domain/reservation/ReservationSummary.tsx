@@ -3,14 +3,14 @@
 import { useReservationStore } from '@/stores/reservation-store'
 
 interface ReservationSummaryProps {
-  scheduleId: string
   isPollingError: boolean
   isHoldPending: boolean
   onHold: (seatIds: string[]) => void
 }
 
-export function ReservationSummary({ scheduleId: _scheduleId, isPollingError, isHoldPending, onHold }: ReservationSummaryProps) {
-  const { selectedSeats, totalPrice } = useReservationStore()
+export function ReservationSummary({ isPollingError, isHoldPending, onHold }: ReservationSummaryProps) {
+  const selectedSeats = useReservationStore((s) => s.selectedSeats)
+  const totalPrice = useReservationStore((s) => s.totalPrice)
 
   const isDisabled =
     selectedSeats.length === 0 ||
@@ -57,10 +57,6 @@ export function ReservationSummary({ scheduleId: _scheduleId, isPollingError, is
           {totalPrice.toLocaleString('ko-KR')}원
         </span>
       </div>
-
-      {selectedSeats.length > 4 && (
-        <p className="text-sm text-red-500">좌석은 최대 4장까지 선택할 수 있습니다.</p>
-      )}
 
       <button
         type="button"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useReservationStore } from '@/stores/reservation-store';
@@ -14,9 +14,11 @@ export function HoldTimer({ holdExpiresAt, scheduleId }: HoldTimerProps) {
   const router = useRouter();
   const resetReservation = useReservationStore((state) => state.resetReservation);
   const { isExpired, isWarning, formatted } = useCountdown(holdExpiresAt);
+  const hasRedirectedRef = useRef(false);
 
   useEffect(() => {
-    if (isExpired) {
+    if (isExpired && !hasRedirectedRef.current) {
+      hasRedirectedRef.current = true;
       resetReservation();
       router.replace(`/reservation/${scheduleId}`);
     }

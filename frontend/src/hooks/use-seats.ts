@@ -32,12 +32,14 @@ export function useSeatsWithAutoDeselect(scheduleId: string) {
   useEffect(() => {
     if (!query.data?.seats) return
 
-    const unavailableIds = query.data.seats
-      .filter((seat) => seat.status === 'HOLD' || seat.status === 'SOLD')
-      .map((seat) => seat.seatId)
+    const unavailableIds = new Set(
+      query.data.seats
+        .filter((seat) => seat.status === 'HOLD' || seat.status === 'SOLD')
+        .map((seat) => seat.seatId)
+    )
 
     const deselected = selectedSeats.filter((selected) =>
-      unavailableIds.includes(selected.id)
+      unavailableIds.has(selected.id)
     )
 
     if (deselected.length === 0) return

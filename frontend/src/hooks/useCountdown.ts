@@ -13,7 +13,10 @@ interface CountdownResult {
 
 /**
  * holdExpiresAt timestamp 기준으로 남은 시간을 계산하는 커스텀 훅
- * 서버 기준 시각을 사용하여 클라이언트 시계 drift를 방지합니다.
+ * 클라이언트 시계(Date.now())를 기준으로 계산합니다.
+ *
+ * 주의: 클라이언트 시계가 서버와 차이가 있을 경우 타이머가 부정확할 수 있습니다.
+ * TODO: 서버 응답의 타임스탬프를 이용한 offset 계산으로 개선 필요.
  *
  * @param holdExpiresAt - ISO8601 형식의 만료 시각 (예: "2026-03-13T10:05:00")
  * @returns CountdownResult
