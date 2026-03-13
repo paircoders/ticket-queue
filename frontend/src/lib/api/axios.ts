@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth-store'
 import { useQueueStore } from '@/stores/queue-store'
+import { useReservationStore } from '@/stores/reservation-store'
 import { handleApiError } from './error-handler'
 import { redirectTo } from '@/lib/navigation'
 import type { RefreshResponse } from '@/types/auth'
@@ -78,7 +79,8 @@ apiClient.interceptors.response.use(
       if (errorCode === ERROR_CODES.QUEUE_TOKEN_EXPIRED || errorCode === ERROR_CODES.QUEUE_TOKEN_INVALID) {
         if (typeof window !== 'undefined') {
           const pathMatch = window.location.pathname.match(/\/reservation\/([^/]+)/)
-          const scheduleId = pathMatch?.[1]
+          const scheduleId =
+            pathMatch?.[1] ?? useReservationStore.getState().scheduleId ?? undefined
           const redirectUrl = scheduleId ? `/queue/${scheduleId}` : '/'
           window.location.href = redirectUrl
         }

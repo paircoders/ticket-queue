@@ -51,7 +51,14 @@ function groupSeatsByRow(seats: ReservationSeat[]): Map<number, ReservationSeat[
   return map
 }
 
+/**
+ * row는 1-based여야 합니다. ReservationSeat.row >= 1 이 보장되어야 합니다.
+ * row=0이면 '@'가 생성되므로 런타임에 검증합니다.
+ */
 function rowToAlpha(row: number): string {
+  if (row < 1) {
+    throw new Error(`rowToAlpha: row는 1 이상이어야 합니다. 받은 값: ${row}`)
+  }
   return String.fromCharCode(64 + row)
 }
 
@@ -60,6 +67,11 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
   const selectedSeats = useReservationStore((s) => s.selectedSeats)
   const addSeat = useReservationStore((s) => s.addSeat)
   const removeSeat = useReservationStore((s) => s.removeSeat)
+
+  const seatsByRow = useMemo(() => groupSeatsByRow(data?.seats ?? []), [data?.seats])
+  const sortedRows = useMemo(() => Array.from(seatsByRow.keys()).sort((a, b) => a - b), [seatsByRow])
+  // selectedIds를 handleSeatClick 전에 정의하여 O(1) 조회에 사용
+  const selectedIds = useMemo(() => new Set(selectedSeats.map((s) => s.id)), [selectedSeats])
 
   // Notify parent when polling fails repeatedly
   useEffect(() => {
@@ -74,8 +86,7 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
     const seat = data?.seats.find((s) => s.seatId === seatId)
     if (!seat) return
 
-    const isSelected = selectedSeats.some((s) => s.id === seatId)
-    if (isSelected) {
+    if (selectedIds.has(seatId)) {
       removeSeat(seatId)
     } else {
       if (selectedSeats.length >= 4) {
@@ -93,10 +104,6 @@ export function SeatMap({ scheduleId, isHoldPending, onPollingError }: SeatMapPr
       })
     }
   }
-
-  const seatsByRow = useMemo(() => groupSeatsByRow(data?.seats ?? []), [data?.seats])
-  const sortedRows = useMemo(() => Array.from(seatsByRow.keys()).sort((a, b) => a - b), [seatsByRow])
-  const selectedIds = useMemo(() => new Set(selectedSeats.map((s) => s.id)), [selectedSeats])
 
   if (isLoading) {
     return (
