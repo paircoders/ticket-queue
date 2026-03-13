@@ -64,13 +64,25 @@ class QueueCleanupScheduler(
         val scheduleIds = try {
             eventServiceClient.getEndedScheduleIds().scheduleIds
         } catch (e: RetryableException) {
-            logger.error(e) { "Queue cleanup batch failed: Event Service 5xx error (transient)" }
+            failedCounter.increment()
+            slf4jLogger.error(
+                "Queue cleanup batch failed: Event Service 5xx error (transient): cause={}",
+                kv("cause", e.javaClass.simpleName), e
+            )
             return
         } catch (e: BusinessException) {
-            logger.error(e) { "Queue cleanup batch failed: Event Service 4xx error (non-transient), code=${e.errorCode}" }
+            failedCounter.increment()
+            slf4jLogger.error(
+                "Queue cleanup batch failed: Event Service 4xx error (non-transient): errorCode={}, cause={}",
+                kv("errorCode", e.errorCode), kv("cause", e.javaClass.simpleName), e
+            )
             return
         } catch (e: Exception) {
-            logger.error(e) { "Queue cleanup batch failed: unable to fetch ended schedules from Event Service" }
+            failedCounter.increment()
+            slf4jLogger.error(
+                "Queue cleanup batch failed: unable to fetch ended schedules from Event Service: cause={}",
+                kv("cause", e.javaClass.simpleName), e
+            )
             return
         }
 
@@ -96,11 +108,17 @@ class QueueCleanupScheduler(
             } catch (e: RedisConnectionFailureException) {
                 failedCount++
                 failedCounter.increment()
-                logger.error(e) { "Queue cleanup Redis connection failed for scheduleId=$scheduleId, continuing with remaining schedules" }
+                slf4jLogger.error(
+                    "Queue cleanup Redis connection failed: scheduleId={}, cause={}",
+                    kv("scheduleId", scheduleId), kv("cause", e.javaClass.simpleName), e
+                )
             } catch (e: Exception) {
                 failedCount++
                 failedCounter.increment()
-                logger.error(e) { "Queue cleanup failed for scheduleId=$scheduleId, continuing with remaining schedules" }
+                slf4jLogger.error(
+                    "Queue cleanup failed: scheduleId={}, cause={}",
+                    kv("scheduleId", scheduleId), kv("cause", e.javaClass.simpleName), e
+                )
             }
         }
 

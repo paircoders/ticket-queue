@@ -23,7 +23,9 @@ import com.ticketqueue.common.util.DateTimeUtils
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.runs
+import io.mockk.unmockkObject
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -551,6 +553,30 @@ class ScheduleServiceTest {
             val result = scheduleService.getCleanupTargetScheduleIds()
 
             assertTrue(result.isEmpty())
+        }
+
+        @Test
+        @DisplayName("cutoffTime이 현재 시각으로부터 정확히 24시간 전으로 계산된다")
+        fun cutoffTimeIs24HoursAgo() {
+            val fixedNow = LocalDateTime.of(2026, 3, 13, 3, 0, 0)
+            mockkObject(DateTimeUtils)
+            try {
+                every { DateTimeUtils.now() } returns fixedNow
+
+                var capturedCutoffTime: LocalDateTime? = null
+                every {
+                    eventScheduleRepository.findCleanupTargetScheduleIds(any(), null, null)
+                } answers {
+                    capturedCutoffTime = firstArg()
+                    emptyList()
+                }
+
+                scheduleService.getCleanupTargetScheduleIds()
+
+                assertEquals(fixedNow.minusHours(24), capturedCutoffTime)
+            } finally {
+                unmockkObject(DateTimeUtils)
+            }
         }
     }
 

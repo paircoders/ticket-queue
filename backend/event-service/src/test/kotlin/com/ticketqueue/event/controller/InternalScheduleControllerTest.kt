@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.hamcrest.Matchers.emptyOrNullString
+import org.hamcrest.Matchers.matchesPattern
+import org.hamcrest.Matchers.not
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -70,8 +73,8 @@ class InternalScheduleControllerTest {
                 .andExpect(status().isInternalServerError)
                 .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
                 .andExpect(jsonPath("$.message").isString)
-                .andExpect(jsonPath("$.timestamp").isString)
-                .andExpect(jsonPath("$.traceId").isString)
+                .andExpect(jsonPath("$.timestamp").value(matchesPattern("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}")))
+                .andExpect(jsonPath("$.traceId").value(not(emptyOrNullString())))
         }
 
         @Test
