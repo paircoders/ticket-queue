@@ -4,547 +4,220 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-**Ticket Queue**는 대규모 트래픽을 처리하는 콘서트 티켓팅 시스템입니다. MSA(마이크로서비스 아키텍처)를 기반으로 하며, 현재 **구현 진행 단계(Implementation Phase)**에 있습니다.
+**Ticket Queue**는 K-pop 콘서트와 같은 대규모 트래픽을 처리하는 티켓팅 시스템입니다. Redis 기반 대기열, Kafka 이벤트 아키텍처, SAGA 패턴을 적용한 MSA 구조이며, 현재 **구현 진행 단계(Implementation Phase)**에 있습니다.
 
-### 핵심 목표
-- K-pop 콘서트와 같은 높은 동시성 환경에서의 공정한 티켓 판매
-- Redis 기반 대기열 시스템으로 트래픽 폭주 관리
-- 이벤트 기반 아키텍처(Kafka)를 통한 서비스 간 느슨한 결합
-- SAGA 패턴과 Transactional Outbox 패턴으로 분산 트랜잭션 관리
+---
 
-## 문서 구조 및 우선순위
+## 문서 가이드 (Source of Truth: `docs/`)
 
-모든 아키텍처 및 기능 결정은 `docs/` 디렉토리를 **Source of Truth**로 삼습니다. 코드 작성 전 반드시 다음 문서들을 참조하세요:
+코드 작성 전 반드시 관련 문서를 먼저 확인하세요. 모든 아키텍처 결정은 `docs/`가 기준입니다.
 
 ### 필수 읽기 순서 (아키텍처)
-1. **`docs/REQUIREMENTS.md`** - 110개의 상세 요구사항 (기능 74개/비기능 36개)
-2. **`docs/architecture/02_services.md`** - 6개 마이크로서비스의 경계, 책임, API 엔드포인트
-3. **`docs/architecture/04_data.md`** - ERD, Redis 데이터 모델, 분산 락 전략
-4. **`docs/architecture/05_messaging.md`** - Kafka 토픽 설계, 이벤트 스키마, 멱등성 보장
-5. **`docs/architecture/06_api_security.md`** - API Gateway 라우팅, JWT 검증, Rate Limiting
-6. **`docs/architecture/07_operations.md`** - 모니터링, 성능 최적화, 테스트 전략
+1. **`docs/REQUIREMENTS.md`** — 110개 요구사항 (기능 74 / 비기능 36), REQ-xxx-xxx ID 참조
+2. **`docs/architecture/02_services.md`** — 6개 서비스 경계, 책임, API 엔드포인트 전체
+3. **`docs/architecture/04_data.md`** — ERD, Redis 데이터 모델, 분산 락 전략
+4. **`docs/architecture/05_kafka.md`** — Kafka 토픽/이벤트 스키마/Consumer Group/멱등성
+5. **`docs/architecture/06_api_security.md`** — API Gateway 라우팅, JWT, Rate Limiting, 보안
+6. **`docs/architecture/07_operations.md`** — 모니터링, 성능 목표, 테스트 전략
 
-### API 명세서 (specification)
-서비스별 상세 API 명세는 `docs/specification/` 디렉토리에서 확인:
-- **`00_overview.md`** - 공통 규약 (날짜 형식, 에러 응답, 인증 헤더)
-- **`01_user_service.md`** - 회원/인증 API (Auth, Users)
-- **`02_event_service.md`** - 공연/공연장 API (Events, Venues, Internal)
-- **`03_queue_service.md`** - 대기열 API (Queue)
-- **`04_reservation_service.md`** - 예매/좌석 API (Reservations)
-- **`05_payment_service.md`** - 결제 API (Payments)
+### API 명세서 (`docs/specification/`)
+- `00_overview.md` — 공통 규약 (날짜 형식, 에러 응답, 인증 헤더)
+- `01_user_service.md` ~ `05_payment_service.md` — 서비스별 상세 API
 
-### 공통 규약
-- **날짜/시간 형식**: `yyyy-MM-ddTHH:mm:ss` (예: `2026-01-20T10:00:00`)
-- **인증 헤더**: `Authorization: Bearer {Access_Token}`
-- **대기열 토큰 헤더**: `X-Queue-Token: {Queue_Token}` (예매/결제 API 필수)
-- **에러 응답 형식**:
-  ```json
-  {
-    "code": "ERROR_CODE",
-    "message": "사용자에게 표시할 메시지",
-    "timestamp": "2026-01-20T10:00:00",
-    "traceId": "분산 추적용 ID"
-  }
-  ```
-
-## 마이크로서비스 구조
-
-### 서비스별 책임 및 담당자
-
-| 서비스 | 담당자 | 핵심 책임 | 데이터 스키마 | Kafka 역할 |
-|--------|--------|----------|--------------|-----------|
-| **API Gateway** | A개발자 | 라우팅, JWT 검증, Rate Limiting, Circuit Breaker | 없음 (Stateless) | - |
-| **User Service** | B개발자 | 인증(JWT), 회원관리, OAuth2, reCAPTCHA | `user_service` | - |
-| **Event Service** | A개발자 | 공연/공연장/좌석 관리, Redis 캐싱 | `event_service` | Consumer 전용 |
-| **Queue Service** | A개발자 | Redis Sorted Set 기반 대기열, Token 발급 | Redis 전용 | - |
-| **Reservation Service** | B개발자 | 좌석 선점(분산 락), 예매 관리 | `reservation_service` | Producer + Consumer |
-| **Payment Service** | B개발자 | PortOne 연동, SAGA 패턴, 보상 트랜잭션 | `payment_service` | Producer 전용 |
-
-### 데이터베이스 격리 원칙
-- **단일 PostgreSQL 인스턴스**에 스키마로 논리적 분리
-  ```
-  ticketing DB
-  ├── user_service (User Service 전용)
-  ├── event_service (Event Service 전용)
-  ├── reservation_service (Reservation Service 전용)
-  ├── payment_service (Payment Service 전용)
-  └── common (공통: outbox_events, processed_events)
-  ```
-- 각 서비스는 자신의 스키마만 접근 (DB 사용자 권한으로 강제)
-  - 예: `user_svc_user`는 `user_service` 스키마만 접근 가능
-  - 모든 서비스는 `common` 스키마 접근 가능 (Outbox 패턴)
-- 서비스 간 데이터 접근은 **REST API** 또는 **Kafka 이벤트**로만 허용
-- 직접적인 스키마 간 JOIN 또는 쿼리 금지
+---
 
 ## 기술 스택
 
-### Backend
-- **Language**: Kotlin 2.1.0 (Java 21 기반)
-- **Framework**: Spring Boot 3.5.10, Spring Cloud Gateway (Spring Cloud 2025.0.1)
-- **Build Tool**: Gradle (Kotlin DSL), KSP (Kotlin Symbol Processing)
-- **Database**: PostgreSQL 18 (단일 인스턴스, 스키마 분리)
-- **ORM**: Spring Data JPA + QueryDSL 6.12 (openfeign fork, KSP 코드 생성)
-- **Cache**: Valkey 8.1.5 (Redis 대체, 캐시, 대기열, 분산 락)
-- **Messaging**: Apache Kafka (KRaft 모드, Zookeeper 불필요)
-- **Distributed Lock**: Redisson 3.40.2
-- **Resilience**: Resilience4j 2.2.0 (Circuit Breaker, Rate Limiter)
-- **JWT**: JJWT 0.12.6
-- **Cloud**: Spring Cloud AWS 3.4.2 (Secrets Manager 연동)
+| 구분 | 기술 |
+|------|------|
+| Language | Kotlin 2.1.0 (Java 21) |
+| Framework | Spring Boot 3.5.10, Spring Cloud Gateway (2025.0.1) |
+| Build | Gradle Kotlin DSL + KSP |
+| DB | PostgreSQL 18 (단일 인스턴스, 스키마 분리) |
+| ORM | Spring Data JPA + QueryDSL 6.12 |
+| Cache/Queue | Valkey 8.1.5 (Redis 호환) |
+| Messaging | Apache Kafka (KRaft 모드) |
+| Dist. Lock | Redisson 3.40.2 |
+| Resilience | Resilience4j 2.2.0 |
+| JWT | JJWT 0.12.6 |
+| Cloud | Spring Cloud AWS 3.4.2 (Secrets Manager) |
+| Frontend | Next.js 16+ (미구현) |
+| Infra | Docker Compose (로컬), AWS EC2 (목표) |
 
-### Frontend (미구현)
-- Next.js 16+ (Vercel 배포, GitHub 연동 자동 CI/CD)
+---
 
-### Infrastructure
-- **Local**: Docker Compose (PostgreSQL, Valkey, Kafka 통합 환경)
-- **Target**: AWS EC2 단일 인스턴스 배포 (비용 최적화)
-- **Monitoring**: 계획 중 (CloudWatch Logs/Metrics)
+## 마이크로서비스 요약
 
-## 아키텍처 핵심 패턴
+| 서비스 | 담당자 | 핵심 책임 |
+|--------|--------|----------|
+| API Gateway | A | 라우팅, JWT 검증, Rate Limiting, Circuit Breaker |
+| User Service | B | 인증(JWT), 회원관리, OAuth2, reCAPTCHA |
+| Event Service | A | 공연/공연장/좌석 관리, Redis 캐싱 |
+| Queue Service | A | Redis Sorted Set 대기열, Queue Token 발급 |
+| Reservation Service | B | 좌석 선점(Redisson 분산 락), 예매 관리 |
+| Payment Service | B | PortOne 연동, SAGA 패턴, 보상 트랜잭션 |
 
-### 1. 대기열 시스템 (Queue Service)
-- **Redis Sorted Set**: score는 진입 시각(timestamp), member는 userId
-  - Key: `queue:{scheduleId}` (공연별이 아닌 회차별 대기열)
-- **배치 승인**: 1초마다 10명씩 Lua 스크립트로 원자적 처리 (36,000명/시간)
-  - Lua 스크립트로 ZRANGE + ZREM + Token 발급을 원자적으로 처리
-- **단일 Queue Token 모델**:
-  - `queue_token`: 대기열 통과 후 좌석 조회/선점용 (TTL 10분)
-  - Token 데이터: Redis String `queue:token:{token}` (JSON: userId, scheduleId, issuedAt)
-  - **결제 권한**: 별도 토큰 없이 `Reservation(PENDING + hold_expires_at)` 기반 검증
-    - 결제 시 검증: reservationId 존재 + userId 일치 + status=PENDING + hold_expires_at 미경과
-- **중복 대기 방지**: 사용자당 동시 대기 1개 회차만 허용 (Redis `queue:active:{userId}`, TTL 10분)
-- **대기열 용량 제한**: 회차당 최대 50,000명 (초과 시 503 Service Unavailable)
-- **REQ-QUEUE-001 ~ 011**
+> 상세 책임/스키마/Kafka 역할: `docs/architecture/02_services.md`
 
-### 2. 좌석 선점 및 예매 (Reservation Service)
-- **Redisson 분산 락**: `seat:hold:{scheduleId}:{seatId}` (TTL 5분)
-  - `tryLock(15초 대기, 300초 보유)` - 경합 시 최대 15초 대기
-- **좌석 상태 조회 최적화**:
-  - **HOLD 상태**: Redis SET `hold_seats:{scheduleId}` 조회 (O(1), KEYS 명령 금지)
-  - **SOLD 상태**: Event Service 내부 API `/internal/seats/status/{scheduleId}` 호출 (Feign)
-  - **AVAILABLE**: HOLD도 SOLD도 아닌 좌석
-- **좌석 상태 업데이트 책임**:
-  - SOLD → RDB: Event Service (ReservationConfirmed 이벤트 수신 시)
-  - HOLD 해제: Reservation Service (분산 락 해제) + Event Service (Redis SET 정리)
-- **1회 최대 4장 제한**: 좌석 선점 시 개수 검증
-- **REQ-RSV-001 ~ 012**
+---
 
-### 3. SAGA 패턴 (Payment Service)
-- **Orchestration 방식**: Payment Service가 SAGA 진행 상황 관리
-- **성공 플로우**:
-  1. 예매 생성 (PENDING) → 2. 결제 성공 → 3. `PaymentSuccess` 이벤트 발행
-  4. Reservation Consumer: 예매 확정 (CONFIRMED)
-  5. Event Consumer: 좌석 상태 SOLD
-- **보상 트랜잭션 (실패 플로우)**:
-  1. 예매 생성 (PENDING) → 2. 결제 실패 → 3. `PaymentFailed` 이벤트 발행
-  4. Reservation Consumer: 예매 취소 (CANCELLED) → 5. `ReservationCancelled` 이벤트 발행
-  6. Event Consumer: 좌석 선점 해제 (AVAILABLE)
-- **REQ-PAY-011, REQ-PAY-012**
+## 아키텍처 핵심 패턴 (포인터)
 
-### 4. Transactional Outbox Pattern
-- **문제**: Kafka 발행 실패 시 데이터 불일치
-- **해결책**: 비즈니스 로직 트랜잭션 내 `common.outbox_events` 테이블에 이벤트 INSERT
-- **Outbox Poller**: 1초마다 미발행 이벤트를 Kafka로 발행 (재시도 최대 3회, 실패 시 DLQ)
-- **적용 대상 (Producer 서비스)**:
-  - **Reservation Service**: `ReservationCancelled` 이벤트 발행 (P0 데이터 정합성)
-  - **Payment Service**: `PaymentSuccess`, `PaymentFailed` 이벤트 발행 (P0 데이터 정합성)
-  - **Event Service**: 적용 안 함 (Producer가 아닌 Consumer 전용)
-- **공통 스키마**: `common.outbox_events` 테이블
-  - `id`, `aggregate_type`, `aggregate_id`, `event_type`, `payload` (JSONB)
-  - `published` (boolean), `published_at`, `retry_count`, `last_error`
-- **정리 배치**: 발행 완료된 이벤트는 7일 후 자동 삭제
-- **REQ-RSV-012, REQ-PAY-013**
+| 패턴 | 한줄 설명 | 상세 문서 |
+|------|----------|----------|
+| **대기열 시스템** | Redis Sorted Set + Lua 원자적 배치 승인, Queue Token TTL 10분 | `04_data.md`, `03_queue_service.md` |
+| **좌석 선점** | Redisson 분산 락 `seat:hold:{scheduleId}:{seatId}`, 최대 4장 | `04_data.md`, `04_reservation_service.md` |
+| **SAGA 패턴** | Payment Service Orchestration, PaymentSuccess/Failed 이벤트 트리거 | `05_kafka.md`, `05_payment_service.md` |
+| **Transactional Outbox** | Reservation·Payment Service 필수, `common.outbox_events`, 1초 폴링 | `05_kafka.md` |
+| **Consumer 멱등성** | `common.processed_events` INSERT 선행, DataIntegrityViolationException 중복 감지 | `05_kafka.md` |
+| **내부 API 보안** | `/internal/**` 경로 + `X-Service-Api-Key` 헤더, Gateway에서 차단 | `06_api_security.md` |
 
-### 5. 멱등성 보장
-- **Producer**: Kafka 자체 멱등성 활성화 (`enable.idempotence=true`, `acks=all`)
-- **Consumer 멱등성 (필수 적용)**:
-  - **적용 대상 (Consumer 서비스)**:
-    - **Reservation Service**: `payment.events` 구독 (PaymentSuccess/PaymentFailed 처리)
-    - **Event Service**: `payment.events`, `reservation.events` 구독 (좌석 상태 변경)
-    - **Payment Service**: 적용 안 함 (Consumer가 아닌 Producer 전용)
-  - **방법 1 (필수)**: `common.processed_events` 테이블에 `(event_id, consumer_service)` 복합 PK + Unique Constraint
-    - Consumer 로직 최상단에 먼저 INSERT 시도 (원자적 중복 체크)
-    - `DataIntegrityViolationException` 발생 시 이미 처리된 이벤트로 간주하고 종료
-    - DB가 Race Condition을 원자적으로 해결 (가장 안전)
-    - 동일 이벤트를 여러 Consumer가 각각 처리 가능 (`consumer_service` 구분)
-  - 방법 2 (보조): Redis `SETNX processed:event:{eventId}` (TTL 7일)
-  - 방법 3 (보조): 도메인 키(`paymentKey`, `reservationId`) 기반 중복 체크
-- **전달 보장**: At-least-once + Consumer 멱등성 = Exactly-once 효과
-- **수동 커밋**: `enable-auto-commit: false`, `ack-mode: MANUAL_IMMEDIATE`
-- **REQ-PAY-004, REQ-PAY-010**
+> Redis 키 패턴 전체: `04_data.md` §Redis 데이터 모델
+> Kafka 토픽/이벤트 스키마/Consumer Group: `05_kafka.md`
+> API 엔드포인트 전체 목록: `specification/` 각 파일
 
-### 6. 서비스 간 통신 보안
-- **내부 API 패턴**: `/internal/**` 경로는 서비스 간 직접 호출 전용
-- **인증**: `X-Service-Api-Key` 헤더로 UUID 기반 API Key 검증
-- **API Gateway 차단**: Gateway는 `/internal/**` 라우팅을 명시적으로 차단 (404)
-- **네트워크 격리**: VPC Private Subnet 내에서만 접근 가능 (Security Group)
-- **예시**: Reservation Service → Event Service `/internal/seats/status/{eventId}` 호출로 SOLD 좌석 조회
-- **REQ-INT-001 ~ 010**
+---
 
-## Redis 데이터 모델 핵심
+## 주의사항 및 설계 원칙 체크리스트
 
-| Key Pattern | 타입 | 용도 | TTL | 서비스 |
-|-------------|------|------|-----|--------|
-| `queue:{scheduleId}` | Sorted Set | 대기열 (회차별) | 없음 | Queue |
-| `queue:token:{token}` | String (JSON) | Queue Token (대기열 통과 후 발급) | 10분 | Queue |
-| `queue:user-token:{userId}:{scheduleId}` | String | 역방향 토큰 조회 키 (ACTIVE 상태 판단, 배치 승인 시 SET 필요) ⚠️ Issue #44 | 10분 | Queue |
-| `queue:active:{userId}` | String | 중복 대기 방지 (scheduleId 저장) | 10분 | Queue |
-| `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (Redisson) | 5분 | Reservation |
-| `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
-| `token:blacklist:{jti}` | String | Access Token 블랙리스트 | 1시간 | User |
-| `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
-| `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
-| `cache:schedule:{scheduleId}` | Hash | 회차 상세정보 캐시 | 5분 | Event |
-| `cache:seats:{scheduleId}` | Hash | 좌석 정보 캐시 (등급별) | 5분 | Event |
+코드 작성 전 반드시 확인:
 
-## Kafka 토픽 및 이벤트
+1. **문서 우선**: 해당 REQ-xxx-xxx ID를 `docs/REQUIREMENTS.md`에서 먼저 확인
+2. **스키마 격리**: 서비스 간 직접 DB 쿼리 금지 — REST API 또는 Kafka 이벤트만 허용
+3. **멱등성**: 모든 Kafka Consumer는 `common.processed_events` 테이블 INSERT 선행 필수
+4. **Outbox 패턴**: Reservation·Payment Service에서 이벤트 발행 시 반드시 적용
+5. **내부 API 보안**: `/internal/**` 엔드포인트는 `X-Service-Api-Key` 검증 필수
+6. **Redis KEYS 명령 금지**: `hold_seats:{scheduleId}` SET 등 O(1) 자료구조로 대체
+7. **결제 권한은 Reservation 기반**: Queue Token 만료 후에도 `hold_expires_at` 미경과 시 결제 가능
+8. **DLQ 전략**: 재시도 가능(지수 백오프 3회) vs 즉시 DLQ(ValidationException 등) 구분
 
-### 토픽 목록
-| 토픽 | Producer | Consumer | 파티션 수 | 보관 기간 | 용도 |
-|------|----------|----------|----------|----------|------|
-| `reservation.events` | Reservation | Event | 3 | 3일 | 예매 취소 → 좌석 복구 |
-| `payment.events` | Payment | Reservation, Event | 3 | 3일 | 결제 성공/실패 → 예매 확정/취소, 좌석 SOLD |
-| `dlq.reservation` | - | Admin | 1 | 7일 | 처리 실패 메시지 (수동 복구) |
-| `dlq.payment` | - | Admin | 1 | 7일 | 처리 실패 메시지 (수동 복구) |
+---
 
-### 주요 이벤트 스키마
-모든 이벤트는 공통 구조를 따릅니다:
-```json
-{
-  "eventId": "uuid",           // 멱등성 키
-  "eventType": "PaymentSuccess | PaymentFailed | ReservationCancelled",
-  "aggregateId": "uuid",       // Reservation/Payment ID
-  "aggregateType": "string",
-  "version": "v1",
-  "timestamp": "ISO8601",
-  "metadata": {
-    "correlationId": "uuid",
-    "causationId": "uuid",
-    "userId": "uuid"
-  },
-  "payload": { /* 이벤트별 데이터 */ }
-}
-```
+## 핵심 설계 결정 (ADR 요약)
 
-### Consumer Group 매핑
-| Consumer Group ID | 구독 토픽 | 서비스 |
-|-------------------|----------|--------|
-| `reservation-payment-consumer` | `payment.events` | Reservation Service |
-| `event-payment-consumer` | `payment.events` | Event Service |
-| `event-reservation-consumer` | `reservation.events` | Event Service |
+1. **단일 PostgreSQL 인스턴스**: 비용 효율, 향후 물리 분리 가능
+2. **Redis KEYS 명령 금지**: `hold_seats:{scheduleId}` SET으로 대체
+3. **Outbox Pattern 필수**: Reservation, Payment Service (P0 정합성)
+4. **Consumer 멱등성**: `common.processed_events` + Unique Constraint (원자적 중복 방지)
+5. **단일 Queue Token + Reservation 기반 결제 권한**: 결제는 `Reservation(PENDING + hold_expires_at)` 검증
+6. **DLQ 재시도 전략**: 지수 백오프 3회, 재시도 불가 예외는 즉시 DLQ
+7. **보상 토픽 제외**: `payment.events`의 PaymentFailed가 보상 트리거 (YAGNI)
+8. **개인정보 AES 암호화 + 해시**: 이메일/이름/전화번호/CI 암호화, 검색용 해시(emailHash 등) 별도
 
-## 주요 API 엔드포인트 요약
+---
 
-| 서비스 | Method | Endpoint | 설명 | Auth | Queue Token |
-|--------|--------|----------|------|:----:|:-----------:|
-| User | POST | `/auth/signup` | 회원가입 | - | - |
-| User | POST | `/auth/login` | 로그인 | - | - |
-| User | POST | `/auth/logout` | 로그아웃 | O | - |
-| User | POST | `/auth/refresh` | 토큰 갱신 | - | - |
-| User | GET | `/users/me` | 내 프로필 조회 | O | - |
-| Event | GET | `/events` | 공연 목록 조회 | - | - |
-| Event | GET | `/events/{id}` | 공연 상세 조회 | - | - |
-| Event | GET | `/events/schedules/{id}/seats` | 좌석 정보 조회 | - | - |
-| Queue | POST | `/queue/enter` | 대기열 진입 | O | - |
-| Queue | GET | `/queue/status` | 대기열 상태 조회 | O | - |
-| Queue | DELETE | `/queue/leave` | 대기열 이탈 | O | - |
-| Reservation | GET | `/reservations/seats/{id}` | 실시간 좌석 상태 | O | O |
-| Reservation | POST | `/reservations/hold` | 좌석 선점 | O | O |
-| Reservation | GET | `/reservations` | 내 예매 내역 | O | - |
-| Payment | POST | `/payments` | 결제 요청 | O | O |
-| Payment | POST | `/payments/confirm` | 결제 승인 | O | O |
+## 현재 상태 및 다음 단계
 
-**내부 API** (서비스 간 통신용, `X-Service-Api-Key` 필수):
-- `GET /internal/seats/status/{scheduleId}` - SOLD 좌석 조회 (Event → Reservation)
+**현재**: 구현 진행 중 (Implementation Phase)
 
-## 성능 목표 (비기능 요구사항)
+### ✅ 완료된 구현
+- **Common 모듈** — Outbox Pattern, Kafka 멱등성, 공통 이벤트 스키마, 내부 API 보안, 공통 설정
+- **Event Service** — Venue/Hall CRUD API, JPA Entity, Kafka·Redis 설정, 내부 API 보안 필터
+- **User Service** — 회원가입 API (reCAPTCHA, AES 암호화, 해시 중복 체크)
+- **API Gateway** — TraceId 전파 필터, 기본 구조
+- **Payment/Queue/Reservation Service** — Kafka·Redis·Redisson 기본 설정
 
-- **대기열 진입**: P95 < 100ms (REQ-QUEUE-009)
-- **대기열 상태 조회**: P95 < 50ms (REQ-QUEUE-009)
-- **공연 목록 조회**: P95 < 200ms (REQ-EVT-004)
-- **공연 상세 조회**: P95 < 100ms (REQ-EVT-005)
-- **좌석 정보 조회**: P95 < 300ms (REQ-EVT-006)
-- **대기열 처리량**: 36,000명/시간 (10명/초) (REQ-QUEUE-005)
+### 🔄 진행 필요
+1. **User Service**: 로그인/로그아웃/토큰 갱신, JWT 발급, Refresh Token Rotation
+2. **API Gateway**: JWT 검증 필터, 라우팅 설정, Circuit Breaker
+3. **Event Service**: 공연/회차/좌석 CRUD API, Redis 캐싱
+4. **Queue Service**: 대기열 진입/상태/이탈 API, Queue Token 발급
+5. **Reservation Service**: 좌석 선점 API, 예매 조회/관리, Kafka Consumer
+6. **Payment Service**: PortOne 연동, 결제 API, SAGA 패턴, Outbox Pattern
+7. **통합 테스트 및 부하 테스트** (k6)
 
-## API Gateway 정책
-
-### API Throttling (REQ-GW-005)
-- **대기열 토큰**: 주요 API 접근 시 `X-Queue-Token` 필수 검증
-- 일반 API: Spring Cloud Gateway 기본 RequestRateLimiter 사용 (선택)
-
-### Timeout (REQ-GW-007, REQ-GW-008)
-- Payment 라우트: 60초
-- Queue 라우트: 10초
-- 기타: 30초 (기본)
-
-### Circuit Breaker (REQ-GW-006)
-- 실패율 임계값 초과 시 Circuit Open
-- Payment 서비스: 대기 시간 60초
-
-## 보안 요구사항
-
-### 인증/인가
-- **JWT**: Access Token (1시간), Refresh Token (7일)
-- **로그아웃**: Access Token 블랙리스트 (Redis) + Refresh Token 삭제
-- **Refresh Token Rotation (RTR)**: 토큰 갱신 시 신규 Refresh Token 발급 및 기존 토큰 폐기
-  - 폐기된 토큰 재사용 시 해당 `token_family` 전체 무효화 (탈취 감지)
-- **본인인증**: PortOne CI/DI 수집으로 1인 1계정 강제 (REQ-AUTH-004)
-- **reCAPTCHA**: 회원가입 및 로그인 시 봇 차단 (REQ-AUTH-003)
-
-### 암호화
-- **비밀번호**: BCrypt 해싱 (REQ-AUTH-014)
-- **개인정보**: AES 암호화 적용 (`EncryptionService.encrypt()`) — 이메일, 이름, 전화번호, CI
-- **검색용 해시**: SHA-256 해시(`EncryptionService.hash()`) — emailHash, phoneHash, ciHash (중복 체크용)
-- **1인 1계정 강제**: `ci_hash` 컬럼 Unique Constraint
+---
 
 ## 개발 환경 설정 및 실행
 
 ### 사전 요구사항
-- **JDK 21** 이상
-- **Docker & Docker Compose** 설치
-- **Gradle** (프로젝트 내 Wrapper 사용 가능)
+- JDK 21+, Docker & Docker Compose, Gradle (Wrapper 포함)
 
-### 로컬 실행 프로필 및 환경 변수
-- **Active Profile**: `local` (모든 서비스 공통)
-- **필수 환경 변수** (IDE Run Configuration 또는 CLI에서 설정):
-  ```
-  SPRING_CLOUD_AWS_REGION_STATIC=ap-northeast-2
-  SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=test
-  SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=test
-  SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://192.168.50.111:4566
-  ```
-- Gradle로 실행 시 예시:
-  ```bash
-  SPRING_PROFILES_ACTIVE=local \
-  SPRING_CLOUD_AWS_REGION_STATIC=ap-northeast-2 \
-  SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=test \
-  SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=test \
-  SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://192.168.50.111:4566 \
-  ./gradlew :api-gateway:bootRun
-  ```
+### 필수 환경 변수 (Active Profile: `local`)
+```
+SPRING_CLOUD_AWS_REGION_STATIC=ap-northeast-2
+SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=test
+SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=test
+SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://192.168.50.111:4566
+```
 
-### 로컬 환경 실행 순서
+### 로컬 실행 순서
+```bash
+# 1. 인프라 (PostgreSQL 5432, Valkey 6379, Kafka 9092)
+cd docker && docker-compose up -d
 
-1. **인프라 컨테이너 실행**
-   ```bash
-   cd docker
-   docker-compose up -d
-   ```
-   - PostgreSQL (5432 포트), Valkey (6379 포트), Kafka (9092 포트) 실행
-   - 초기 DB 스키마는 `docker/db_init/` 스크립트로 자동 생성
+# 2. 빌드
+cd backend && ./gradlew build
 
-2. **백엔드 서비스 빌드**
-   ```bash
-   cd backend
-   ./gradlew build
-   ```
+# 3. 서비스 실행
+./gradlew :api-gateway:bootRun
+./gradlew :user-service:bootRun
+./gradlew :event-service:bootRun
+./gradlew :queue-service:bootRun
+./gradlew :reservation-service:bootRun
+./gradlew :payment-service:bootRun
 
-3. **각 서비스 실행** (IDE 또는 Gradle)
-   ```bash
-   # API Gateway
-   ./gradlew :api-gateway:bootRun
+# 4. 테스트
+./gradlew test
+./gradlew integrationTest   # TestContainers
+```
 
-   # User Service
-   ./gradlew :user-service:bootRun
+---
 
-   # Event Service
-   ./gradlew :event-service:bootRun
-
-   # Queue Service
-   ./gradlew :queue-service:bootRun
-
-   # Reservation Service
-   ./gradlew :reservation-service:bootRun
-
-   # Payment Service
-   ./gradlew :payment-service:bootRun
-   ```
-
-4. **전체 테스트 실행**
-   ```bash
-   ./gradlew test
-   ```
-
-5. **통합 테스트** (TestContainers 사용 시)
-   ```bash
-   ./gradlew integrationTest
-   ```
-
-### 프로젝트 구조
+## 프로젝트 구조
 ```
 ticket-queue/
 ├── backend/
 │   ├── common/                    # 공통 모듈 (Outbox, Processed Events 등)
-│   ├── api-gateway/               # API Gateway 서비스
-│   ├── user-service/              # User Service
-│   ├── event-service/             # Event Service
-│   ├── queue-service/             # Queue Service
-│   ├── reservation-service/       # Reservation Service
-│   ├── payment-service/           # Payment Service
-│   ├── build.gradle.kts           # 루트 빌드 스크립트
-│   └── settings.gradle.kts        # 서브프로젝트 설정
+│   ├── api-gateway/
+│   ├── user-service/
+│   ├── event-service/
+│   ├── queue-service/
+│   ├── reservation-service/
+│   └── payment-service/
 ├── docker/
-│   ├── docker-compose.yml         # 인프라 컨테이너 설정
+│   ├── docker-compose.yml
 │   └── db_init/                   # PostgreSQL 초기화 스크립트
 ├── docs/
-│   ├── REQUIREMENTS.md            # 요구사항 명세 (110개)
-│   ├── ARCHITECTURE.md            # 아키텍처 문서 인덱스
+│   ├── REQUIREMENTS.md
 │   ├── architecture/              # 상세 아키텍처 문서
-│   └── specification/             # API 명세서
-├── frontend/                      # Next.js 프론트엔드 (미구현)
-└── CLAUDE.md                      # 이 파일
+│   └── specification/             # 서비스별 API 명세
+└── frontend/                      # Next.js (미구현)
 ```
 
-### 개발 가이드라인
+---
 
-#### 코드 스타일
-- **Kotlin 코딩 컨벤션** 준수 (IntelliJ IDEA 기본 포맷터 사용)
-- **Commit Messages**: Conventional Commits 형식
-  - `feat:`, `fix:`, `refactor:`, `chore:`, `docs:` 등
+## 개발 가이드라인
 
-#### 테스트 전략
-- **Unit Tests**: JUnit 5, MockK, Kotest (Mockito 대신 MockK 사용)
-- **Integration Tests**: TestContainers (PostgreSQL, Kafka) — common 모듈 Outbox 테스트 구현 완료
-- **Load Testing**: k6 (대기열 및 예매 시나리오 집중, 미구현)
-
-#### 브랜치 전략 (계획)
-- **main**: 프로덕션 릴리스
-- **develop**: 개발 통합 브랜치
-- **feature/***: 기능 개발
-- **hotfix/***: 긴급 수정
-
-## 주의사항 및 제약사항
-
-### 설계 단계 원칙
-1. **문서 우선**: 코드 작성 전 `docs/REQUIREMENTS.md`에서 해당 요구사항 ID(REQ-xxx-xxx) 확인
-2. **스키마 격리**: 서비스 간 직접 DB 쿼리 금지, REST API 또는 Kafka 사용
-3. **멱등성**: 모든 Kafka Consumer는 멱등성 보장 로직 필수 (`common.processed_events` 테이블 활용)
-4. **Outbox 패턴**: 이벤트 발행 시 Transactional Outbox 적용 (Reservation, Payment Service 필수)
-5. **내부 API 보안**: `/internal/**` 엔드포인트는 API Key 검증 필수
-6. **Redis KEYS 명령 금지**: Production 환경에서 KEYS 명령 사용 금지 (O(N) 복잡도, 전체 DB 스캔)
-   - 대신 SET, HASH 등 O(1) 자료구조 사용 (예: `hold_seats:{scheduleId}`)
-7. **Queue Token 만료 시 UX**:
-   - Queue Token 만료: 401 에러 + 대기열 페이지 리디렉션
-   - **결제 권한은 Reservation 기반**: 좌석 선점(PENDING) 후에는 Queue Token 불필요
-   - 결제 시 검증: `hold_expires_at` 미경과 여부 확인 (Token과 무관)
-   - Frontend Timer 표시로 사용자에게 남은 시간 시각화 권장
-8. **DLQ 처리 전략**:
-   - 재시도 가능한 예외: 지수 백오프로 최대 3회 재시도 (TimeoutException, 네트워크 오류 등)
-   - 재시도 불가능한 예외: 즉시 DLQ 이동 (ValidationException, DataIntegrityViolationException 등)
-   - DLQ 모니터링: 메시지 10개 이상 시 알람
-
-### 확장성 고려사항
-- **PostgreSQL**: 단일 인스턴스 → Read Replica → 서비스별 물리 분리 (마이그레이션 계획 존재)
-- **Redis**: 단일 노드 → Multi-AZ Replication (트래픽 증가 시)
-- **Kafka**: 단일 브로커 → 3 브로커 클러스터 (고가용성 전환)
-
-## 외부 서비스 연동
-
-- **PortOne**: 본인인증(CI/DI), 결제 (테스트 모드)
-  - Prepare API: 금액 사전 검증 등록
-  - Confirm API: 결제 승인 확인 및 금액 검증
-  - Timeout: 10초, Circuit Breaker: 실패율 50% 초과 시 Open (60초 대기)
-- **reCAPTCHA**: Google reCAPTCHA v2/v3 (봇 차단)
-- **OAuth2**: 카카오, 네이버, 구글 (소셜 로그인, 선택)
-
-## 모니터링 및 로깅 (계획)
-
-- **로그**: 구조화된 JSON 로그, CloudWatch Logs 전송
-- **메트릭**: CloudWatch Metrics (라우트별 요청 수, 응답 시간, 에러율)
-- **알람**: DLQ 메시지 10개 이상, Circuit Breaker Open 시 알림
-- **분산 추적**: Request ID 전파 (REQ-GW-010)
-
-## 현재 상태 및 다음 단계
-
-**현재**: 구현 진행 중 (Implementation Phase, feat/32 브랜치)
-
-### ✅ 완료된 구현
-- **Common 모듈** — Outbox Pattern(OutboxPollerService, OutboxCleanupBatchService), Kafka 멱등성(IdempotentConsumerTemplate, ProcessedEventService, KafkaErrorHandlerConfig), 공통 이벤트 스키마(BaseEvent/PaymentEvents/ReservationEvents), 내부 API 보안(InternalApiKeyValidator/InternalApiAuthInterceptor), 공통 설정(JacksonConfig, QuerydslConfig, TimeZoneConfig, TraceIdFilter)
-- **Event Service** — Venue/Hall CRUD API (Controller, Service, Repository, QueryDSL), JPA Entity (Event, EventSchedule, Hall, Venue, Seat), Kafka Consumer 설정, Redis 설정, 내부 API 보안 필터
-- **User Service** — 회원가입 API (reCAPTCHA, AES 암호화, 해시 중복 체크), AuthController/AuthService, SecurityConfig
-- **API Gateway** — TraceId 전파 필터, 기본 프로젝트 구조
-- **Payment Service** — Kafka/Resilience4j/WebClient 기본 설정
-- **Queue Service** — Redis/Queue 기본 설정 (QueueConfig, QueueProperties)
-- **Reservation Service** — Kafka/Redisson 기본 설정
-
-### 🔄 진행 필요
-1. **User Service**: 로그인/로그아웃/토큰 갱신 API, JWT 발급, Refresh Token Rotation
-2. **API Gateway**: JWT 검증 필터, 라우팅 설정 (Issue #13~#19), Circuit Breaker
-3. **Event Service**: 공연(Event)/회차(EventSchedule)/좌석(Seat) CRUD API, Redis 캐싱
-4. **Queue Service**: 대기열 진입/상태/이탈 API (Redis Sorted Set, Lua 스크립트), Queue Token 발급
-5. **Reservation Service**: 좌석 선점 API (Redisson 분산 락), 예매 조회/관리, Kafka Consumer
-6. **Payment Service**: PortOne 연동, 결제 요청/승인 API, SAGA 패턴, Outbox Pattern 적용
-7. **통합 테스트 및 부하 테스트** (k6)
-
-## 핵심 설계 결정 (ADR 요약)
-
-1. **단일 PostgreSQL 인스턴스**: 비용 효율성, 향후 물리 분리 가능
-2. **Redis KEYS 명령 금지**: `hold_seats:{scheduleId}` SET으로 대체
-3. **Outbox Pattern 필수**: Reservation, Payment Service (P0 정합성 이슈)
-4. **Consumer 멱등성**: `common.processed_events` 테이블 + Unique Constraint (원자적 중복 방지)
-5. **단일 Queue Token + Reservation 기반 결제 권한**: qp_token 제거, 결제 권한은 Reservation(PENDING + hold_expires_at) 검증
-6. **DLQ 재시도 전략**: 지수 백오프 3회, 재시도 불가능 예외는 즉시 DLQ
-7. **보상 토픽 제외**: `payment.events`의 PaymentFailed가 보상 트리거 (YAGNI 원칙)
-8. **개인정보 AES 암호화 + 해시**: 이메일/이름/전화번호/CI는 AES 암호화 저장, 검색/중복 체크용 해시(emailHash 등) 별도 관리
+- **코드 스타일**: Kotlin 코딩 컨벤션, IntelliJ IDEA 기본 포맷터
+- **Commit**: Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`)
+- **테스트**: JUnit 5 + MockK + Kotest (Mockito 대신 MockK), TestContainers
+- **브랜치**: `main` (프로덕션) / `develop` (통합) / `feature/*` / `hotfix/*`
 
 ---
 
 ## 자주 사용하는 명령어
 
-### 개발 중 자주 사용
 ```bash
-# 인프라 재시작 (DB/Redis/Kafka 초기화)
+# 인프라 재시작 (초기화)
 cd docker && docker-compose down -v && docker-compose up -d
 
-# 특정 서비스만 빌드 및 실행
-./gradlew :user-service:clean :user-service:build :user-service:bootRun
-
-# 전체 프로젝트 클린 빌드
-./gradlew clean build
-
-# 테스트 제외 빌드 (개발 중 빠른 빌드)
+# 빠른 빌드 (테스트 제외)
 ./gradlew build -x test
 
-# 특정 서비스 테스트만 실행
+# 특정 서비스만
+./gradlew :user-service:clean :user-service:build :user-service:bootRun
 ./gradlew :reservation-service:test
 
-# 로그 레벨 변경하여 실행 (디버깅)
-./gradlew :queue-service:bootRun --debug
-```
-
-### Docker 관련
-```bash
-# 모든 컨테이너 로그 확인
-docker-compose logs -f
-
-# 특정 컨테이너 로그 확인
-docker-compose logs -f postgres
-docker-compose logs -f kafka
-
-# 컨테이너 상태 확인
-docker-compose ps
-
-# PostgreSQL 접속 (데이터 확인)
+# PostgreSQL 접속
 docker exec -it ticket-postgres psql -U ticketing_admin -d ticketing
 
-# Valkey CLI 접속
+# Valkey CLI
 docker exec -it ticket-valkey valkey-cli
-```
 
-### Kafka 관련 (디버깅)
-```bash
-# Kafka 컨테이너 접속
+# Kafka 디버깅
 docker exec -it ticket-kafka bash
-
-# Topic 목록 확인
 kafka-topics.sh --bootstrap-server localhost:9092 --list
-
-# 특정 Topic 메시지 확인
 kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic payment.events --from-beginning
-
-# Consumer Group 상태 확인
 kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group reservation-payment-consumer
 ```
-
----
-
-**요약**: 이 프로젝트는 대규모 트래픽을 처리하는 티켓팅 시스템으로, MSA, 이벤트 기반 아키텍처, SAGA 패턴을 적용합니다. 모든 구현은 `docs/` 디렉토리의 요구사항 명세서와 아키텍처 설계서를 기준으로 진행하며, 서비스 간 데이터 격리, 멱등성 보장, 분산 락을 통한 동시성 제어가 핵심입니다.
