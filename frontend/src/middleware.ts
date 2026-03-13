@@ -68,20 +68,28 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    // /reservation/{scheduleId} 패턴에서 scheduleId 추출
+    let scheduleId: string | undefined
+    if (pathname.startsWith('/reservation/')) {
+      scheduleId = pathname.split('/')[2]
+    }
+
     // Queue Token 확인
     const queueToken = request.cookies.get('queueToken')?.value
 
     if (!queueToken) {
-      // Queue Token 없음 → /queue 리디렉트
-      return NextResponse.redirect(new URL('/queue', request.url))
+      // Queue Token 없음 → /queue/{scheduleId} 또는 /queue 리디렉트
+      const redirectPath = scheduleId ? `/queue/${scheduleId}` : '/queue'
+      return NextResponse.redirect(new URL(redirectPath, request.url))
     }
 
     // Queue Token 검증
     try {
       await verifyQueueToken(queueToken)
     } catch {
-      // Queue Token 만료 또는 유효하지 않음 → /queue 리디렉트
-      return NextResponse.redirect(new URL('/queue', request.url))
+      // Queue Token 만료 또는 유효하지 않음 → /queue/{scheduleId} 또는 /queue 리디렉트
+      const redirectPath = scheduleId ? `/queue/${scheduleId}` : '/queue'
+      return NextResponse.redirect(new URL(redirectPath, request.url))
     }
   }
 

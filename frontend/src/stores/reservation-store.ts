@@ -10,17 +10,23 @@ interface ReservationState {
   selectedSeats: SelectedSeat[]
   scheduleId: string | null
   totalPrice: number
+  holdExpiresAt: string | null
+  reservationId: string | null
 
   addSeat: (seat: SelectedSeat) => void
   removeSeat: (seatId: string) => void
   clearSeats: () => void
   setScheduleId: (id: string) => void
+  setHoldResult: (reservationId: string, holdExpiresAt: string) => void
+  resetReservation: () => void
 }
 
 export const useReservationStore = create<ReservationState>((set) => ({
   selectedSeats: [],
   scheduleId: null,
   totalPrice: 0,
+  holdExpiresAt: null,
+  reservationId: null,
 
   addSeat: (seat) =>
     set((state) => {
@@ -43,5 +49,27 @@ export const useReservationStore = create<ReservationState>((set) => ({
 
   clearSeats: () => set({ selectedSeats: [], totalPrice: 0 }),
 
-  setScheduleId: (id) => set({ scheduleId: id, selectedSeats: [], totalPrice: 0 }),
+  setScheduleId: (id) =>
+    set((state) =>
+      state.scheduleId === id
+        ? state
+        : {
+            scheduleId: id,
+            selectedSeats: [],
+            totalPrice: 0,
+            holdExpiresAt: null,
+            reservationId: null,
+          }
+    ),
+
+  setHoldResult: (reservationId, holdExpiresAt) => set({ reservationId, holdExpiresAt }),
+
+  resetReservation: () =>
+    set({
+      selectedSeats: [],
+      totalPrice: 0,
+      holdExpiresAt: null,
+      reservationId: null,
+      scheduleId: null,
+    }),
 }))
