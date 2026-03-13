@@ -16,6 +16,9 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.RedisConnectionFailureException
+import org.springframework.data.redis.core.RedisCallback
+import org.springframework.data.redis.core.SetOperations
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import java.util.UUID
@@ -443,6 +446,47 @@ class QueueServiceTest {
             val tokenArgs = capturedArgs.drop(5)
             tokenArgs.forEach { token ->
                 UUID.fromString(token) // 파싱 실패 시 IllegalArgumentException
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("cleanupEndedSchedule")
+    inner class CleanupEndedSchedule {
+
+        @Test
+        @DisplayName("대기열 키가 존재하면 파이프라인 DEL이 1을 반환하고 메서드도 true를 반환한다")
+        fun returnsTrueWhenQueueKeyExisted() {
+            // results[0]=SREM count, results[1]=DEL count (1 = key existed)
+            every { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) } returns listOf(1L, 1L)
+
+            val result = queueService.cleanupEndedSchedule(scheduleId)
+
+            assertEquals(true, result)
+            verify(exactly = 1) { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) }
+        }
+
+        @Test
+        @DisplayName("대기열 키가 없으면 파이프라인 DEL이 0을 반환하고 메서드도 false를 반환한다")
+        fun returnsFalseWhenQueueKeyAbsent() {
+            // results[0]=SREM count, results[1]=DEL count (0 = key not found)
+            every { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) } returns listOf(0L, 0L)
+
+            val result = queueService.cleanupEndedSchedule(scheduleId)
+
+            assertEquals(false, result)
+            verify(exactly = 1) { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) }
+        }
+
+        @Test
+        @DisplayName("Redis 연결 실패 시 RedisConnectionFailureException이 호출자에게 전파된다")
+        fun propagatesRedisConnectionFailureException() {
+            every {
+                stringRedisTemplate.executePipelined(any<RedisCallback<Any>>())
+            } throws RedisConnectionFailureException("Connection refused")
+
+            assertThrows<RedisConnectionFailureException> {
+                queueService.cleanupEndedSchedule(scheduleId)
             }
         }
     }

@@ -127,6 +127,8 @@ CREATE TABLE event_service.event_schedules (
 CREATE INDEX idx_schedules_status_sale_start ON event_service.event_schedules(status, sale_start_at);
 CREATE INDEX idx_schedules_event_date ON event_service.event_schedules(event_id, event_start_at);
 CREATE INDEX idx_schedules_sale_start ON event_service.event_schedules(sale_start_at) WHERE status = 'UPCOMING';
+-- 대기열 정리 배치용: status IN ('ENDED','CANCELLED') AND event_end_at < cutoff, id for keyset pagination
+CREATE INDEX idx_schedules_status_event_end ON event_service.event_schedules(status, event_end_at, id) WHERE status IN ('ENDED', 'CANCELLED');
 
 -- updated_at Trigger
 CREATE TRIGGER trg_schedules_updated_at

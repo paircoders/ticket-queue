@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.hamcrest.Matchers.emptyOrNullString
+import org.hamcrest.Matchers.matchesPattern
+import org.hamcrest.Matchers.not
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -40,6 +43,50 @@ class InternalScheduleControllerTest {
             .setControllerAdvice(GlobalExceptionHandler())
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
             .build()
+    }
+
+    @Nested
+    @DisplayName("GET /internal/schedules/ended")
+    inner class GetEndedScheduleIds {
+
+        @Test
+        @DisplayName("200 OK - 종료된 회차 ID 목록을 반환한다")
+        fun success() {
+            val id1 = UUID.randomUUID()
+            val id2 = UUID.randomUUID()
+            every { scheduleService.getCleanupTargetScheduleIds() } returns listOf(id1, id2)
+
+            mockMvc.perform(get("/internal/schedules/ended"))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.scheduleIds").isArray)
+                .andExpect(jsonPath("$.scheduleIds.length()").value(2))
+                .andExpect(jsonPath("$.scheduleIds[0]").value(id1.toString()))
+                .andExpect(jsonPath("$.scheduleIds[1]").value(id2.toString()))
+        }
+
+        @Test
+        @DisplayName("500 Internal Server Error - 서비스 예외 발생 시 에러 응답을 반환한다")
+        fun serviceError() {
+            every { scheduleService.getCleanupTargetScheduleIds() } throws RuntimeException("DB error")
+
+            mockMvc.perform(get("/internal/schedules/ended"))
+                .andExpect(status().isInternalServerError)
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.message").isString)
+                .andExpect(jsonPath("$.timestamp").value(matchesPattern("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}")))
+                .andExpect(jsonPath("$.traceId").value(not(emptyOrNullString())))
+        }
+
+        @Test
+        @DisplayName("200 OK - 종료된 회차가 없으면 빈 목록을 반환한다")
+        fun empty() {
+            every { scheduleService.getCleanupTargetScheduleIds() } returns emptyList()
+
+            mockMvc.perform(get("/internal/schedules/ended"))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.scheduleIds").isArray)
+                .andExpect(jsonPath("$.scheduleIds.length()").value(0))
+        }
     }
 
     @Nested

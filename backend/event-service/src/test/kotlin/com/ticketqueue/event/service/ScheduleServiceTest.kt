@@ -17,11 +17,15 @@ import com.ticketqueue.event.entity.Venue
 import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.repository.EventRepository
 import com.ticketqueue.event.repository.EventScheduleRepository
+import com.ticketqueue.event.repository.ScheduleCleanupCursor
 import com.ticketqueue.event.repository.SeatRepository
+import com.ticketqueue.common.util.DateTimeUtils
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.runs
+import io.mockk.unmockkObject
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -508,6 +512,71 @@ class ScheduleServiceTest {
             val result = scheduleService.getSchedule(scheduleId)
 
             assertEquals(scheduleId, result.id)
+        }
+    }
+
+    @Nested
+    @DisplayName("getCleanupTargetScheduleIds")
+    inner class GetCleanupTargetScheduleIds {
+
+        @Test
+        @DisplayName("repository가 반환한 UUID 목록을 커서 페이지네이션으로 전체 조회해 반환한다")
+        fun success() {
+            val id1 = UUID.randomUUID()
+            val id2 = UUID.randomUUID()
+            val now = DateTimeUtils.now()
+            val cursor1 = ScheduleCleanupCursor(id1, now.minusHours(26))
+            val cursor2 = ScheduleCleanupCursor(id2, now.minusHours(25))
+
+            // 첫 번째 호출: cursor 없음(null, null) → 결과 반환
+            every {
+                eventScheduleRepository.findCleanupTargetScheduleIds(any(), null, null)
+            } returns listOf(cursor1, cursor2)
+
+            // 두 번째 호출: cursor 있음 → 빈 목록 → 루프 종료
+            every {
+                eventScheduleRepository.findCleanupTargetScheduleIds(any(), cursor2.eventEndAt, cursor2.id)
+            } returns emptyList()
+
+            val result = scheduleService.getCleanupTargetScheduleIds()
+
+            assertEquals(listOf(id1, id2), result)
+        }
+
+        @Test
+        @DisplayName("정리 대상 회차가 없으면 빈 목록을 반환한다")
+        fun empty() {
+            every {
+                eventScheduleRepository.findCleanupTargetScheduleIds(any(), null, null)
+            } returns emptyList()
+
+            val result = scheduleService.getCleanupTargetScheduleIds()
+
+            assertTrue(result.isEmpty())
+        }
+
+        @Test
+        @DisplayName("cutoffTime이 현재 시각으로부터 정확히 24시간 전으로 계산된다")
+        fun cutoffTimeIs24HoursAgo() {
+            val fixedNow = LocalDateTime.of(2026, 3, 13, 3, 0, 0)
+            mockkObject(DateTimeUtils)
+            try {
+                every { DateTimeUtils.now() } returns fixedNow
+
+                var capturedCutoffTime: LocalDateTime? = null
+                every {
+                    eventScheduleRepository.findCleanupTargetScheduleIds(any(), null, null)
+                } answers {
+                    capturedCutoffTime = firstArg()
+                    emptyList()
+                }
+
+                scheduleService.getCleanupTargetScheduleIds()
+
+                assertEquals(fixedNow.minusHours(24), capturedCutoffTime)
+            } finally {
+                unmockkObject(DateTimeUtils)
+            }
         }
     }
 

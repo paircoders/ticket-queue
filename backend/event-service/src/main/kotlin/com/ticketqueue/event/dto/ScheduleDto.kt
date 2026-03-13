@@ -148,4 +148,7 @@ class ScheduleDto {
         val sellable: Boolean,
         val reason: String? = null
     )
+
+    /** 종료된 회차 ID 목록 응답 (내부 API용 — Queue Service 정리 배치 전용) */
+    data class EndedScheduleIdsResponse(val scheduleIds: List<UUID>)
 }

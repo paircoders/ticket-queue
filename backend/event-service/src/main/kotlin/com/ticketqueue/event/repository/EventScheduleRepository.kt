@@ -7,7 +7,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 @Repository
-interface EventScheduleRepository : JpaRepository<EventSchedule, UUID> {
+interface EventScheduleRepository : JpaRepository<EventSchedule, UUID>, EventScheduleRepositoryCustom {
     fun findByEventIdOrderByPlaySequence(eventId: UUID): List<EventSchedule>
 
     /**

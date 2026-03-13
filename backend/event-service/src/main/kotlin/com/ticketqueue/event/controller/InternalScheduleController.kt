@@ -22,4 +22,10 @@ class InternalScheduleController(
     fun checkSellable(@PathVariable scheduleId: UUID): ScheduleDto.SellableResponse {
         return scheduleService.checkSellable(scheduleId)
     }
+
+    /** 종료/취소 후 24시간 경과한 회차 ID 목록 조회 — Queue Service 정리 배치에서 사용 */
+    @GetMapping("/ended")
+    fun getEndedScheduleIds(): ScheduleDto.EndedScheduleIdsResponse {
+        return ScheduleDto.EndedScheduleIdsResponse(scheduleService.getCleanupTargetScheduleIds())
+    }
 }

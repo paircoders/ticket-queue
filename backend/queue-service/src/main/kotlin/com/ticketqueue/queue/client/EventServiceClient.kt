@@ -11,5 +11,10 @@ interface EventServiceClient {
     @GetMapping("/internal/schedules/{scheduleId}/sellable")
     fun checkSellable(@PathVariable scheduleId: UUID): SellableResponse
 
+    @GetMapping("/internal/schedules/ended")
+    fun getEndedScheduleIds(): EndedScheduleIdsResponse
+
     data class SellableResponse(val sellable: Boolean, val reason: String?)
+
+    data class EndedScheduleIdsResponse(val scheduleIds: List<UUID>)
 }
