@@ -2,6 +2,7 @@ package com.ticketqueue.queue.scheduler
 
 import com.ticketqueue.queue.client.EventServiceClient
 import com.ticketqueue.queue.service.QueueService
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -22,7 +23,7 @@ class QueueCleanupSchedulerTest {
     fun setUp() {
         eventServiceClient = mockk()
         queueService = mockk()
-        scheduler = QueueCleanupScheduler(eventServiceClient, queueService)
+        scheduler = QueueCleanupScheduler(eventServiceClient, queueService, SimpleMeterRegistry())
     }
 
     @Test

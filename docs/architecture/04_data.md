@@ -1087,6 +1087,7 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (e
 | `queue:{scheduleId}` | Sorted Set | 대기열 (score: timestamp) | 없음 | Queue |
 | `queue:token:{token}` | String | Queue Token (qr_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 사용자 활성 대기열 (중복 방지) | 10분 | Queue |
+| `queue:active-schedules` | Set | 활성 대기열 scheduleId 추적 (정리 배치 기준) | 없음 | Queue |
 | `rate:ip:{ip}` | String (Integer) | IP 기반 Rate Limiting (Token Bucket) | 1분 | Gateway |
 | `rate:user:{userId}:{endpoint}` | String (Integer) | 사용자 기반 Rate Limiting | 1분 | Gateway |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
@@ -1154,7 +1155,7 @@ EXISTS queue:active:user-abc
 - **로직**:
   1. Event Service 내부 API(`/internal/schedules/ended`) 경유로 정리 대상 회차 ID 조회
      - 조건: `event_schedules.status IN ('ENDED', 'CANCELLED') AND event_end_at < now() - INTERVAL '24 hours'`
-     - 최대 1000건, `event_end_at ASC` 정렬 (오래된 것부터 처리)
+     - 1000건씩 커서 페이지네이션 (keyset: `event_end_at ASC, id ASC`), 전체 대상 누락 없이 처리
   2. `queue:active-schedules` Set에서 해당 scheduleId 제거 (`SREM`)
   3. 해당 회차의 Redis 대기열 Sorted Set 삭제 (`DEL queue:{scheduleId}`)
 - **목적**: Redis 메모리 절약, 고아 데이터 제거

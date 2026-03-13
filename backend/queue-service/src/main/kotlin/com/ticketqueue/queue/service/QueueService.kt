@@ -9,6 +9,7 @@ import com.ticketqueue.queue.exception.QueueException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
+import org.springframework.data.redis.connection.StringRedisConnection
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
@@ -236,11 +237,19 @@ class QueueService(
      * TTL 10분으로 자동 만료되는 키(queue:active:{userId}, queue:token:{token},
      * queue:user-token:{userId}:{scheduleId})는 24시간 후 이미 만료됨 → 삭제 불필요
      *
+     * 파이프라인을 사용하여 SREM + DEL을 단일 round-trip으로 처리한다.
+     *
      * @return true if the queue key existed and was deleted
      */
     fun cleanupEndedSchedule(scheduleId: UUID): Boolean {
-        stringRedisTemplate.opsForSet().remove(QueueRedisKeys.activeSchedules(), scheduleId.toString())
-        return stringRedisTemplate.delete(QueueRedisKeys.queue(scheduleId))
+        val results = stringRedisTemplate.executePipelined { conn ->
+            val stringConn = conn as StringRedisConnection
+            stringConn.sRem(QueueRedisKeys.activeSchedules(), scheduleId.toString())
+            stringConn.del(QueueRedisKeys.queue(scheduleId))
+            null
+        }
+        // results[0] = SREM count (Long), results[1] = DEL count (Long: 1 deleted, 0 not found)
+        return (results.getOrNull(1) as? Long ?: 0L) > 0
     }
 
     /**

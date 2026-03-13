@@ -16,6 +16,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.redis.RedisConnectionFailureException
+import org.springframework.data.redis.core.RedisCallback
 import org.springframework.data.redis.core.SetOperations
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
@@ -452,37 +454,40 @@ class QueueServiceTest {
     @DisplayName("cleanupEndedSchedule")
     inner class CleanupEndedSchedule {
 
-        private lateinit var setOps: SetOperations<String, String>
-
-        @BeforeEach
-        fun setUpSetOps() {
-            setOps = mockk()
-            every { stringRedisTemplate.opsForSet() } returns setOps
-            every { setOps.remove(any(), any()) } returns 1L
-        }
-
         @Test
-        @DisplayName("대기열 키가 존재하면 delete가 true를 반환하고 메서드도 true를 반환한다")
+        @DisplayName("대기열 키가 존재하면 파이프라인 DEL이 1을 반환하고 메서드도 true를 반환한다")
         fun returnsTrueWhenQueueKeyExisted() {
-            every { stringRedisTemplate.delete(any<String>()) } returns true
+            // results[0]=SREM count, results[1]=DEL count (1 = key existed)
+            every { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) } returns listOf(1L, 1L)
 
             val result = queueService.cleanupEndedSchedule(scheduleId)
 
             assertEquals(true, result)
-            verify(exactly = 1) { setOps.remove("queue:active-schedules", scheduleId.toString()) }
-            verify(exactly = 1) { stringRedisTemplate.delete("queue:$scheduleId") }
+            verify(exactly = 1) { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) }
         }
 
         @Test
-        @DisplayName("대기열 키가 없으면 delete가 false를 반환하고 메서드도 false를 반환한다")
+        @DisplayName("대기열 키가 없으면 파이프라인 DEL이 0을 반환하고 메서드도 false를 반환한다")
         fun returnsFalseWhenQueueKeyAbsent() {
-            every { stringRedisTemplate.delete(any<String>()) } returns false
+            // results[0]=SREM count, results[1]=DEL count (0 = key not found)
+            every { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) } returns listOf(0L, 0L)
 
             val result = queueService.cleanupEndedSchedule(scheduleId)
 
             assertEquals(false, result)
-            verify(exactly = 1) { setOps.remove("queue:active-schedules", scheduleId.toString()) }
-            verify(exactly = 1) { stringRedisTemplate.delete("queue:$scheduleId") }
+            verify(exactly = 1) { stringRedisTemplate.executePipelined(any<RedisCallback<Any>>()) }
+        }
+
+        @Test
+        @DisplayName("Redis 연결 실패 시 RedisConnectionFailureException이 호출자에게 전파된다")
+        fun propagatesRedisConnectionFailureException() {
+            every {
+                stringRedisTemplate.executePipelined(any<RedisCallback<Any>>())
+            } throws RedisConnectionFailureException("Connection refused")
+
+            assertThrows<RedisConnectionFailureException> {
+                queueService.cleanupEndedSchedule(scheduleId)
+            }
         }
     }
 

@@ -34,8 +34,8 @@ import javax.sql.DataSource
  *
  * findCleanupTargetScheduleIds 메서드를 PostgreSQL 18 환경에서 검증한다.
  * - ENDED/CANCELLED 상태 + cutoff 이전 회차 필터링
- * - LIMIT 1000 적용 여부
  * - lt (strictly before) 경계값 동작
+ * - (eventEndAt ASC, id ASC) 결정적 정렬 보장
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -132,7 +132,7 @@ class EventScheduleRepositoryCustomImplTest {
 
             val result = eventScheduleRepository.findCleanupTargetScheduleIds(cutoffTime)
 
-            assertTrue(result.contains(schedule.id))
+            assertTrue(result.any { it.id == schedule.id })
         }
 
         @Test
@@ -160,7 +160,7 @@ class EventScheduleRepositoryCustomImplTest {
 
             val result = eventScheduleRepository.findCleanupTargetScheduleIds(cutoffTime)
 
-            assertTrue(result.contains(schedule.id))
+            assertTrue(result.any { it.id == schedule.id })
         }
 
         @Test

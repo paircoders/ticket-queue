@@ -6,6 +6,7 @@ import feign.Logger
 import feign.RequestInterceptor
 import feign.Retryer
 import feign.codec.ErrorDecoder
+import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
@@ -22,6 +23,15 @@ class FeignConfig(
     fun internalApiKeyRequestInterceptor(): RequestInterceptor {
         return RequestInterceptor { template ->
             template.header(InternalApiKeyValidator.HEADER_NAME, internalApiKey)
+        }
+    }
+
+    @Bean
+    fun traceIdRequestInterceptor(): RequestInterceptor {
+        return RequestInterceptor { template ->
+            MDC.get("traceId")?.let { traceId ->
+                template.header("X-Trace-Id", traceId)
+            }
         }
     }
 

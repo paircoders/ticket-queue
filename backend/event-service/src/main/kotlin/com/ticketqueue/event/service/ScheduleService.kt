@@ -273,11 +273,26 @@ class ScheduleService(
     }
 
     /**
-     * 종료/취소 후 24시간 이상 경과한 회차 ID 목록을 반환한다 (내부 API용 — Queue Service 정리 배치 전용)
+     * 종료/취소 후 24시간 이상 경과한 회차 ID 목록을 모두 반환한다 (내부 API용 — Queue Service 정리 배치 전용)
+     *
+     * 커서 기반 페이지네이션으로 1000건씩 반복 조회하여 1000건 초과 데이터도 누락 없이 처리한다.
      */
     fun getCleanupTargetScheduleIds(): List<UUID> {
         val cutoffTime = DateTimeUtils.now().minusHours(24)
-        return eventScheduleRepository.findCleanupTargetScheduleIds(cutoffTime)
+        val allIds = mutableListOf<UUID>()
+        var cursor: com.ticketqueue.event.repository.ScheduleCleanupCursor? = null
+
+        while (true) {
+            val batch = eventScheduleRepository.findCleanupTargetScheduleIds(
+                cutoffTime = cutoffTime,
+                afterEventEndAt = cursor?.eventEndAt,
+                afterId = cursor?.id
+            )
+            if (batch.isEmpty()) break
+            allIds.addAll(batch.map { it.id })
+            cursor = batch.last()
+        }
+        return allIds
     }
 
     internal fun invalidateScheduleDetailCache(scheduleId: UUID) {

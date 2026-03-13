@@ -223,6 +223,27 @@ Reservation Service가 호출합니다.
 }
 ```
 
+### 2.2 대기열 정리 대상 회차 조회
+Queue Service 정리 배치가 호출합니다. 종료/취소 후 24시간 이상 경과한 회차 ID 전체를 반환합니다.
+
+- **URL:** `GET /internal/schedules/ended`
+- **Headers:** `X-Service-Api-Key: {UUID}`
+
+**Response (200 OK)**
+```json
+{
+  "scheduleIds": [
+    "schedule_uuid_1",
+    "schedule_uuid_2"
+  ]
+}
+```
+
+**에러 응답**
+| 상태 코드 | code | 설명 |
+|----------|------|------|
+| 500 | `INTERNAL_SERVER_ERROR` | 내부 처리 오류 |
+
 ## 3. 공연장 (Venues)
 
 ### 3.1 공연장 생성

@@ -17,14 +17,13 @@ import com.ticketqueue.event.entity.Venue
 import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.repository.EventRepository
 import com.ticketqueue.event.repository.EventScheduleRepository
+import com.ticketqueue.event.repository.ScheduleCleanupCursor
 import com.ticketqueue.event.repository.SeatRepository
 import com.ticketqueue.common.util.DateTimeUtils
-import io.mockk.capture
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
-import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -519,29 +518,35 @@ class ScheduleServiceTest {
     inner class GetCleanupTargetScheduleIds {
 
         @Test
-        @DisplayName("repository가 반환한 UUID 목록을 그대로 반환한다")
+        @DisplayName("repository가 반환한 UUID 목록을 커서 페이지네이션으로 전체 조회해 반환한다")
         fun success() {
             val id1 = UUID.randomUUID()
             val id2 = UUID.randomUUID()
-            val cutoffSlot = slot<LocalDateTime>()
+            val now = DateTimeUtils.now()
+            val cursor1 = ScheduleCleanupCursor(id1, now.minusHours(26))
+            val cursor2 = ScheduleCleanupCursor(id2, now.minusHours(25))
 
-            every { eventScheduleRepository.findCleanupTargetScheduleIds(capture(cutoffSlot)) } returns listOf(id1, id2)
+            // 첫 번째 호출: cursor 없음(null, null) → 결과 반환
+            every {
+                eventScheduleRepository.findCleanupTargetScheduleIds(any(), null, null)
+            } returns listOf(cursor1, cursor2)
 
-            val beforeCall = DateTimeUtils.now().minusHours(24)
+            // 두 번째 호출: cursor 있음 → 빈 목록 → 루프 종료
+            every {
+                eventScheduleRepository.findCleanupTargetScheduleIds(any(), cursor2.eventEndAt, cursor2.id)
+            } returns emptyList()
+
             val result = scheduleService.getCleanupTargetScheduleIds()
-            val afterCall = DateTimeUtils.now().minusHours(24)
 
             assertEquals(listOf(id1, id2), result)
-            assertTrue(
-                !cutoffSlot.captured.isBefore(beforeCall) && !cutoffSlot.captured.isAfter(afterCall),
-                "cutoff 시간은 24시간 전 기준이어야 한다 (허용 오차 내)"
-            )
         }
 
         @Test
         @DisplayName("정리 대상 회차가 없으면 빈 목록을 반환한다")
         fun empty() {
-            every { eventScheduleRepository.findCleanupTargetScheduleIds(any()) } returns emptyList()
+            every {
+                eventScheduleRepository.findCleanupTargetScheduleIds(any(), null, null)
+            } returns emptyList()
 
             val result = scheduleService.getCleanupTargetScheduleIds()
 

@@ -68,6 +68,10 @@ class InternalScheduleControllerTest {
 
             mockMvc.perform(get("/internal/schedules/ended"))
                 .andExpect(status().isInternalServerError)
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.message").isString)
+                .andExpect(jsonPath("$.timestamp").isString)
+                .andExpect(jsonPath("$.traceId").isString)
         }
 
         @Test
