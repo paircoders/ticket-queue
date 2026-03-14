@@ -15,7 +15,7 @@ import org.springframework.test.web.reactive.server.WebTestClient
 import reactor.core.publisher.Mono
 import java.util.UUID
 
-private val VALID_QUEUE_TOKEN = "qr_${UUID.randomUUID()}"
+private val MOCK_QUEUE_TOKEN = "qr_${UUID.randomUUID()}"
 
 /**
  * JwtAuthenticationWebFilter 통합 테스트
@@ -91,7 +91,7 @@ class JwtAuthenticationWebFilterTest : BaseIntegrationTest() {
             .header(JwtAuthenticationWebFilter.USER_ID_HEADER, "99")
             .header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
             .exchange()
-            .expectStatus().is5xxServerError // downstream 부재로 5xx, 인젝션 헤더로 인한 401이 아님
+            .expectStatus().is5xxServerError // downstream 부재로 5xx. 헤더 제거 직접 검증은 JwtAuthenticationWebFilterUnitTest의 capturingChain 기반 테스트로 수행.
     }
 
     @Test
@@ -117,7 +117,7 @@ class JwtAuthenticationWebFilterTest : BaseIntegrationTest() {
         webTestClient.post()
             .uri("/reservations/hold")
             .header("Authorization", "Bearer $token")
-            .header(QueueTokenWebFilter.QUEUE_TOKEN_HEADER, VALID_QUEUE_TOKEN) // Queue Token 필수 경로
+            .header(QueueTokenWebFilter.QUEUE_TOKEN_HEADER, MOCK_QUEUE_TOKEN) // Queue Token 필수 경로
             .exchange()
             .expectStatus().is5xxServerError // JWT + Queue Token 필터 모두 통과, downstream 없어서 5xx
     }

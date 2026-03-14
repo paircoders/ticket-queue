@@ -26,6 +26,8 @@ class RouteValidator {
     private val publicRoutes: List<RouteRule> = listOf(
         RouteRule("/auth/signup", HttpMethod.POST),
         RouteRule("/auth/login", HttpMethod.POST),
+        // Access Token이 아닌 Refresh Token으로 검증하므로 JWT(Access Token) 필터를 우회.
+        // Refresh Token 유효성 검증은 User Service 내부에서 수행.
         RouteRule("/auth/refresh", HttpMethod.POST),
         RouteRule("/events", HttpMethod.GET),
         RouteRule("/events/*", HttpMethod.GET),

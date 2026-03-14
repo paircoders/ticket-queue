@@ -58,12 +58,6 @@ class JwtAuthenticationWebFilter(
     }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        // CORS preflight (OPTIONS) 요청은 JWT 검증 없이 통과
-        // globalcors가 라우팅 핸들러 레벨에서 처리하므로 WebFilter가 개입하지 않아야 함
-        if (exchange.request.method == HttpMethod.OPTIONS) {
-            return chain.filter(exchange)
-        }
-
         // [보안] Strip-First 패턴: 외부 클라이언트가 인젝션한 신뢰 헤더를 무조건 제거.
         // JWT 검증 성공 시에만 클레임 기반으로 재추가하여 헤더 인젝션 취약점(사용자 사칭) 방지.
         val sanitizedExchange = exchange.mutate()
@@ -76,6 +70,12 @@ class JwtAuthenticationWebFilter(
                     .build()
             )
             .build()
+
+        // CORS preflight (OPTIONS) 요청은 JWT 검증 없이 통과
+        // globalcors가 라우팅 핸들러 레벨에서 처리하므로 WebFilter가 개입하지 않아야 함
+        if (exchange.request.method == HttpMethod.OPTIONS) {
+            return chain.filter(sanitizedExchange)
+        }
 
         // 1. 공개 엔드포인트 통과
         if (routeValidator.isPublic(sanitizedExchange)) {
@@ -124,8 +124,10 @@ class JwtAuthenticationWebFilter(
 
                     // 6. 사용자 정보 헤더 추가 후 downstream 전달 (sanitize된 요청에 JWT 클레임만 추가)
                     val mutatedRequest = sanitizedExchange.request.mutate()
-                        .header(USER_ID_HEADER, claims.userId)
-                        .header(USER_ROLE_HEADER, claims.role)
+                        .headers { headers ->
+                            headers.set(USER_ID_HEADER, claims.userId)
+                            headers.set(USER_ROLE_HEADER, claims.role)
+                        }
                         .build()
 
                     chain.filter(sanitizedExchange.mutate().request(mutatedRequest).build())

@@ -11,6 +11,7 @@ import com.ticketqueue.gateway.support.responseBody
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
@@ -268,8 +269,9 @@ class JwtAuthenticationWebFilterUnitTest {
         StepVerifier.create(filter.filter(exchange, capturingChain))
             .verifyComplete()
 
-        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-42"
-        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
+        capturedHeaders shouldNotBe null
+        capturedHeaders!!.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-42"
+        capturedHeaders!!.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
     }
 
     @Test
@@ -298,8 +300,9 @@ class JwtAuthenticationWebFilterUnitTest {
         StepVerifier.create(filter.filter(exchange, capturingChain))
             .verifyComplete()
 
-        capturedHeaders?.containsKey(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe false
-        capturedHeaders?.containsKey(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe false
+        capturedHeaders shouldNotBe null
+        capturedHeaders!!.containsKey(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe false
+        capturedHeaders!!.containsKey(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe false
     }
 
     @Test
@@ -317,8 +320,9 @@ class JwtAuthenticationWebFilterUnitTest {
         StepVerifier.create(filter.filter(exchange, capturingChain))
             .verifyComplete()
 
-        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
-        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
+        capturedHeaders shouldNotBe null
+        capturedHeaders!!.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
+        capturedHeaders!!.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
     }
 
     @Test
@@ -334,6 +338,49 @@ class JwtAuthenticationWebFilterUnitTest {
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
         val body = responseBody(exchange)
         body shouldContain "\"code\":\"UNAUTHORIZED\""
+    }
+
+    @Test
+    fun `OPTIONS 요청에 X-User-Id, X-User-Role 인젝션 헤더가 포함되어도 chain에 제거된 채로 전달된다`() {
+        val exchange = exchange(HttpMethod.OPTIONS, "/events") {
+            header(JwtAuthenticationWebFilter.USER_ID_HEADER, "99")
+            header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+        }
+        StepVerifier.create(filter.filter(exchange, capturingChain))
+            .verifyComplete()
+        capturedHeaders shouldNotBe null
+        capturedHeaders!!.containsKey(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe false
+        capturedHeaders!!.containsKey(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe false
+    }
+
+    @Test
+    fun `ADMIN 전용 경로에 USER 토큰으로 ADMIN role 인젝션 시 인젝션이 무시되고 403 반환`() {
+        val claims = JwtClaims(userId = "user-1", role = "USER", jti = "jti-1")
+        every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        every { tokenBlacklistService.isBlacklisted("jti-1") } returns Mono.just(false)
+        val exchange = exchange(HttpMethod.POST, "/events") {
+            header(HttpHeaders.AUTHORIZATION, "Bearer valid.token")
+            header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")  // 인젝션 시도
+        }
+        StepVerifier.create(filter.filter(exchange, passChain))
+            .verifyComplete()
+        exchange.response.statusCode shouldBe HttpStatus.FORBIDDEN
+        val body = responseBody(exchange)
+        body shouldContain "\"code\":\"FORBIDDEN\""
+    }
+
+    @Test
+    fun `동일 헤더를 여러 값으로 인젝션해도 downstream에 전혀 전달되지 않는다`() {
+        val exchange = exchange(HttpMethod.GET, "/events") {
+            header(JwtAuthenticationWebFilter.USER_ID_HEADER, "id-1")
+            header(JwtAuthenticationWebFilter.USER_ID_HEADER, "id-2")  // 같은 헤더 두 번
+            header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+        }
+        StepVerifier.create(filter.filter(exchange, capturingChain))
+            .verifyComplete()
+        capturedHeaders shouldNotBe null
+        capturedHeaders!!.getOrEmpty(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe emptyList()
+        capturedHeaders!!.getOrEmpty(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe emptyList()
     }
 
     // ─── 헬퍼 ─────────────────────────────────────────────────────────
