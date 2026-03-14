@@ -242,6 +242,23 @@ class JwtAuthenticationWebFilterUnitTest {
         body shouldContain "접근 권한이 없습니다"
     }
 
+    @Test
+    fun `허용되지 않은 role이 JWT에 포함된 경우 403 FORBIDDEN 반환`() {
+        val claims = JwtClaims(userId = "user-1", role = "SUPERADMIN", jti = "jti-1")
+        every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        every { tokenBlacklistService.isBlacklisted("jti-1") } returns Mono.just(false)
+
+        val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
+
+        StepVerifier.create(filter.filter(exchange, passChain))
+            .verifyComplete()
+
+        exchange.response.statusCode shouldBe HttpStatus.FORBIDDEN
+        val body = responseBody(exchange)
+        body shouldContain "\"code\":\"FORBIDDEN\""
+        body shouldContain "접근 권한이 없습니다"
+    }
+
     // ─── 성공 케이스 ───────────────────────────────────────────────────
 
     @Test

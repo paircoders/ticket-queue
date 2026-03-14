@@ -50,6 +50,9 @@ class JwtAuthenticationWebFilter(
         const val USER_ID_HEADER = "X-User-Id"
         const val USER_ROLE_HEADER = "X-User-Role"
 
+        // 허용된 role 목록 (GatewayAuthFilter와 동일한 값 유지)
+        private val ALLOWED_ROLES = setOf("USER", "ADMIN")
+
         // 에러 코드 상수 (common 모듈 의존 불가로 인라인 정의)
         private const val CODE_UNAUTHORIZED = "UNAUTHORIZED"
         private const val CODE_INVALID_TOKEN = "INVALID_TOKEN"
@@ -116,7 +119,13 @@ class JwtAuthenticationWebFilter(
                     log.debug { "Blacklisted token jti=${claims.jti}" }
                     writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
                 } else {
-                    // 5. 관리자 전용 엔드포인트 인가 검사
+                    // 5-1. Role 화이트리스트 검증
+                    if (claims.role !in ALLOWED_ROLES) {
+                        log.debug { "Invalid role: role=${claims.role} path=${sanitizedExchange.request.path}" }
+                        return@flatMap writeErrorResponse(sanitizedExchange, HttpStatus.FORBIDDEN, CODE_FORBIDDEN, "접근 권한이 없습니다.")
+                    }
+
+                    // 5-2. 관리자 전용 엔드포인트 인가 검사
                     if (routeValidator.isAdminOnly(sanitizedExchange) && claims.role != "ADMIN") {
                         log.debug { "Forbidden: role=${claims.role} path=${sanitizedExchange.request.path}" }
                         return@flatMap writeErrorResponse(sanitizedExchange, HttpStatus.FORBIDDEN, CODE_FORBIDDEN, "접근 권한이 없습니다.")
