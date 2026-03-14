@@ -6,6 +6,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.security.MessageDigest
 
 @Component
 class InternalApiKeyValidator(
@@ -25,7 +26,7 @@ class InternalApiKeyValidator(
 
         val apiKey = request.getHeader(HEADER_NAME)
 
-        if (apiKey.isNullOrBlank() || apiKey != internalApiKey) {
+        if (apiKey.isNullOrBlank() || !MessageDigest.isEqual(apiKey.toByteArray(), internalApiKey.toByteArray())) {
             logger.warn {
                 "[INTERNAL_API_AUTH_FAILED] uri=${request.requestURI}, method=${request.method}, " +
                 "remoteAddr=${request.remoteAddr}, forwardedFor=${request.getHeader("X-Forwarded-For")}, " +

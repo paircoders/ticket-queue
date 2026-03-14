@@ -84,7 +84,7 @@ resilience4j:
 
 internal:
   api:
-    key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
+    key: ${INTERNAL_API_KEY}
 
 management:
   server:
