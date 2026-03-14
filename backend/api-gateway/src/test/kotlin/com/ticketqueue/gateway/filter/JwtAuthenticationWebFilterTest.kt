@@ -80,6 +80,34 @@ class JwtAuthenticationWebFilterTest : BaseIntegrationTest() {
             }
     }
 
+    // ─── 헤더 인젝션 방어 ──────────────────────────────────────────────
+
+    @Test
+    fun `공개 엔드포인트에서 X-User-Id, X-User-Role 헤더 인젝션 시 downstream에 전달되지 않는다`() {
+        // 공개 경로는 JWT 검증 없이 통과하지만, 인젝션 헤더는 제거되어야 함
+        // downstream이 없으므로 5xx가 반환되나 401(UNAUTHORIZED)이 아닌 것이 핵심
+        webTestClient.get()
+            .uri("/events")
+            .header(JwtAuthenticationWebFilter.USER_ID_HEADER, "99")
+            .header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+            .exchange()
+            .expectStatus().is5xxServerError // downstream 부재로 5xx, 인젝션 헤더로 인한 401이 아님
+    }
+
+    @Test
+    fun `JWT 없이 보호 경로에 X-User-Role ADMIN 인젝션 시 401 반환`() {
+        webTestClient.get()
+            .uri("/users/me")
+            .header(JwtAuthenticationWebFilter.USER_ID_HEADER, "1")
+            .header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+            .exchange()
+            .expectStatus().isUnauthorized
+            .expectBody(String::class.java)
+            .value { body ->
+                body shouldContain "\"code\":\"UNAUTHORIZED\""
+            }
+    }
+
     @Test
     fun `유효한 토큰으로 보호 엔드포인트 접근 시 downstream으로 전달 (5xx는 downstream 부재 때문)`() {
         every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)

@@ -286,6 +286,56 @@ class JwtAuthenticationWebFilterUnitTest {
         body shouldContain "\"traceId\""
     }
 
+    // ─── 헤더 인젝션 방어 ──────────────────────────────────────────────
+
+    @Test
+    fun `공개 경로에서 X-User-Id, X-User-Role 인젝션 헤더가 제거된 채로 chain에 전달된다`() {
+        val exchange = exchange(HttpMethod.GET, "/events") {
+            header(JwtAuthenticationWebFilter.USER_ID_HEADER, "99")
+            header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+        }
+
+        StepVerifier.create(filter.filter(exchange, capturingChain))
+            .verifyComplete()
+
+        capturedHeaders?.containsKey(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe false
+        capturedHeaders?.containsKey(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe false
+    }
+
+    @Test
+    fun `보호 경로에서 인젝션된 X-User-Role이 JWT 클레임 값으로 대체된다`() {
+        val claims = JwtClaims(userId = "user-1", role = "USER", jti = "jti-1")
+        every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        every { tokenBlacklistService.isBlacklisted("jti-1") } returns Mono.just(false)
+
+        val exchange = exchange(HttpMethod.POST, "/reservations/hold") {
+            header(HttpHeaders.AUTHORIZATION, "Bearer valid.token")
+            header(JwtAuthenticationWebFilter.USER_ID_HEADER, "malicious-id")
+            header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+        }
+
+        StepVerifier.create(filter.filter(exchange, capturingChain))
+            .verifyComplete()
+
+        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
+        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
+    }
+
+    @Test
+    fun `JWT 없이 보호 경로에 X-User-Id, X-User-Role 인젝션 시 401 반환`() {
+        val exchange = exchange(HttpMethod.GET, "/reservations/seats/1") {
+            header(JwtAuthenticationWebFilter.USER_ID_HEADER, "1")
+            header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
+        }
+
+        StepVerifier.create(filter.filter(exchange, passChain))
+            .verifyComplete()
+
+        exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
+        val body = responseBody(exchange)
+        body shouldContain "\"code\":\"UNAUTHORIZED\""
+    }
+
     // ─── 헬퍼 ─────────────────────────────────────────────────────────
 
     private fun exchangeWithBearer(

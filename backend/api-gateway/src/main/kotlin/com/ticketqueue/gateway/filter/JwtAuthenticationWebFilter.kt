@@ -64,16 +64,29 @@ class JwtAuthenticationWebFilter(
             return chain.filter(exchange)
         }
 
+        // [보안] Strip-First 패턴: 외부 클라이언트가 인젝션한 신뢰 헤더를 무조건 제거.
+        // JWT 검증 성공 시에만 클레임 기반으로 재추가하여 헤더 인젝션 취약점(사용자 사칭) 방지.
+        val sanitizedExchange = exchange.mutate()
+            .request(
+                exchange.request.mutate()
+                    .headers { headers ->
+                        headers.remove(USER_ID_HEADER)
+                        headers.remove(USER_ROLE_HEADER)
+                    }
+                    .build()
+            )
+            .build()
+
         // 1. 공개 엔드포인트 통과
-        if (routeValidator.isPublic(exchange)) {
-            return chain.filter(exchange)
+        if (routeValidator.isPublic(sanitizedExchange)) {
+            return chain.filter(sanitizedExchange)
         }
 
         // 2. Authorization 헤더 추출
-        val authHeader = exchange.request.headers.getFirst(AUTHORIZATION_HEADER)
+        val authHeader = sanitizedExchange.request.headers.getFirst(AUTHORIZATION_HEADER)
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
-            log.debug { "Missing or invalid Authorization header: ${exchange.request.path}" }
-            return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, CODE_UNAUTHORIZED, "인증이 필요합니다.")
+            log.debug { "Missing or invalid Authorization header: ${sanitizedExchange.request.path}" }
+            return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_UNAUTHORIZED, "인증이 필요합니다.")
         }
 
         val token = authHeader.removePrefix(BEARER_PREFIX)
@@ -82,14 +95,14 @@ class JwtAuthenticationWebFilter(
         val claims = try {
             jwtTokenProvider.validateAndExtract(token)
         } catch (e: ExpiredJwtException) {
-            log.debug { "Expired JWT token: ${exchange.request.path}" }
-            return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, CODE_EXPIRED_TOKEN, "토큰이 만료되었습니다.")
+            log.debug { "Expired JWT token: ${sanitizedExchange.request.path}" }
+            return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_EXPIRED_TOKEN, "토큰이 만료되었습니다.")
         } catch (e: JwtException) {
             log.debug { "Invalid JWT token: ${e.message}" }
-            return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
+            return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
         } catch (e: IllegalArgumentException) {
             log.debug { "Invalid JWT token argument: ${e.message}" }
-            return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
+            return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
         }
 
         // 4. 블랙리스트 확인 (Redis non-blocking)
@@ -101,21 +114,21 @@ class JwtAuthenticationWebFilter(
             .flatMap { isBlacklisted ->
                 if (isBlacklisted) {
                     log.debug { "Blacklisted token jti=${claims.jti}" }
-                    writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
+                    writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
                 } else {
                     // 5. 관리자 전용 엔드포인트 인가 검사
-                    if (routeValidator.isAdminOnly(exchange) && claims.role != "ADMIN") {
-                        log.debug { "Forbidden: role=${claims.role} path=${exchange.request.path}" }
-                        return@flatMap writeErrorResponse(exchange, HttpStatus.FORBIDDEN, CODE_FORBIDDEN, "접근 권한이 없습니다.")
+                    if (routeValidator.isAdminOnly(sanitizedExchange) && claims.role != "ADMIN") {
+                        log.debug { "Forbidden: role=${claims.role} path=${sanitizedExchange.request.path}" }
+                        return@flatMap writeErrorResponse(sanitizedExchange, HttpStatus.FORBIDDEN, CODE_FORBIDDEN, "접근 권한이 없습니다.")
                     }
 
-                    // 6. 사용자 정보 헤더 추가 후 downstream 전달
-                    val mutatedRequest = exchange.request.mutate()
+                    // 6. 사용자 정보 헤더 추가 후 downstream 전달 (sanitize된 요청에 JWT 클레임만 추가)
+                    val mutatedRequest = sanitizedExchange.request.mutate()
                         .header(USER_ID_HEADER, claims.userId)
                         .header(USER_ROLE_HEADER, claims.role)
                         .build()
 
-                    chain.filter(exchange.mutate().request(mutatedRequest).build())
+                    chain.filter(sanitizedExchange.mutate().request(mutatedRequest).build())
                 }
             }
     }
