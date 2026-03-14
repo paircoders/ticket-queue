@@ -11,6 +11,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -442,10 +443,11 @@ class QueueServiceTest {
             // fixedArgs(5개) + tokens(batchSize=10개) = 15개
             val batchSize = queueProperties.batch.size
             assertEquals(5 + batchSize, capturedArgs.size)
-            // 마지막 batchSize개의 args가 유효한 UUID 형식인지 검증
+            // 마지막 batchSize개의 args가 qr_ prefix를 포함한 UUID 형식인지 검증
             val tokenArgs = capturedArgs.drop(5)
+            val uuidRegex = Regex("^qr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
             tokenArgs.forEach { token ->
-                UUID.fromString(token) // 파싱 실패 시 IllegalArgumentException
+                assertTrue(uuidRegex.matches(token), "토큰이 qr_ prefix를 포함한 UUID 형식이어야 함: $token")
             }
         }
     }

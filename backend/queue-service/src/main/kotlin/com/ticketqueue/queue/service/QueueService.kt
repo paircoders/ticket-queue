@@ -199,7 +199,7 @@ class QueueService(
      */
     fun batchApprove(scheduleId: UUID): Long {
         val batchSize = queueProperties.batch.size
-        val tokens = (1..batchSize).map { UUID.randomUUID().toString() }
+        val tokens = (1..batchSize).map { "qr_${UUID.randomUUID()}" }
 
         val keys = listOf(
             QueueRedisKeys.queue(scheduleId),
