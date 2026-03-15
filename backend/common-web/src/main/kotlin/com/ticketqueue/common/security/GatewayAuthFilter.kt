@@ -28,6 +28,10 @@ import org.springframework.web.filter.OncePerRequestFilter
  */
 class GatewayAuthFilter : OncePerRequestFilter() {
 
+    companion object {
+        private val ALLOWED_ROLES = setOf("USER", "ADMIN")
+    }
+
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
@@ -36,7 +40,7 @@ class GatewayAuthFilter : OncePerRequestFilter() {
         val userId = request.getHeader("X-User-Id")
         val userRole = request.getHeader("X-User-Role")
 
-        if (userId != null && userRole != null) {
+        if (userId != null && userRole != null && userRole in ALLOWED_ROLES) {
             val authorities = listOf(SimpleGrantedAuthority("ROLE_$userRole"))
             val authentication = UsernamePasswordAuthenticationToken(userId, null, authorities)
             SecurityContextHolder.getContext().authentication = authentication
