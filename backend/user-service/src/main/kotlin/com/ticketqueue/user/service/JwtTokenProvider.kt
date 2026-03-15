@@ -33,9 +33,9 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
         } catch (e: IllegalArgumentException) {
             throw IllegalStateException("JWT secret은 유효한 Base64 형식이어야 합니다.", e)
         }
-        if (decoded.size < 32) {
+        if (decoded.size < 64) {
             throw IllegalStateException(
-                "JWT secret은 최소 256비트(32바이트) 이상이어야 합니다. 현재: ${decoded.size}바이트"
+                "JWT secret은 최소 512비트(64바이트) 이상이어야 합니다 (HS512 서명 사용). 현재: ${decoded.size}바이트"
             )
         }
         Keys.hmacShaKeyFor(decoded)

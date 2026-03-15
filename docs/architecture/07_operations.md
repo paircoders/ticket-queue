@@ -40,6 +40,14 @@
 | Resilience4j Circuit Breaker | CB 상태(CLOSED/OPEN/HALF_OPEN), 실패율, 호출 수 | Ticket Queue |
 | Infrastructure Overview | HikariCP 커넥션 풀, Kafka Consumer Lag, 처리량 | Ticket Queue |
 
+**Prometheus Alert 규칙:**
+
+#### Redis Blacklist CircuitBreaker OPEN 알림
+- **쿼리**: `resilience4j_circuitbreaker_state{name="redisBlacklist", state="open"} == 1`
+- **심각도**: WARNING
+- **의미**: Redis 블랙리스트 서킷이 열려 로그아웃 토큰 검사가 우회되고 있음
+- **대응**: Redis 상태 확인 (`docker exec ticket-valkey valkey-cli ping`), 복구 후 서킷 자동 전환 확인
+
 **서비스별 포트 매핑 (Prometheus 스크래핑 대상):**
 
 | 서비스 | 서비스 포트 | Management 포트 | 메트릭 경로 |

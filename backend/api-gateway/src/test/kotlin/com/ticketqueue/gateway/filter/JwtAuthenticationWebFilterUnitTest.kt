@@ -260,7 +260,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `CircuitBreaker OPEN 상태에서 fail-open 전략으로 요청 허용`() {
         val claims = JwtClaims(userId = "user-1", role = "USER", jti = "open-jti")
         every { jwtTokenProvider.validateAndExtract(any()) } returns claims
-        // Mono 객체 생성은 허용하되 실제 구독은 CircuitBreaker가 차단
+        // CircuitBreaker OPEN 상태에서는 isBlacklisted Mono가 생성되지만 구독(실행)은 CircuitBreaker가 차단
         every { tokenBlacklistService.isBlacklisted("open-jti") } returns Mono.just(false)
 
         // CircuitBreaker를 강제로 OPEN 상태로 전환
@@ -284,6 +284,39 @@ class JwtAuthenticationWebFilterUnitTest {
         // OPEN 상태: fail-open → 요청 통과 (응답 코드 없음)
         exchange.response.statusCode shouldBe null
         capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
+        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
+    }
+
+    @Test
+    fun `CircuitBreaker HALF_OPEN 상태에서 Redis 오류 시 fail-closed 전략으로 401 반환`() {
+        val claims = JwtClaims(userId = "user-1", role = "USER", jti = "half-open-jti")
+        every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        every { tokenBlacklistService.isBlacklisted("half-open-jti") } returns
+            Mono.error(RuntimeException("Redis connection refused"))
+
+        // CircuitBreaker를 강제로 HALF_OPEN 상태로 전환 (CLOSED → OPEN → HALF_OPEN)
+        val halfOpenRegistry = CircuitBreakerRegistry.ofDefaults()
+        val cb = halfOpenRegistry.circuitBreaker("redisBlacklist")
+        cb.transitionToOpenState()
+        cb.transitionToHalfOpenState()
+
+        val halfOpenFilter = JwtAuthenticationWebFilter(
+            jwtTokenProvider,
+            tokenBlacklistService,
+            routeValidator,
+            objectMapper,
+            halfOpenRegistry,
+        )
+
+        val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
+
+        StepVerifier.create(halfOpenFilter.filter(exchange, passChain))
+            .verifyComplete()
+
+        // HALF_OPEN 상태: Redis 오류 → fail-closed → 401 반환
+        exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
+        val body = responseBody(exchange)
+        body shouldContain "\"code\":\"INVALID_TOKEN\""
     }
 
     // ─── 인가 실패 ─────────────────────────────────────────────────────

@@ -116,14 +116,17 @@ class JwtAuthenticationWebFilter(
         }
 
         // 4. 블랙리스트 확인 (Redis non-blocking, CircuitBreaker 적용)
+        // 주의: onErrorResume 순서 의존적
+        // ① CallNotPermittedException (CircuitBreaker OPEN) → fail-open: 가용성 우선, 블랙리스트 미확인 허용
+        // ② 그 외 Redis I/O 오류 → fail-closed: 보안 우선, 401 반환
         return tokenBlacklistService.isBlacklisted(claims.jti)
             .transform(CircuitBreakerOperator.of(circuitBreaker))
-            .onErrorResume(CallNotPermittedException::class.java) { ex ->
-                log.warn { "Redis blacklist circuit OPEN — fail-open for jti=${claims.jti}" }
+            .onErrorResume(CallNotPermittedException::class.java) { _ ->
+                log.warn { "Redis blacklist circuit OPEN — fail-open for jti=${claims.jti.take(8)}..." }
                 Mono.just(false)
             }
             .onErrorResume { ex ->
-                log.error(ex) { "Redis blacklist check failed for jti=${claims.jti}" }
+                log.error(ex) { "Redis blacklist check failed for jti=${claims.jti.take(8)}..." }
                 Mono.just(true)
             }
             .flatMap { isBlacklisted ->

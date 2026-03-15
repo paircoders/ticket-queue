@@ -8,6 +8,7 @@ import io.jsonwebtoken.UnsupportedJwtException
 import io.jsonwebtoken.security.Keys
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Base64
@@ -32,6 +33,8 @@ class JwtTokenProviderTest {
 
     @BeforeEach
     fun setUp() {
+        // testSecret이 실제 64바이트(512비트)인지 검증 — expectedAlgorithm HS512 분기를 올바르게 적용하기 위해 필수
+        Base64.getDecoder().decode(testSecret).size shouldBe 64
         val props = JwtProperties(secret = testSecret)
         provider = JwtTokenProvider(props)
     }
@@ -91,7 +94,18 @@ class JwtTokenProviderTest {
         val ex = shouldThrow<JwtException> {
             provider.validateAndExtract(token)
         }
-        ex.message?.contains("Algorithm mismatch") shouldBe true
+        ex.message shouldContain "Algorithm mismatch"
+    }
+
+    @Test
+    fun `동일 키로 HS384 서명한 토큰은 알고리즘 불일치로 거부`() {
+        // 동일한 64바이트 키로 HS384 서명 (algorithm confusion attack — 중간 단계)
+        val token = buildToken(algorithm = Jwts.SIG.HS384)
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldContain "Algorithm mismatch"
     }
 
     @Test

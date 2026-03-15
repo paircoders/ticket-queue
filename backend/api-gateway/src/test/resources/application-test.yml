@@ -152,14 +152,11 @@ resilience4j:
       paymentService:
         baseConfig: default
       redisBlacklist:
-        slidingWindowType: COUNT_BASED
+        baseConfig: default
         slidingWindowSize: 5
         minimumNumberOfCalls: 3
-        failureRateThreshold: 50
         waitDurationInOpenState: 5s
         permittedNumberOfCallsInHalfOpenState: 2
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-        registerHealthIndicator: true
 
   timelimiter:
     configs:

@@ -18,6 +18,7 @@ spring:
       host: ${REDIS_HOST:192.168.50.111}
       port: ${REDIS_PORT:6379}
       password: ${valkey_password}
+      timeout: 2000ms
 
   cloud:
     gateway:
@@ -144,14 +145,13 @@ resilience4j:
       paymentService:
         baseConfig: default
       redisBlacklist:
-        slidingWindowType: COUNT_BASED
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50
+        # fail-open 정책: Redis 장애 시 가용성 우선 (로그아웃 토큰이 waitDurationInOpenState 동안 허용될 수 있음)
+        # 이 트레이드오프는 의도적 설계 결정임 — docs/architecture/06_api_security.md 참조
+        baseConfig: default
+        slidingWindowSize: 50
+        minimumNumberOfCalls: 10
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 3
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-        registerHealthIndicator: true
 
   timelimiter:
     configs:
