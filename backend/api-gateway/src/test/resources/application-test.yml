@@ -125,7 +125,7 @@ spring:
       port: 6379
 
 jwt:
-  secret: dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tdmVyaWZpY2F0aW9uLXRlc3Rpbmc=
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tdmVyaWZpY2F0aW9uLXRlc3RpbmctNjRieXRlLWtleXMhIQ==
 
 # 테스트 환경용 Resilience4j 설정 (빠른 검증을 위해 축소된 값 사용)
 resilience4j:
@@ -134,7 +134,7 @@ resilience4j:
       default:
         registerHealthIndicator: true
         slidingWindowType: COUNT_BASED
-        slidingWindowSize: 100
+        slidingWindowSize: 10
         minimumNumberOfCalls: 3
         failureRateThreshold: 50
         waitDurationInOpenState: 5s
@@ -151,6 +151,15 @@ resilience4j:
         baseConfig: default
       paymentService:
         baseConfig: default
+      redisBlacklist:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 2
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true
 
   timelimiter:
     configs:

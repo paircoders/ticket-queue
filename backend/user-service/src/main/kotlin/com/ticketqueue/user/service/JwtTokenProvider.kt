@@ -57,7 +57,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .claim("email", email)
             .issuedAt(now)
             .expiration(expiry)
-            .signWith(secretKey)
+            .signWith(secretKey, Jwts.SIG.HS512)
             .compact()
 
         return Pair(token, jti)
@@ -78,7 +78,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .claim("type", "refresh")
             .issuedAt(now)
             .expiration(expiry)
-            .signWith(secretKey)
+            .signWith(secretKey, Jwts.SIG.HS512)
             .compact()
 
         return Pair(token, jti)

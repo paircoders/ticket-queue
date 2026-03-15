@@ -4,9 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.gateway.security.JwtTokenProvider
 import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
 import com.ticketqueue.gateway.security.RouteValidator
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
-import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
@@ -42,7 +46,10 @@ class JwtAuthenticationWebFilter(
     private val tokenBlacklistService: ReactiveTokenBlacklistService,
     private val routeValidator: RouteValidator,
     private val objectMapper: ObjectMapper,
+    circuitBreakerRegistry: CircuitBreakerRegistry,
 ) : WebFilter {
+
+    private val circuitBreaker: CircuitBreaker = circuitBreakerRegistry.circuitBreaker("redisBlacklist")
 
     companion object {
         private const val BEARER_PREFIX = "Bearer "
@@ -108,8 +115,13 @@ class JwtAuthenticationWebFilter(
             return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
         }
 
-        // 4. 블랙리스트 확인 (Redis non-blocking)
+        // 4. 블랙리스트 확인 (Redis non-blocking, CircuitBreaker 적용)
         return tokenBlacklistService.isBlacklisted(claims.jti)
+            .transform(CircuitBreakerOperator.of(circuitBreaker))
+            .onErrorResume(CallNotPermittedException::class.java) { ex ->
+                log.warn { "Redis blacklist circuit OPEN — fail-open for jti=${claims.jti}" }
+                Mono.just(false)
+            }
             .onErrorResume { ex ->
                 log.error(ex) { "Redis blacklist check failed for jti=${claims.jti}" }
                 Mono.just(true)

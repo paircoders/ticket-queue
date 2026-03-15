@@ -8,6 +8,10 @@ import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
 import com.ticketqueue.gateway.security.RouteValidator
 import com.ticketqueue.gateway.support.exchange
 import com.ticketqueue.gateway.support.responseBody
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import io.kotest.matchers.shouldBe
@@ -38,11 +42,15 @@ class JwtAuthenticationWebFilterUnitTest {
     private val routeValidator = RouteValidator()
     private val objectMapper = ObjectMapper()
 
+    // 기본 CircuitBreakerRegistry (CLOSED 상태로 시작)
+    private val circuitBreakerRegistry = CircuitBreakerRegistry.ofDefaults()
+
     private val filter = JwtAuthenticationWebFilter(
         jwtTokenProvider,
         tokenBlacklistService,
         routeValidator,
         objectMapper,
+        circuitBreakerRegistry,
     )
 
     private val passChain = WebFilterChain { Mono.empty() }
@@ -131,6 +139,16 @@ class JwtAuthenticationWebFilterUnitTest {
         exchange.response.statusCode shouldBe null
     }
 
+    @Test
+    fun `OPTIONS preflight 요청은 JWT 검증 없이 통과`() {
+        val exchange = exchange(HttpMethod.OPTIONS, "/reservations/seats/1")
+
+        StepVerifier.create(filter.filter(exchange, passChain))
+            .verifyComplete()
+
+        exchange.response.statusCode shouldBe null
+    }
+
     // ─── 인증 실패 ─────────────────────────────────────────────────────
 
     @Test
@@ -191,6 +209,21 @@ class JwtAuthenticationWebFilterUnitTest {
     }
 
     @Test
+    fun `IllegalArgumentException 발생 시 401 INVALID_TOKEN`() {
+        every { jwtTokenProvider.validateAndExtract(any()) } throws
+            IllegalArgumentException("JWT String argument cannot be null or empty")
+
+        val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "blank.token")
+
+        StepVerifier.create(filter.filter(exchange, passChain))
+            .verifyComplete()
+
+        exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
+        val body = responseBody(exchange)
+        body shouldContain "\"code\":\"INVALID_TOKEN\""
+    }
+
+    @Test
     fun `블랙리스트 토큰은 401 INVALID_TOKEN 반환`() {
         val claims = JwtClaims(userId = "user-1", role = "USER", jti = "blacklisted-jti")
         every { jwtTokenProvider.validateAndExtract(any()) } returns claims
@@ -207,7 +240,7 @@ class JwtAuthenticationWebFilterUnitTest {
     }
 
     @Test
-    fun `Redis 오류 시 fail-closed 전략으로 401 INVALID_TOKEN 반환`() {
+    fun `CircuitBreaker CLOSED 상태에서 Redis 오류 시 fail-closed 전략으로 401 INVALID_TOKEN 반환`() {
         val claims = JwtClaims(userId = "user-1", role = "USER", jti = "some-jti")
         every { jwtTokenProvider.validateAndExtract(any()) } returns claims
         every { tokenBlacklistService.isBlacklisted("some-jti") } returns
@@ -221,6 +254,36 @@ class JwtAuthenticationWebFilterUnitTest {
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
         val body = responseBody(exchange)
         body shouldContain "\"code\":\"INVALID_TOKEN\""
+    }
+
+    @Test
+    fun `CircuitBreaker OPEN 상태에서 fail-open 전략으로 요청 허용`() {
+        val claims = JwtClaims(userId = "user-1", role = "USER", jti = "open-jti")
+        every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        // Mono 객체 생성은 허용하되 실제 구독은 CircuitBreaker가 차단
+        every { tokenBlacklistService.isBlacklisted("open-jti") } returns Mono.just(false)
+
+        // CircuitBreaker를 강제로 OPEN 상태로 전환
+        val openRegistry = CircuitBreakerRegistry.ofDefaults()
+        val cb = openRegistry.circuitBreaker("redisBlacklist")
+        cb.transitionToOpenState()
+
+        val openFilter = JwtAuthenticationWebFilter(
+            jwtTokenProvider,
+            tokenBlacklistService,
+            routeValidator,
+            objectMapper,
+            openRegistry,
+        )
+
+        val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
+
+        StepVerifier.create(openFilter.filter(exchange, capturingChain))
+            .verifyComplete()
+
+        // OPEN 상태: fail-open → 요청 통과 (응답 코드 없음)
+        exchange.response.statusCode shouldBe null
+        capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
     }
 
     // ─── 인가 실패 ─────────────────────────────────────────────────────
