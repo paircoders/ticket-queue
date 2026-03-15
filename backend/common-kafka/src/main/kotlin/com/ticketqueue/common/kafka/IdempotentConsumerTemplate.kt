@@ -50,6 +50,7 @@ class IdempotentConsumerTemplate(
                 throw e
             } else {
                 logger.error(e) { "Non-retryable error processing event: eventId=$eventId, consumer=$consumerService, error=${e.message}" }
+                processedEventService.deleteRecord(eventId, consumerService)
                 throw e
             }
         }
