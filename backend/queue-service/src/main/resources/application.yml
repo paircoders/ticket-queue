@@ -38,6 +38,10 @@ queue:
     max-requests: 15
     window-seconds: 60
 
+internal:
+  api:
+    key: ${internal_api_key}
+
 management:
   server:
     port: 9083

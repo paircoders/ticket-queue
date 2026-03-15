@@ -38,7 +38,7 @@ cache:
 
 internal:
   api:
-    key: ${INTERNAL_API_KEY:internal-api-key-for-dev}
+    key: ${internal_api_key}
 
 management:
   server:
