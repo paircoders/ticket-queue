@@ -10,8 +10,10 @@ import java.security.MessageDigest
 
 @Component
 class InternalApiKeyValidator(
-    @Value("\${internal.api.key:}")
-    private val internalApiKey: String
+    @Value("\${internal.api.key}")
+    private val internalApiKey: String,
+    @Value("\${spring.application.name:unknown}")
+    private val serviceName: String = "unknown"
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -26,9 +28,9 @@ class InternalApiKeyValidator(
 
         val apiKey = request.getHeader(HEADER_NAME)
 
-        if (apiKey.isNullOrBlank() || !MessageDigest.isEqual(apiKey.toByteArray(), internalApiKey.toByteArray())) {
+        if (apiKey.isNullOrBlank() || !MessageDigest.isEqual(apiKey.toByteArray(Charsets.UTF_8), internalApiKey.toByteArray(Charsets.UTF_8))) {
             logger.warn {
-                "[INTERNAL_API_AUTH_FAILED] uri=${request.requestURI}, method=${request.method}, " +
+                "[INTERNAL_API_AUTH_FAILED] service=$serviceName, uri=${request.requestURI}, method=${request.method}, " +
                 "remoteAddr=${request.remoteAddr}, forwardedFor=${request.getHeader("X-Forwarded-For")}, " +
                 "keyPresent=${!apiKey.isNullOrBlank()}"
             }
