@@ -128,7 +128,7 @@ class JwtTokenProviderTest {
         val ex = shouldThrow<JwtException> {
             provider.validateAndExtract(token)
         }
-        ex.message shouldBe "Missing sub claim"
+        ex.message shouldBe "Missing or blank sub claim"
     }
 
     @Test
@@ -138,7 +138,7 @@ class JwtTokenProviderTest {
         val ex = shouldThrow<JwtException> {
             provider.validateAndExtract(token)
         }
-        ex.message shouldBe "Missing role claim"
+        ex.message shouldBe "Missing or blank role claim"
     }
 
     @Test
@@ -164,7 +164,61 @@ class JwtTokenProviderTest {
         val ex = shouldThrow<JwtException> {
             provider.validateAndExtract(token)
         }
-        ex.message shouldBe "Missing jti claim"
+        ex.message shouldBe "Missing or blank jti claim"
+    }
+
+    @Test
+    fun `sub 클레임이 빈 문자열이면 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("")
+            .claim("role", "USER")
+            .id(UUID.randomUUID().toString())
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank sub claim"
+    }
+
+    @Test
+    fun `role 클레임이 빈 문자열이면 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("user-123")
+            .claim("role", "")
+            .id(UUID.randomUUID().toString())
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank role claim"
+    }
+
+    @Test
+    fun `jti 클레임이 공백 문자열이면 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("user-123")
+            .claim("role", "USER")
+            .id(" ")
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank jti claim"
     }
 
     @Test

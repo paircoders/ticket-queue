@@ -40,13 +40,20 @@
 | Resilience4j Circuit Breaker | CB 상태(CLOSED/OPEN/HALF_OPEN), 실패율, 호출 수 | Ticket Queue |
 | Infrastructure Overview | HikariCP 커넥션 풀, Kafka Consumer Lag, 처리량 | Ticket Queue |
 
-**Prometheus Alert 규칙:**
+**Prometheus Alert 규칙 (계획됨 — 미배포):**
+
+> 아래 Alert 규칙은 설계 단계이며, Prometheus alert rule 파일 및 Alertmanager는 아직 구성되지 않았습니다.
+> 배포 시 `docker/prometheus/alert_rules.yml` 생성 및 `prometheus.yml`에 `rule_files:` 섹션 추가가 필요합니다.
 
 #### Redis Blacklist CircuitBreaker OPEN 알림
 - **쿼리**: `resilience4j_circuitbreaker_state{name="redisBlacklist", state="open"} == 1`
 - **심각도**: WARNING
-- **의미**: Redis 블랙리스트 서킷이 열려 로그아웃 토큰 검사가 우회되고 있음
-- **대응**: Redis 상태 확인 (`docker exec ticket-valkey valkey-cli ping`), 복구 후 서킷 자동 전환 확인
+- **CB 설정**: `waitDurationInOpenState: 30s`, `minimumNumberOfCalls: 20`, 실패율 기반 트립 (slow-call 미사용)
+- **보안 영향**: 서킷 OPEN 시 fail-open 정책으로 로그아웃된 Access Token이 최대 30초간 허용될 수 있음 (상세: `docs/architecture/06_api_security.md` §2.1.1)
+- **대응**:
+  1. Redis 상태 확인: `docker exec ticket-valkey valkey-cli ping`
+  2. HALF_OPEN 전환 확인: `resilience4j_circuitbreaker_state{name="redisBlacklist", state="half_open"} == 1`
+  3. CLOSED 복구 확인: `resilience4j_circuitbreaker_state{name="redisBlacklist", state="closed"} == 1`
 
 **서비스별 포트 매핑 (Prometheus 스크래핑 대상):**
 

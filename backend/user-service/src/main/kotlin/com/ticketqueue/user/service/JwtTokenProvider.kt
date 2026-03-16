@@ -100,6 +100,9 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             if (claims["type"] == "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
             claims.id ?: throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: ExpiredJwtException) {
+            if (e.header?.algorithm != "HS512") {
+                throw JwtException("Algorithm mismatch detected")
+            }
             if (e.claims["type"] == "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
             e.claims.id ?: throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: UserException) {
@@ -132,6 +135,9 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             if (claims.subject.isNullOrBlank()) throw UserException(ErrorCode.INVALID_TOKEN)
             UUID.fromString(claims.subject) // subject가 유효한 UUID인지 검증
         } catch (e: ExpiredJwtException) {
+            if (e.header?.algorithm != "HS512") {
+                throw JwtException("Algorithm mismatch detected")
+            }
             logger.error { "JWT token expired" }
             throw UserException(ErrorCode.EXPIRED_TOKEN)
         } catch (e: UserException) {

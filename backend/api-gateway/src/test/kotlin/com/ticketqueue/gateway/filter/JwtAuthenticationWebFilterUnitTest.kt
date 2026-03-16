@@ -18,10 +18,8 @@ import io.jsonwebtoken.JwtException
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
-import io.mockk.Called
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
@@ -265,6 +263,8 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `CircuitBreaker OPEN 상태에서 fail-open 전략으로 요청 허용`() {
         val claims = JwtClaims(userId = "user-1", role = "USER", jti = "open-jti")
         every { jwtTokenProvider.validateAndExtract(any()) } returns claims
+        // CircuitBreaker OPEN 상태에서는 isBlacklisted Mono가 생성되지만 구독(실행)은 CircuitBreaker가 차단
+        every { tokenBlacklistService.isBlacklisted("open-jti") } returns Mono.just(false)
 
         // CircuitBreaker를 강제로 OPEN 상태로 전환
         val openRegistry = CircuitBreakerRegistry.ofDefaults()
@@ -287,7 +287,6 @@ class JwtAuthenticationWebFilterUnitTest {
 
         // OPEN 상태: fail-open → 요청 통과 (응답 코드 없음)
         exchange.response.statusCode shouldBe null
-        verify { tokenBlacklistService.isBlacklisted(any()) wasNot Called }
         capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
         capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
     }

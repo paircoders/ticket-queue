@@ -68,10 +68,12 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
         }
 
         val claims = jws.payload
-        val userId = claims.subject ?: throw JwtException("Missing sub claim")
-        val role = claims.get("role", String::class.java)
-            ?: throw JwtException("Missing role claim")
-        val jti = claims.id ?: throw JwtException("Missing jti claim")
+        val userId = claims.subject?.takeIf { it.isNotBlank() }
+            ?: throw JwtException("Missing or blank sub claim")
+        val role = claims.get("role", String::class.java)?.takeIf { it.isNotBlank() }
+            ?: throw JwtException("Missing or blank role claim")
+        val jti = claims.id?.takeIf { it.isNotBlank() }
+            ?: throw JwtException("Missing or blank jti claim")
 
         return JwtClaims(userId = userId, role = role, jti = jti)
     }
