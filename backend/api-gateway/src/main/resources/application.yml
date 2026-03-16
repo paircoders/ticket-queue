@@ -46,6 +46,11 @@ spring:
                 allow-credentials: true
                 max-age: 3600
           max-request-size: 1MB
+          default-filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter: "#{@globalRedisRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
           routes:
             # /internal/** 차단 라우트 (최우선 순위)
             # 내부 API는 외부 접근 차단
@@ -113,6 +118,10 @@ spring:
                   args:
                     name: paymentService
                     fallbackUri: forward:/fallback/payment
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter: "#{@paymentRedisRateLimiter}"
+                    key-resolver: "#{@userKeyResolver}"
 
 jwt:
   secret: ${jwt_secret}
