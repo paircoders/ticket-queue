@@ -19,6 +19,13 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${valkey_password}
       timeout: 2000ms
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+          max-wait: 1000ms
 
   cloud:
     gateway:
@@ -149,9 +156,12 @@ resilience4j:
         # 이 트레이드오프는 의도적 설계 결정임 — docs/architecture/06_api_security.md 참조
         baseConfig: default
         slidingWindowSize: 50
-        minimumNumberOfCalls: 10
+        minimumNumberOfCalls: 20
         waitDurationInOpenState: 30s
-        permittedNumberOfCallsInHalfOpenState: 3
+        permittedNumberOfCallsInHalfOpenState: 10
+        slowCallDurationThreshold: 1500ms
+        slowCallRateThreshold: 80
+        automaticTransitionFromOpenToHalfOpenEnabled: true
 
   timelimiter:
     configs:

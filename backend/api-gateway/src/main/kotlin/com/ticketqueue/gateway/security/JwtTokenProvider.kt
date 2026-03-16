@@ -62,8 +62,8 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
 
         val actualAlg = jws.header.algorithm
         if (actualAlg != EXPECTED_ALGORITHM) {
-            // Algorithm Confusion Attack 시도 가능성 — warn 레벨로 기록
-            log.warn { "Algorithm mismatch detected: expected=$EXPECTED_ALGORITHM, actual=$actualAlg" }
+            // Algorithm Confusion Attack 시도 가능성 — error 레벨로 기록
+            log.error { "Algorithm mismatch detected: expected=$EXPECTED_ALGORITHM, actual=$actualAlg" }
             throw JwtException("Algorithm mismatch detected")
         }
 

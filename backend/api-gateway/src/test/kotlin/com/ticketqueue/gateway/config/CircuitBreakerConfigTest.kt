@@ -1,6 +1,7 @@
 package com.ticketqueue.gateway.config
 
 import com.ticketqueue.gateway.BaseIntegrationTest
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry
 import io.kotest.matchers.shouldBe
@@ -124,5 +125,6 @@ class CircuitBreakerConfigTest : BaseIntegrationTest() {
         config.minimumNumberOfCalls shouldBe 3
         // application-test.yml redisBlacklist: permittedNumberOfCallsInHalfOpenState: 2
         config.permittedNumberOfCallsInHalfOpenState shouldBe 2
+        config.slidingWindowType shouldBe CircuitBreakerConfig.SlidingWindowType.COUNT_BASED
     }
 }

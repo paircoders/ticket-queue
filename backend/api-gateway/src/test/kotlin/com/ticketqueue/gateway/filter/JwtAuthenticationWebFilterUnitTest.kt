@@ -12,13 +12,16 @@ import io.github.resilience4j.circuitbreaker.CallNotPermittedException
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.mockk.Called
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
@@ -44,6 +47,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
     // 기본 CircuitBreakerRegistry (CLOSED 상태로 시작)
     private val circuitBreakerRegistry = CircuitBreakerRegistry.ofDefaults()
+    private val meterRegistry = SimpleMeterRegistry()
 
     private val filter = JwtAuthenticationWebFilter(
         jwtTokenProvider,
@@ -51,9 +55,10 @@ class JwtAuthenticationWebFilterUnitTest {
         routeValidator,
         objectMapper,
         circuitBreakerRegistry,
+        meterRegistry,
     )
 
-    private val passChain = WebFilterChain { Mono.empty() }
+    private val noOpChain = WebFilterChain { Mono.empty() }
 
     // 다운스트림으로 전달된 요청 헤더를 캡처하는 체인
     private var capturedHeaders: org.springframework.http.HttpHeaders? = null
@@ -73,7 +78,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `POST auth-login은 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.POST, "/auth/login")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null // 필터가 응답 쓰지 않음
@@ -83,7 +88,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `POST auth-signup은 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.POST, "/auth/signup")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -93,7 +98,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `POST auth-refresh는 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.POST, "/auth/refresh")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -103,7 +108,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `GET events는 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.GET, "/events")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -113,7 +118,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `GET events-id는 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.GET, "/events/123")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -123,7 +128,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `GET events-schedules-id-seats는 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.GET, "/events/schedules/456/seats")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -133,7 +138,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `GET actuator-health는 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.GET, "/actuator/health")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -143,7 +148,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `OPTIONS preflight 요청은 JWT 검증 없이 통과`() {
         val exchange = exchange(HttpMethod.OPTIONS, "/reservations/seats/1")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe null
@@ -155,7 +160,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `Authorization 헤더 없으면 401 UNAUTHORIZED 반환`() {
         val exchange = exchange(HttpMethod.GET, "/reservations/seats/1")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -171,7 +176,7 @@ class JwtAuthenticationWebFilterUnitTest {
             header(HttpHeaders.AUTHORIZATION, "Basic sometoken")
         }
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -184,7 +189,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "expired.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -200,7 +205,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "tampered.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -215,7 +220,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "blank.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -231,7 +236,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -248,7 +253,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -260,8 +265,6 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `CircuitBreaker OPEN 상태에서 fail-open 전략으로 요청 허용`() {
         val claims = JwtClaims(userId = "user-1", role = "USER", jti = "open-jti")
         every { jwtTokenProvider.validateAndExtract(any()) } returns claims
-        // CircuitBreaker OPEN 상태에서는 isBlacklisted Mono가 생성되지만 구독(실행)은 CircuitBreaker가 차단
-        every { tokenBlacklistService.isBlacklisted("open-jti") } returns Mono.just(false)
 
         // CircuitBreaker를 강제로 OPEN 상태로 전환
         val openRegistry = CircuitBreakerRegistry.ofDefaults()
@@ -274,6 +277,7 @@ class JwtAuthenticationWebFilterUnitTest {
             routeValidator,
             objectMapper,
             openRegistry,
+            meterRegistry,
         )
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
@@ -283,6 +287,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         // OPEN 상태: fail-open → 요청 통과 (응답 코드 없음)
         exchange.response.statusCode shouldBe null
+        verify { tokenBlacklistService.isBlacklisted(any()) wasNot Called }
         capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ID_HEADER) shouldBe "user-1"
         capturedHeaders?.getFirst(JwtAuthenticationWebFilter.USER_ROLE_HEADER) shouldBe "USER"
     }
@@ -306,11 +311,12 @@ class JwtAuthenticationWebFilterUnitTest {
             routeValidator,
             objectMapper,
             halfOpenRegistry,
+            meterRegistry,
         )
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
 
-        StepVerifier.create(halfOpenFilter.filter(exchange, passChain))
+        StepVerifier.create(halfOpenFilter.filter(exchange, noOpChain))
             .verifyComplete()
 
         // HALF_OPEN 상태: Redis 오류 → fail-closed → 401 반환
@@ -329,7 +335,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.POST, "/events", "valid.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.FORBIDDEN
@@ -346,7 +352,7 @@ class JwtAuthenticationWebFilterUnitTest {
 
         val exchange = exchangeWithBearer(HttpMethod.GET, "/reservations/seats/1", "valid.token")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.FORBIDDEN
@@ -391,7 +397,7 @@ class JwtAuthenticationWebFilterUnitTest {
     fun `에러 응답 JSON에 code, message, timestamp, traceId 모두 포함`() {
         val exchange = exchange(HttpMethod.GET, "/reservations/seats/1")
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         val body = responseBody(exchange)
@@ -445,7 +451,7 @@ class JwtAuthenticationWebFilterUnitTest {
             header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")
         }
 
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
 
         exchange.response.statusCode shouldBe HttpStatus.UNAUTHORIZED
@@ -475,7 +481,7 @@ class JwtAuthenticationWebFilterUnitTest {
             header(HttpHeaders.AUTHORIZATION, "Bearer valid.token")
             header(JwtAuthenticationWebFilter.USER_ROLE_HEADER, "ADMIN")  // 인젝션 시도
         }
-        StepVerifier.create(filter.filter(exchange, passChain))
+        StepVerifier.create(filter.filter(exchange, noOpChain))
             .verifyComplete()
         exchange.response.statusCode shouldBe HttpStatus.FORBIDDEN
         val body = responseBody(exchange)

@@ -26,15 +26,14 @@ import java.util.UUID
  */
 class JwtTokenProviderTest {
 
-    // 64바이트 = HS512 키 (application-test.yml과 동일)
-    private val testSecret = "dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tdmVyaWZpY2F0aW9uLXRlc3RpbmctNjRieXRlLWtleXMhIQ=="
+    private lateinit var testSecret: String
 
     private lateinit var provider: JwtTokenProvider
 
     @BeforeEach
     fun setUp() {
-        // testSecret이 실제 64바이트(512비트)인지 검증 — expectedAlgorithm HS512 분기를 올바르게 적용하기 위해 필수
-        Base64.getDecoder().decode(testSecret).size shouldBe 64
+        val bytes = ByteArray(64).also { java.security.SecureRandom().nextBytes(it) }
+        testSecret = Base64.getEncoder().encodeToString(bytes)
         val props = JwtProperties(secret = testSecret)
         provider = JwtTokenProvider(props)
     }
@@ -94,7 +93,7 @@ class JwtTokenProviderTest {
         val ex = shouldThrow<JwtException> {
             provider.validateAndExtract(token)
         }
-        ex.message shouldContain "Algorithm mismatch"
+        ex.message shouldBe "Algorithm mismatch detected"
     }
 
     @Test
@@ -105,13 +104,17 @@ class JwtTokenProviderTest {
         val ex = shouldThrow<JwtException> {
             provider.validateAndExtract(token)
         }
-        ex.message shouldContain "Algorithm mismatch"
+        ex.message shouldBe "Algorithm mismatch detected"
     }
 
     @Test
     fun `alg none 토큰은 UnsupportedJwtException 발생`() {
-        // 서명 없는 토큰 문자열 (헤더.페이로드. 형태)
-        val unsignedToken = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyLTEyMyIsInJvbGUiOiJVU0VSIn0."
+        // 서명 없는 토큰 문자열 (헤더.페이로드. 형태) — 동적 생성으로 하드코딩 제거
+        val header = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"alg":"none"}""".toByteArray())
+        val payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"sub":"user-123","role":"USER"}""".toByteArray())
+        val unsignedToken = "$header.$payload."
 
         shouldThrow<UnsupportedJwtException> {
             provider.validateAndExtract(unsignedToken)
@@ -162,5 +165,19 @@ class JwtTokenProviderTest {
             provider.validateAndExtract(token)
         }
         ex.message shouldBe "Missing jti claim"
+    }
+
+    @Test
+    fun `빈 문자열 토큰은 IllegalArgumentException 발생`() {
+        shouldThrow<IllegalArgumentException> {
+            provider.validateAndExtract("")
+        }
+    }
+
+    @Test
+    fun `malformed 토큰은 JwtException 발생`() {
+        shouldThrow<JwtException> {
+            provider.validateAndExtract("notavalidjwt")
+        }
     }
 }
