@@ -27,6 +27,10 @@ dependencies {
 
     // Test
     testImplementation(libs.bundles.test.base)
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.postgresql)
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
 }
 
 tasks.withType<Test> {

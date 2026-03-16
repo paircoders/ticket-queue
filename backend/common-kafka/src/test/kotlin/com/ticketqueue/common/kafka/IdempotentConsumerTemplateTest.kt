@@ -1,110 +1,95 @@
 package com.ticketqueue.common.kafka
 
 import com.ticketqueue.common.event.BaseEvent
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.DescribeSpec
+import io.kotest.matchers.shouldBe
+import io.mockk.clearMocks
 import io.mockk.every
-import io.mockk.justRun
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import io.mockk.verify
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.springframework.kafka.support.Acknowledgment
-import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.TimeoutException
 
-class IdempotentConsumerTemplateTest {
+class IdempotentConsumerTemplateTest : DescribeSpec({
 
-    private val processedEventService = mockk<ProcessedEventService>()
-    private val acknowledgment = mockk<Acknowledgment>()
-    private val template = IdempotentConsumerTemplate(processedEventService)
+    val processedEventService = mockk<ProcessedEventService>()
+    val acknowledgment = mockk<Acknowledgment>()
+    val template = IdempotentConsumerTemplate(processedEventService)
 
-    private val testEventId = UUID.randomUUID()
-    private val consumerService = "test-consumer"
+    beforeEach {
+        clearMocks(processedEventService, acknowledgment)
+    }
 
-    private val testEvent = object : BaseEvent(
-        eventId = testEventId,
+    fun testEvent(): BaseEvent = object : BaseEvent(
         eventType = "TEST_EVENT",
         aggregateId = UUID.randomUUID(),
         aggregateType = "TEST_AGGREGATE",
     ) {}
 
-    @BeforeEach
-    fun setUp() {
-        justRun { acknowledgment.acknowledge() }
-        justRun { processedEventService.deleteRecord(any(), any()) }
-    }
+    describe("IdempotentConsumerTemplate.process()") {
 
-    @Test
-    fun `non-retryable 예외 발생 시 deleteRecord 호출 후 예외 전파`() {
-        every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
+        context("중복 이벤트 (tryRecord = false)") {
+            it("businessLogic을 실행하지 않고 acknowledge만 호출한다") {
+                every { processedEventService.tryRecord(any(), any(), any(), any()) } returns false
+                every { acknowledgment.acknowledge() } just runs
 
-        assertThrows<IllegalArgumentException> {
-            template.process(testEvent, consumerService, acknowledgment) {
-                throw IllegalArgumentException("validation error")
+                var called = false
+                template.process(testEvent(), "test-service", acknowledgment) { called = true }
+
+                called shouldBe false
+                verify { acknowledgment.acknowledge() }
+                verify(exactly = 0) { processedEventService.deleteRecord(any(), any()) }
             }
         }
 
-        verify(exactly = 1) { processedEventService.deleteRecord(testEventId, consumerService) }
-        verify(exactly = 0) { acknowledgment.acknowledge() }
-    }
+        context("신규 이벤트 정상 처리 (tryRecord = true)") {
+            it("businessLogic 실행 후 acknowledge 호출") {
+                every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
+                every { acknowledgment.acknowledge() } just runs
 
-    @Test
-    fun `retryable 예외 발생 시 deleteRecord 호출 후 예외 전파`() {
-        every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
+                var called = false
+                template.process(testEvent(), "test-service", acknowledgment) { called = true }
 
-        assertThrows<java.util.concurrent.TimeoutException> {
-            template.process(testEvent, consumerService, acknowledgment) {
-                throw java.util.concurrent.TimeoutException("timeout")
+                called shouldBe true
+                verify { acknowledgment.acknowledge() }
+                verify(exactly = 0) { processedEventService.deleteRecord(any(), any()) }
             }
         }
 
-        verify(exactly = 1) { processedEventService.deleteRecord(testEventId, consumerService) }
-        verify(exactly = 0) { acknowledgment.acknowledge() }
-    }
+        context("retryable 예외 발생 (TimeoutException)") {
+            it("deleteRecord 호출 후 예외 rethrow") {
+                every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
+                every { processedEventService.deleteRecord(any(), any()) } just runs
 
-    @Test
-    fun `중복 이벤트 skip 시 deleteRecord 미호출`() {
-        every { processedEventService.tryRecord(any(), any(), any(), any()) } returns false
+                shouldThrow<TimeoutException> {
+                    template.process(testEvent(), "test-service", acknowledgment) {
+                        throw TimeoutException("timeout")
+                    }
+                }
 
-        template.process(testEvent, consumerService, acknowledgment) {
-            // should not be called
-        }
-
-        verify(exactly = 0) { processedEventService.deleteRecord(any(), any()) }
-        verify(exactly = 1) { acknowledgment.acknowledge() }
-    }
-
-    @Test
-    fun `정상 처리 시 deleteRecord 미호출 및 acknowledge 호출`() {
-        every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
-
-        template.process(testEvent, consumerService, acknowledgment) {
-            // success
-        }
-
-        verify(exactly = 0) { processedEventService.deleteRecord(any(), any()) }
-        verify(exactly = 1) { acknowledgment.acknowledge() }
-    }
-
-    @Test
-    fun `DLQ replay 시나리오 - 동일 eventId로 재처리 가능`() {
-        // 1차 처리: non-retryable 예외 → deleteRecord 호출
-        every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
-
-        assertThrows<IllegalArgumentException> {
-            template.process(testEvent, consumerService, acknowledgment) {
-                throw IllegalArgumentException("first attempt fails")
+                verify { processedEventService.deleteRecord(any(), "test-service") }
+                verify(exactly = 0) { acknowledgment.acknowledge() }
             }
         }
-        verify(exactly = 1) { processedEventService.deleteRecord(testEventId, consumerService) }
 
-        // 2차 처리 (DLQ replay): tryRecord가 true 반환 → 재처리 가능
-        every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
+        context("non-retryable 예외 발생 (IllegalArgumentException)") {
+            it("deleteRecord 호출 후 예외 rethrow — DLQ replay 차단") {
+                every { processedEventService.tryRecord(any(), any(), any(), any()) } returns true
+                every { processedEventService.deleteRecord(any(), any()) } just runs
 
-        template.process(testEvent, consumerService, acknowledgment) {
-            // replay succeeds
+                shouldThrow<IllegalArgumentException> {
+                    template.process(testEvent(), "test-service", acknowledgment) {
+                        throw IllegalArgumentException("invalid")
+                    }
+                }
+
+                verify { processedEventService.deleteRecord(any(), "test-service") }
+                verify(exactly = 0) { acknowledgment.acknowledge() }
+            }
         }
-
-        verify(exactly = 1) { acknowledgment.acknowledge() }
     }
-}
+})
