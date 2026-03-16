@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono
  * - X-Frame-Options: DENY — Clickjacking 방지
  * - Strict-Transport-Security: max-age=31536000; includeSubDomains — HTTPS 강제 (HSTS)
  * - X-XSS-Protection: 0 — 최신 브라우저에서 비활성화 권장 (CSP로 대체)
+ * - Content-Security-Policy: default-src 'self' — XSS 및 데이터 인젝션 방지
  *
  * REQ-GW-011 준수
  *
@@ -38,6 +39,8 @@ class SecurityHeadersWebFilter : WebFilter {
         const val DENY = "DENY"
         const val HSTS_VALUE = "max-age=31536000; includeSubDomains"
         const val XSS_DISABLED = "0"
+        const val CONTENT_SECURITY_POLICY = "Content-Security-Policy"
+        const val CSP_DEFAULT_SRC_SELF = "default-src 'self'"
     }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
@@ -46,6 +49,7 @@ class SecurityHeadersWebFilter : WebFilter {
             set(X_FRAME_OPTIONS, DENY)
             set(STRICT_TRANSPORT_SECURITY, HSTS_VALUE)
             set(X_XSS_PROTECTION, XSS_DISABLED)
+            set(CONTENT_SECURITY_POLICY, CSP_DEFAULT_SRC_SELF)
         }
         return chain.filter(exchange)
     }

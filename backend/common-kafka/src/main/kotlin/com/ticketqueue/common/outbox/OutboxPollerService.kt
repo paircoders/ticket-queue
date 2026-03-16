@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 /**
  * Transactional Outbox Pattern Poller 서비스
@@ -132,7 +133,7 @@ class OutboxPollerService(
 
             // 발행 성공 시 DB 상태 업데이트
             event.published = true
-            event.publishedAt = LocalDateTime.now()
+            event.publishedAt = LocalDateTime.now(ZoneOffset.UTC)
             outboxEventRepository.save(event)
 
             log.info(
@@ -175,7 +176,7 @@ class OutboxPollerService(
             // 재시도 횟수 초과 → DLQ로 이동
             moveToDlq(event)
             event.published = true // 폴링 대상에서 제외
-            event.publishedAt = LocalDateTime.now()
+            event.publishedAt = LocalDateTime.now(ZoneOffset.UTC)
 
             log.error(
                 "Outbox event exceeded max retries, moved to DLQ: id={}, type={}, retries={}",

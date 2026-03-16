@@ -34,7 +34,7 @@ dependencies {
     api(libs.logstash.logback.encoder)
 
     // Spring Security (GlobalExceptionHandler에서 AccessDeniedException 사용)
-    api(libs.spring.boot.starter.security)
+    api(libs.spring.security.core)
 
     // Test
     testImplementation(libs.bundles.test.base)
