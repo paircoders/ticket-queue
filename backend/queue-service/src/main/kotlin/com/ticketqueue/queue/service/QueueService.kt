@@ -9,6 +9,7 @@ import com.ticketqueue.queue.exception.QueueException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.springframework.data.redis.connection.StringRedisConnection
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
@@ -42,6 +43,12 @@ class QueueService(
     private val batchApproveCounter: Counter =
         meterRegistry.counter("queue.batch.approved.total")
 
+    private val enterTimer: Timer = Timer.builder("queue.enter.time")
+        .description("대기열 진입 처리 시간")
+        .tags("service", "queue")
+        .publishPercentileHistogram(true)
+        .register(meterRegistry)
+
     /**
      * 대기열 진입 처리 (REQ-QUEUE-001)
      *
@@ -53,55 +60,57 @@ class QueueService(
      * - 4: 이미 배치 승인 완료 → ALREADY_APPROVED
      */
     fun enterQueue(userId: UUID, scheduleId: UUID): QueueDto.EnterResponse {
-        scheduleValidator.validateSchedule(scheduleId)
-        val keys = listOf(
-            QueueRedisKeys.queue(scheduleId),
-            QueueRedisKeys.active(userId),
-            QueueRedisKeys.activeSchedules()
-        )
-        val args = arrayOf(
-            userId.toString(),
-            System.currentTimeMillis().toString(),
-            queueProperties.maxCapacity.toString(),
-            queueProperties.activeUser.ttl.toString(),
-            scheduleId.toString()
-        )
+        return enterTimer.recordCallable {
+            scheduleValidator.validateSchedule(scheduleId)
+            val keys = listOf(
+                QueueRedisKeys.queue(scheduleId),
+                QueueRedisKeys.active(userId),
+                QueueRedisKeys.activeSchedules()
+            )
+            val args = arrayOf(
+                userId.toString(),
+                System.currentTimeMillis().toString(),
+                queueProperties.maxCapacity.toString(),
+                queueProperties.activeUser.ttl.toString(),
+                scheduleId.toString()
+            )
 
-        val result = executeLuaOrThrow(
-            queueEnterScript, keys, *args,
-            logContext = "enter: scheduleId=$scheduleId, userId=$userId"
-        )
+            val result = executeLuaOrThrow(
+                queueEnterScript, keys, *args,
+                logContext = "enter: scheduleId=$scheduleId, userId=$userId"
+            )
 
-        val code = (result.getOrNull(0) as? Long)?.toInt()
-            ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
+            val code = (result.getOrNull(0) as? Long)?.toInt()
+                ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
 
-        return when (code) {
-            0, 1 -> {
-                val rank = safeRank(result)
-                val logMsg = if (code == 0) "Queue entered" else "Queue re-entered (idempotent)"
-                logger.info { "$logMsg: userId=$userId, scheduleId=$scheduleId, rank=$rank" }
-                QueueDto.EnterResponse(
-                    status = QueueStatus.WAITING,
-                    scheduleId = scheduleId,
-                    rank = rank,
-                    estimatedWaitTime = calculateWaitTime(rank),
-                    token = null
-                )
+            when (code) {
+                0, 1 -> {
+                    val rank = safeRank(result)
+                    val logMsg = if (code == 0) "Queue entered" else "Queue re-entered (idempotent)"
+                    logger.info { "$logMsg: userId=$userId, scheduleId=$scheduleId, rank=$rank" }
+                    QueueDto.EnterResponse(
+                        status = QueueStatus.WAITING,
+                        scheduleId = scheduleId,
+                        rank = rank,
+                        estimatedWaitTime = calculateWaitTime(rank),
+                        token = null
+                    )
+                }
+                2 -> {
+                    logger.warn { "Queue enter rejected (already in another queue): userId=$userId, scheduleId=$scheduleId" }
+                    throw QueueException(ErrorCode.ALREADY_IN_QUEUE)
+                }
+                3 -> {
+                    logger.warn { "Queue enter rejected (queue full): scheduleId=$scheduleId, capacity=${queueProperties.maxCapacity}" }
+                    throw QueueException(ErrorCode.QUEUE_FULL)
+                }
+                4 -> {
+                    logger.info { "Queue enter rejected (already approved): userId=$userId, scheduleId=$scheduleId" }
+                    throw QueueException(ErrorCode.ALREADY_APPROVED)
+                }
+                else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
             }
-            2 -> {
-                logger.warn { "Queue enter rejected (already in another queue): userId=$userId, scheduleId=$scheduleId" }
-                throw QueueException(ErrorCode.ALREADY_IN_QUEUE)
-            }
-            3 -> {
-                logger.warn { "Queue enter rejected (queue full): scheduleId=$scheduleId, capacity=${queueProperties.maxCapacity}" }
-                throw QueueException(ErrorCode.QUEUE_FULL)
-            }
-            4 -> {
-                logger.info { "Queue enter rejected (already approved): userId=$userId, scheduleId=$scheduleId" }
-                throw QueueException(ErrorCode.ALREADY_APPROVED)
-            }
-            else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
-        }
+        }!!
     }
 
     /**
@@ -250,6 +259,62 @@ class QueueService(
         }
         // results[0] = SREM count (Long), results[1] = DEL count (Long: 1 deleted, 0 not found)
         return (results.getOrNull(1) as? Long ?: 0L) > 0
+    }
+
+    /**
+     * 관리자 통계 조회 (REQ-QUEUE-007)
+     *
+     * 활성 대기열 scheduleId 목록을 SMEMBERS로 조회하고,
+     * 각 회차별 ZCARD로 대기 인원을 수집하여 통계를 반환한다.
+     * KEYS/SCAN 명령 미사용 — queue:active-schedules SET 활용.
+     */
+    fun getAdminStats(): QueueDto.AdminStatsResponse {
+        val activeScheduleIds = getActiveScheduleIds()
+
+        val batchSize = queueProperties.batch.size
+        val intervalMs = queueProperties.batch.interval.coerceAtLeast(1)
+        val intervalSeconds = intervalMs / 1000L
+        val throughputPerMinute = if (intervalSeconds > 0) {
+            batchSize.toLong() * 60L / intervalSeconds
+        } else {
+            batchSize.toLong() * 60L
+        }
+
+        if (activeScheduleIds.isEmpty()) {
+            return QueueDto.AdminStatsResponse(
+                totalWaiting = 0,
+                scheduleStats = emptyList(),
+                batchApprovalRate = batchSize,
+                batchIntervalSeconds = intervalSeconds,
+                throughputPerMinute = throughputPerMinute
+            )
+        }
+
+        val scheduleStats = activeScheduleIds.map { rawId ->
+            val waitingCount = try {
+                stringRedisTemplate.opsForZSet().zCard(QueueRedisKeys.queue(rawId)) ?: 0L
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to get ZCARD for scheduleId=$rawId" }
+                0L
+            }
+            val batchCount = (waitingCount + batchSize - 1) / batchSize.coerceAtLeast(1)
+            val estimatedWaitMinutes = (batchCount * intervalMs + 59_999) / 60_000
+            QueueDto.ScheduleStat(
+                scheduleId = rawId,
+                waitingCount = waitingCount,
+                estimatedWaitMinutes = estimatedWaitMinutes
+            )
+        }
+
+        val totalWaiting = scheduleStats.sumOf { it.waitingCount }
+
+        return QueueDto.AdminStatsResponse(
+            totalWaiting = totalWaiting,
+            scheduleStats = scheduleStats,
+            batchApprovalRate = batchSize,
+            batchIntervalSeconds = intervalSeconds,
+            throughputPerMinute = throughputPerMinute
+        )
     }
 
     /**

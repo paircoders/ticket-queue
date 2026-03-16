@@ -33,4 +33,18 @@ class QueueDto {
     data class LeaveResponse(
         val message: String
     )
+
+    data class ScheduleStat(
+        val scheduleId: String,
+        val waitingCount: Long,
+        val estimatedWaitMinutes: Long
+    )
+
+    data class AdminStatsResponse(
+        val totalWaiting: Long,
+        val scheduleStats: List<ScheduleStat>,
+        val batchApprovalRate: Int,
+        val batchIntervalSeconds: Long,
+        val throughputPerMinute: Long
+    )
 }
