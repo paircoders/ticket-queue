@@ -26,6 +26,6 @@ fun createValidToken(
         .id(UUID.randomUUID().toString())
         .issuedAt(Date())
         .expiration(Date(System.currentTimeMillis() + expirationMs))
-        .signWith(key)
+        .signWith(key, Jwts.SIG.HS512)
         .compact()
 }

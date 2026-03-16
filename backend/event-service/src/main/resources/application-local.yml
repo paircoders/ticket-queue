@@ -15,6 +15,9 @@ spring:
   kafka:
     bootstrap-servers: 192.168.50.111:9092
     consumer:
+      # 기본값. 각 Consumer의 실제 group-id는 @KafkaListener(groupId=...) 어노테이션이 오버라이드함.
+      # - event-reservation-consumer (ReservationEventConsumer)
+      # - event-payment-consumer (PaymentEventConsumer)
       group-id: event-service
       auto-offset-reset: earliest
       enable-auto-commit: false

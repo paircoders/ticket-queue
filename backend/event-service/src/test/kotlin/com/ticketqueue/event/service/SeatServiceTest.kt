@@ -104,6 +104,7 @@ class SeatServiceTest {
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
             every { hashOps.putAll(any<String>(), any()) } just runs
             every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 
@@ -124,6 +125,7 @@ class SeatServiceTest {
                 seats = emptyList()
             )
             every { hashOps.entries("cache:seats:$scheduleId") } returns mapOf("VIP" to gradeGroup)
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 
@@ -140,6 +142,7 @@ class SeatServiceTest {
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
             every { hashOps.putAll(any<String>(), any()) } just runs
             every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 
@@ -161,6 +164,7 @@ class SeatServiceTest {
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
             every { hashOps.putAll(any<String>(), any()) } just runs
             every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 
@@ -176,6 +180,7 @@ class SeatServiceTest {
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns emptyList()
             every { hashOps.putAll(any<String>(), any()) } just runs
             every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 
@@ -197,6 +202,72 @@ class SeatServiceTest {
         }
 
         @Test
+        @DisplayName("HOLD 오버레이 - AVAILABLE 좌석이 hold_seats SET에 있으면 HOLD로 변환한다")
+        fun holdOverlay() {
+            val seats = listOf(createSeat(SeatGrade.VIP, "A-1", BigDecimal("150000")))
+            val seatId = seats[0].id!!
+            every { hashOps.entries(any<String>()) } returns emptyMap()
+            every { eventScheduleRepository.existsById(scheduleId) } returns true
+            every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
+            every { hashOps.putAll(any<String>(), any()) } just runs
+            every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members("hold_seats:$scheduleId") } returns setOf(seatId.toString())
+
+            val response = seatService.getSeats(scheduleId)
+
+            assertEquals(SeatStatus.HOLD, response.grades[0].seats[0].status)
+        }
+
+        @Test
+        @DisplayName("HOLD 오버레이 - SOLD 좌석은 hold_seats SET에 있어도 SOLD 유지한다")
+        fun holdOverlayDoesNotAffectSoldSeats() {
+            val seats = listOf(createSeat(SeatGrade.VIP, "A-1", BigDecimal("150000"), SeatStatus.SOLD))
+            val seatId = seats[0].id!!
+            every { hashOps.entries(any<String>()) } returns emptyMap()
+            every { eventScheduleRepository.existsById(scheduleId) } returns true
+            every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
+            every { hashOps.putAll(any<String>(), any()) } just runs
+            every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members("hold_seats:$scheduleId") } returns setOf(seatId.toString())
+
+            val response = seatService.getSeats(scheduleId)
+
+            assertEquals(SeatStatus.SOLD, response.grades[0].seats[0].status)
+        }
+
+        @Test
+        @DisplayName("HOLD 오버레이 - Redis SET 조회 장애 시 오버레이 없이 정상 응답한다")
+        fun holdOverlayRedisFailureFallback() {
+            val seats = listOf(createSeat(SeatGrade.VIP, "A-1", BigDecimal("150000")))
+            every { hashOps.entries(any<String>()) } returns emptyMap()
+            every { eventScheduleRepository.existsById(scheduleId) } returns true
+            every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
+            every { hashOps.putAll(any<String>(), any()) } just runs
+            every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members(any<String>()) } throws RedisConnectionFailureException("connection failed")
+
+            val response = seatService.getSeats(scheduleId)
+
+            assertEquals(SeatStatus.AVAILABLE, response.grades[0].seats[0].status)
+        }
+
+        @Test
+        @DisplayName("HOLD 오버레이 - hold_seats SET이 비어있으면 오버레이 없이 반환한다")
+        fun holdOverlayEmptySet() {
+            val seats = listOf(createSeat(SeatGrade.VIP, "A-1", BigDecimal("150000")))
+            every { hashOps.entries(any<String>()) } returns emptyMap()
+            every { eventScheduleRepository.existsById(scheduleId) } returns true
+            every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
+            every { hashOps.putAll(any<String>(), any()) } just runs
+            every { redisTemplate.expire(any<String>(), any<Duration>()) } returns true
+            every { setOps.members("hold_seats:$scheduleId") } returns emptySet()
+
+            val response = seatService.getSeats(scheduleId)
+
+            assertEquals(SeatStatus.AVAILABLE, response.grades[0].seats[0].status)
+        }
+
+        @Test
         @DisplayName("캐시 저장 실패 시에도 정상 응답한다")
         fun cacheWriteFailure() {
             val seats = listOf(createSeat(SeatGrade.VIP, "A-1", BigDecimal("150000")))
@@ -204,6 +275,7 @@ class SeatServiceTest {
             every { eventScheduleRepository.existsById(scheduleId) } returns true
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
             every { hashOps.putAll(any<String>(), any()) } throws RedisConnectionFailureException("Redis write failed")
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 
@@ -220,6 +292,7 @@ class SeatServiceTest {
             every { seatRepository.findByScheduleIdOrderByGradeAndSeatNumber(scheduleId) } returns seats
             // 락 미획득 (다른 요청이 이미 처리 중)
             every { cacheHelper.tryAcquireStampedeLock(any(), any()) } returns false
+            every { setOps.members(any<String>()) } returns emptySet()
 
             val response = seatService.getSeats(scheduleId)
 

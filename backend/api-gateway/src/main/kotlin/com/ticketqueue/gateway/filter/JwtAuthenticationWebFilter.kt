@@ -4,9 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.gateway.security.JwtTokenProvider
 import com.ticketqueue.gateway.security.ReactiveTokenBlacklistService
 import com.ticketqueue.gateway.security.RouteValidator
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
+import io.github.resilience4j.reactor.circuitbreaker.operator.CircuitBreakerOperator
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
-import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
@@ -16,8 +21,6 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
-
-private val log = KotlinLogging.logger {}
 
 /**
  * JWT 토큰 검증 필터
@@ -42,9 +45,15 @@ class JwtAuthenticationWebFilter(
     private val tokenBlacklistService: ReactiveTokenBlacklistService,
     private val routeValidator: RouteValidator,
     private val objectMapper: ObjectMapper,
+    circuitBreakerRegistry: CircuitBreakerRegistry,
+    meterRegistry: MeterRegistry,
 ) : WebFilter {
 
+    private val circuitBreaker: CircuitBreaker = circuitBreakerRegistry.circuitBreaker("redisBlacklist")
+    private val meterRegistry = meterRegistry
+
     companion object {
+        private val log = KotlinLogging.logger {}
         private const val BEARER_PREFIX = "Bearer "
         private const val AUTHORIZATION_HEADER = "Authorization"
         const val USER_ID_HEADER = "X-User-Id"
@@ -99,19 +108,32 @@ class JwtAuthenticationWebFilter(
             jwtTokenProvider.validateAndExtract(token)
         } catch (e: ExpiredJwtException) {
             log.debug { "Expired JWT token: ${sanitizedExchange.request.path}" }
+            meterRegistry.counter("gateway.jwt.rejected.total", "reason", "expired").increment()
             return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_EXPIRED_TOKEN, "토큰이 만료되었습니다.")
         } catch (e: JwtException) {
             log.debug { "Invalid JWT token: ${e.message}" }
+            meterRegistry.counter("gateway.jwt.rejected.total", "reason", "invalid").increment()
             return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
         } catch (e: IllegalArgumentException) {
             log.debug { "Invalid JWT token argument: ${e.message}" }
+            meterRegistry.counter("gateway.jwt.rejected.total", "reason", "invalid").increment()
             return writeErrorResponse(sanitizedExchange, HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.")
         }
 
-        // 4. 블랙리스트 확인 (Redis non-blocking)
+        // 4. 블랙리스트 확인 (Redis non-blocking, CircuitBreaker 적용)
+        // 주의: onErrorResume 순서 의존적
+        // ① CallNotPermittedException (CircuitBreaker OPEN) → fail-open: 가용성 우선, 블랙리스트 미확인 허용
+        // ② 그 외 Redis I/O 오류 → fail-closed: 보안 우선, 401 반환
         return tokenBlacklistService.isBlacklisted(claims.jti)
+            .transform(CircuitBreakerOperator.of(circuitBreaker))
+            .onErrorResume(CallNotPermittedException::class.java) { _ ->
+                log.warn { "Redis blacklist circuit OPEN — fail-open for jti=${claims.jti}" }
+                meterRegistry.counter("gateway.blacklist.circuit.open.passed").increment()
+                Mono.just(false)
+            }
             .onErrorResume { ex ->
                 log.error(ex) { "Redis blacklist check failed for jti=${claims.jti}" }
+                meterRegistry.counter("gateway.blacklist.error.rejected").increment()
                 Mono.just(true)
             }
             .flatMap { isBlacklisted ->

@@ -223,7 +223,8 @@ X-Forwarded-For: <client>, <proxy1>, <proxy2>
 **Access Token:**
 - 유효기간: 1시간
 - 포함 정보: userId, email, role (USER/ADMIN)
-- 서명 알고리즘: HS256 (HMAC-SHA256)
+- 서명 알고리즘: HS512 (HMAC-SHA512)
+- **JWT 시크릿 최소 요구사항:** 512비트(64바이트) 이상
 
 **Refresh Token:**
 - 유효기간: 7일
@@ -237,7 +238,19 @@ X-Forwarded-For: <client>, <proxy1>, <proxy2>
 - 로그아웃 시 Access Token을 Redis에 블랙리스트 등록
 - TTL: 토큰 만료 시간 (1시간)
 
-### 2.1.1 RTR 구현 상세 (REQ-AUTH-012)
+### 2.1.1 Redis Blacklist CircuitBreaker 정책
+
+**Circuit Breaker 설정:**
+- **정책**: fail-open (OPEN 상태에서 가용성 우선)
+- **의도**: Redis 장애 시 로그인된 정상 사용자의 서비스 접근 보장
+- **수용된 위험**: CircuitBreaker OPEN 구간(`waitDurationInOpenState: 30s`)동안 로그아웃된 Access Token이 허용될 수 있음
+- **대응 방안**: Access Token TTL을 짧게 유지 (권장: 1시간 이하), OPEN 상태 Prometheus 알림 필수
+
+**트립 조건:**
+- Redis 연결 실패 또는 타임아웃
+- 실패율 50% 이상 (최소 20회 이상 요청 기준, slow-call 평가 제외 — 예외 기반 메트릭만 사용)
+
+### 2.1.2 RTR 구현 상세 (REQ-AUTH-012)
 
 **토큰 갱신 플로우:**
 1. Client → POST /auth/refresh (Refresh Token 포함)

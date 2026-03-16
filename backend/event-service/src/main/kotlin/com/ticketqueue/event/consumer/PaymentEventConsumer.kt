@@ -39,21 +39,30 @@ class PaymentEventConsumer(
         val eventType = try {
             objectMapper.readTree(rawJson).get("eventType")?.asText()
         } catch (e: JsonProcessingException) {
-            log.error("Malformed JSON in payment.events, skipping: ${e.message}")
-            ack.acknowledge()
-            return
+            log.error("Malformed JSON in payment.events, sending to DLQ: {}", rawJson, e)
+            throw e
         }
 
         when (eventType) {
             "PaymentSuccess" -> {
-                val event = objectMapper.readValue(rawJson, PaymentSuccessEvent::class.java)
+                val event = try {
+                    objectMapper.readValue(rawJson, PaymentSuccessEvent::class.java)
+                } catch (e: JsonProcessingException) {
+                    log.error("Malformed JSON in payment.events, sending to DLQ: {}", rawJson, e)
+                    throw e
+                }
                 idempotentConsumerTemplate.process(event, CONSUMER_SERVICE, ack) { e ->
                     seatService.markSeatsAsSold(e.scheduleId, e.seatIds)
                     log.info("PaymentSuccess: paymentId=${e.aggregateId}, reservationId=${e.reservationId}")
                 }
             }
             "PaymentFailed" -> {
-                val event = objectMapper.readValue(rawJson, PaymentFailedEvent::class.java)
+                val event = try {
+                    objectMapper.readValue(rawJson, PaymentFailedEvent::class.java)
+                } catch (e: JsonProcessingException) {
+                    log.error("Malformed JSON in payment.events, sending to DLQ: {}", rawJson, e)
+                    throw e
+                }
                 idempotentConsumerTemplate.process(event, CONSUMER_SERVICE, ack) { e ->
                     log.info("PaymentFailed: paymentId=${e.aggregateId}, reservationId=${e.reservationId}, reason=${e.reason}")
                 }

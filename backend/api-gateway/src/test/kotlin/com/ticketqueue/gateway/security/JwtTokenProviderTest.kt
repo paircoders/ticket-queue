@@ -4,104 +4,234 @@ import com.ticketqueue.gateway.config.JwtProperties
 import io.jsonwebtoken.ExpiredJwtException
 import io.jsonwebtoken.JwtException
 import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.UnsupportedJwtException
 import io.jsonwebtoken.security.Keys
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
-import java.security.SecureRandom
+import io.kotest.matchers.string.shouldContain
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import java.util.Base64
 import java.util.Date
 import java.util.UUID
-import javax.crypto.SecretKey
 
-class JwtTokenProviderTest : DescribeSpec({
+/**
+ * JwtTokenProvider 단위 테스트
+ *
+ * Algorithm Confusion Attack 방지 검증:
+ * - 유효한 HS512 토큰 파싱 성공
+ * - HS256 다운그레이드 토큰 거부
+ * - alg:none 토큰 거부
+ * - sub 클레임 누락 시 실패
+ */
+class JwtTokenProviderTest {
 
-    // 64바이트 랜덤 키 (HMAC-SHA512)
-    val rawSecret = ByteArray(64).also { SecureRandom().nextBytes(it) }
-    val base64Secret: String = Base64.getEncoder().encodeToString(rawSecret)
-    val secretKey: SecretKey = Keys.hmacShaKeyFor(rawSecret)
+    private lateinit var testSecret: String
 
-    val properties = JwtProperties(secret = base64Secret)
-    val provider = JwtTokenProvider(properties)
+    private lateinit var provider: JwtTokenProvider
 
-    fun buildToken(
-        subject: String = "user-123",
+    @BeforeEach
+    fun setUp() {
+        val bytes = ByteArray(64).also { java.security.SecureRandom().nextBytes(it) }
+        testSecret = Base64.getEncoder().encodeToString(bytes)
+        val props = JwtProperties(secret = testSecret)
+        provider = JwtTokenProvider(props)
+    }
+
+    private fun buildToken(
+        secret: String = testSecret,
+        subject: String? = "user-123",
         role: String? = "USER",
-        jti: String? = UUID.randomUUID().toString(),
+        jti: String = UUID.randomUUID().toString(),
         expirationMs: Long = 3_600_000L,
-        key: SecretKey = secretKey
+        algorithm: io.jsonwebtoken.security.MacAlgorithm = Jwts.SIG.HS512,
     ): String {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret))
         val builder = Jwts.builder()
-            .subject(subject)
+            .id(jti)
+            .issuedAt(Date())
             .expiration(Date(System.currentTimeMillis() + expirationMs))
-            .signWith(key)
-        jti?.let { builder.id(it) }
+            .signWith(key, algorithm)
+
+        subject?.let { builder.subject(it) }
         role?.let { builder.claim("role", it) }
+
         return builder.compact()
     }
 
-    describe("JwtTokenProvider.validateAndExtract()") {
+    @Test
+    fun `유효한 HS512 토큰 파싱 성공`() {
+        val jti = UUID.randomUUID().toString()
+        val token = buildToken(jti = jti)
 
-        context("정상 토큰") {
-            it("JwtClaims 올바르게 추출") {
-                val jti = UUID.randomUUID().toString()
-                val token = buildToken(subject = "user-42", role = "USER", jti = jti)
-                val claims = provider.validateAndExtract(token)
-                claims.userId shouldBe "user-42"
-                claims.role shouldBe "USER"
-                claims.jti shouldBe jti
-            }
+        val claims = provider.validateAndExtract(token)
 
-            it("ADMIN role도 정상 추출") {
-                val token = buildToken(subject = "admin-1", role = "ADMIN")
-                val claims = provider.validateAndExtract(token)
-                claims.role shouldBe "ADMIN"
-            }
-        }
+        claims.userId shouldBe "user-123"
+        claims.role shouldBe "USER"
+        claims.jti shouldBe jti
+    }
 
-        context("만료 토큰") {
-            it("ExpiredJwtException 발생") {
-                val token = buildToken(expirationMs = -1000L)
-                shouldThrow<ExpiredJwtException> {
-                    provider.validateAndExtract(token)
-                }
-            }
-        }
+    @Test
+    fun `다른 키로 서명한 HS256 토큰은 서명 불일치로 거부`() {
+        // 32바이트 키로 HS256 서명 (공격자가 alg를 낮춰 서명한 토큰 시뮬레이션)
+        val hs256Secret = Base64.getEncoder().encodeToString(
+            "test-secret-key-for-hs256-attack!!".toByteArray()
+        )
+        val token = buildToken(secret = hs256Secret, algorithm = Jwts.SIG.HS256)
 
-        context("잘못된 서명") {
-            it("JwtException 발생") {
-                val otherKey = Keys.hmacShaKeyFor(ByteArray(64).also { SecureRandom().nextBytes(it) })
-                val token = buildToken(key = otherKey)
-                shouldThrow<JwtException> {
-                    provider.validateAndExtract(token)
-                }
-            }
-        }
-
-        context("role 클레임 없는 토큰") {
-            it("JwtException(Missing role claim) 발생") {
-                val token = buildToken(role = null)
-                shouldThrow<JwtException> {
-                    provider.validateAndExtract(token)
-                }
-            }
-        }
-
-        context("jti 없는 토큰") {
-            it("JwtException(Missing jti claim) 발생") {
-                val token = buildToken(jti = null)
-                shouldThrow<JwtException> {
-                    provider.validateAndExtract(token)
-                }
-            }
-        }
-
-        context("완전히 잘못된 문자열") {
-            it("JwtException 발생") {
-                shouldThrow<JwtException> {
-                    provider.validateAndExtract("not.a.jwt")
-                }
-            }
+        // 서명 키가 다르므로 JJWT가 서명 검증 실패를 먼저 던짐
+        shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
         }
     }
-})
+
+    @Test
+    fun `동일 키로 HS256 서명한 토큰은 알고리즘 불일치로 거부`() {
+        // 동일한 64바이트 키로 HS256 서명 (algorithm confusion attack)
+        val token = buildToken(algorithm = Jwts.SIG.HS256)
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Algorithm mismatch detected"
+    }
+
+    @Test
+    fun `동일 키로 HS384 서명한 토큰은 알고리즘 불일치로 거부`() {
+        // 동일한 64바이트 키로 HS384 서명 (algorithm confusion attack — 중간 단계)
+        val token = buildToken(algorithm = Jwts.SIG.HS384)
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Algorithm mismatch detected"
+    }
+
+    @Test
+    fun `alg none 토큰은 UnsupportedJwtException 발생`() {
+        // 서명 없는 토큰 문자열 (헤더.페이로드. 형태) — 동적 생성으로 하드코딩 제거
+        val header = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"alg":"none"}""".toByteArray())
+        val payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"sub":"user-123","role":"USER"}""".toByteArray())
+        val unsignedToken = "$header.$payload."
+
+        shouldThrow<UnsupportedJwtException> {
+            provider.validateAndExtract(unsignedToken)
+        }
+    }
+
+    @Test
+    fun `sub 클레임 누락 시 JwtException 발생`() {
+        val token = buildToken(subject = null)
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank sub claim"
+    }
+
+    @Test
+    fun `role 클레임 누락 시 JwtException 발생`() {
+        val token = buildToken(role = null)
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank role claim"
+    }
+
+    @Test
+    fun `만료된 토큰은 ExpiredJwtException 발생`() {
+        val token = buildToken(expirationMs = -3_600_000L)
+
+        shouldThrow<ExpiredJwtException> {
+            provider.validateAndExtract(token)
+        }
+    }
+
+    @Test
+    fun `jti 클레임 누락 시 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("user-123")
+            .claim("role", "USER")
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank jti claim"
+    }
+
+    @Test
+    fun `sub 클레임이 빈 문자열이면 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("")
+            .claim("role", "USER")
+            .id(UUID.randomUUID().toString())
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank sub claim"
+    }
+
+    @Test
+    fun `role 클레임이 빈 문자열이면 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("user-123")
+            .claim("role", "")
+            .id(UUID.randomUUID().toString())
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank role claim"
+    }
+
+    @Test
+    fun `jti 클레임이 공백 문자열이면 JwtException 발생`() {
+        val key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(testSecret))
+        val token = Jwts.builder()
+            .subject("user-123")
+            .claim("role", "USER")
+            .id(" ")
+            .issuedAt(Date())
+            .expiration(Date(System.currentTimeMillis() + 3_600_000L))
+            .signWith(key, Jwts.SIG.HS512)
+            .compact()
+
+        val ex = shouldThrow<JwtException> {
+            provider.validateAndExtract(token)
+        }
+        ex.message shouldBe "Missing or blank jti claim"
+    }
+
+    @Test
+    fun `빈 문자열 토큰은 IllegalArgumentException 발생`() {
+        shouldThrow<IllegalArgumentException> {
+            provider.validateAndExtract("")
+        }
+    }
+
+    @Test
+    fun `malformed 토큰은 JwtException 발생`() {
+        shouldThrow<JwtException> {
+            provider.validateAndExtract("notavalidjwt")
+        }
+    }
+}
