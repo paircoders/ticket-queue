@@ -13,6 +13,9 @@ dependencies {
     implementation(project(":common-kafka"))
     implementation(project(":common-web"))
 
+    // Spring Security (SecurityConfig에서 HttpSecurity, EnableWebSecurity 사용)
+    implementation(libs.spring.boot.starter.security)
+
     // Redis with Redisson for distributed locks
     implementation(libs.redisson.spring.boot.starter)
 

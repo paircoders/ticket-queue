@@ -32,6 +32,7 @@ dependencies {
 
     // Redis Reactive (토큰 블랙리스트 조회)
     implementation(libs.spring.boot.starter.data.redis.reactive)
+    implementation("org.apache.commons:commons-pool2")
 
     // Spring Cloud AWS (Secrets Manager - config property 해석용)
     implementation(libs.spring.cloud.aws.starter.secrets.manager)

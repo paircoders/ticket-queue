@@ -387,20 +387,14 @@ class EventService(
     internal fun invalidateEventListCaches() {
         try {
             redisTemplate.execute { conn ->
+                val keys = mutableListOf<ByteArray>()
                 conn.scan(
                     ScanOptions.scanOptions().match("${EVENT_LIST_PREFIX}*").count(100).build()
                 ).use { cursor ->
-                    val batch = mutableListOf<String>()
-                    cursor.forEach { keyBytes ->
-                        batch.add(String(keyBytes))
-                        if (batch.size >= 100) {
-                            redisTemplate.delete(batch)
-                            batch.clear()
-                        }
-                    }
-                    if (batch.isNotEmpty()) {
-                        redisTemplate.delete(batch)
-                    }
+                    cursor.forEach { keyBytes -> keys.add(keyBytes) }
+                }
+                if (keys.isNotEmpty()) {
+                    conn.keyCommands().del(*keys.toTypedArray())
                 }
                 null
             }

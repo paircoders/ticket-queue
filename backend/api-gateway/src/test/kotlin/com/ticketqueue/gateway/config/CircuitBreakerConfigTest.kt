@@ -1,6 +1,7 @@
 package com.ticketqueue.gateway.config
 
 import com.ticketqueue.gateway.BaseIntegrationTest
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry
 import io.kotest.matchers.shouldBe
@@ -104,5 +105,26 @@ class CircuitBreakerConfigTest : BaseIntegrationTest() {
             val config = timeLimiterRegistry.timeLimiter(name).timeLimiterConfig
             config.shouldCancelRunningFuture() shouldBe true
         }
+    }
+
+    // ─── redisBlacklist CircuitBreaker 검증 ────────────────────────────
+
+    @Test
+    fun `redisBlacklist CircuitBreaker 인스턴스가 레지스트리에서 생성 가능해야 한다`() {
+        val cb = circuitBreakerRegistry.circuitBreaker("redisBlacklist")
+        cb shouldNotBe null
+        cb.name shouldBe "redisBlacklist"
+    }
+
+    @Test
+    fun `redisBlacklist CircuitBreaker 설정값이 application-test yml 기준으로 올바르게 적용되어야 한다`() {
+        val config = circuitBreakerRegistry.circuitBreaker("redisBlacklist").circuitBreakerConfig
+        // application-test.yml redisBlacklist: slidingWindowSize: 5
+        config.slidingWindowSize shouldBe 5
+        // application-test.yml redisBlacklist: minimumNumberOfCalls: 3
+        config.minimumNumberOfCalls shouldBe 3
+        // application-test.yml redisBlacklist: permittedNumberOfCallsInHalfOpenState: 2
+        config.permittedNumberOfCallsInHalfOpenState shouldBe 2
+        config.slidingWindowType shouldBe CircuitBreakerConfig.SlidingWindowType.COUNT_BASED
     }
 }
