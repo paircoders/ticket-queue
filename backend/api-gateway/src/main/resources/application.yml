@@ -49,7 +49,7 @@ spring:
           default-filters:
             - name: RequestRateLimiter
               args:
-                redis-rate-limiter: "#{@globalRedisRateLimiter}"
+                rate-limiter: "#{@globalRedisRateLimiter}"
                 key-resolver: "#{@ipKeyResolver}"
           routes:
             # /internal/** 차단 라우트 (최우선 순위)
@@ -120,7 +120,7 @@ spring:
                     fallbackUri: forward:/fallback/payment
                 - name: RequestRateLimiter
                   args:
-                    redis-rate-limiter: "#{@paymentRedisRateLimiter}"
+                    rate-limiter: "#{@paymentRedisRateLimiter}"
                     key-resolver: "#{@userKeyResolver}"
 
 jwt:

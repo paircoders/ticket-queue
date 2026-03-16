@@ -5,6 +5,7 @@ import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
 import reactor.core.publisher.Mono
 
 /**
@@ -24,6 +25,7 @@ class GatewayConfig {
      * - requestedTokens=1: 요청당 1개 토큰 소비
      */
     @Bean
+    @Primary
     fun globalRedisRateLimiter(): RedisRateLimiter = RedisRateLimiter(50, 100, 1)
 
     /**
@@ -42,6 +44,7 @@ class GatewayConfig {
      * 없는 경우 remoteAddress fallback.
      */
     @Bean
+    @Primary
     fun ipKeyResolver(): KeyResolver = KeyResolver { exchange ->
         val xff = exchange.request.headers.getFirst("X-Forwarded-For")
         val ip = xff?.split(",")?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
