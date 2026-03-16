@@ -140,9 +140,11 @@
     "paymentId": "payment-uuid-123",
     "paymentKey": "payment-key-abc",
     "reservationId": "reservation-uuid-321",
-    "amount": 200000,
+    "amount": 200000.00,
     "paidAt": "2026-01-20T10:00:00",
-    "portoneTransactionId": "imp_123456"
+    "portoneTransactionId": "imp_123456",
+    "scheduleId": "schedule-uuid-111",
+    "seatIds": ["seat-uuid-001", "seat-uuid-002"]
   }
 }
 ```
@@ -153,9 +155,11 @@
 | `paymentId` | UUID | 결제 ID (aggregateId와 동일) |
 | `paymentKey` | String | 결제 고유 키 (멱등성 키) |
 | `reservationId` | UUID | 연관 예매 ID |
-| `amount` | Integer | 결제 금액 (원) |
+| `amount` | BigDecimal | 결제 금액 |
 | `paidAt` | Timestamp | 결제 완료 시각 |
 | `portoneTransactionId` | String | PortOne 거래 ID (API: transactionId) |
+| `scheduleId` | UUID | 회차 ID |
+| `seatIds` | UUID[] | 결제된 좌석 ID 목록 |
 
 #### 3.2.2 PaymentFailed
 <details>
@@ -176,11 +180,8 @@
   },
   "payload": {
     "paymentId": "payment-uuid-456",
-    "paymentKey": "payment-key-def",
     "reservationId": "reservation-uuid-654",
-    "amount": 150000,
-    "failureReason": "INSUFFICIENT_BALANCE",
-    "failedAt": "2026-01-20T10:05:00"
+    "reason": "INSUFFICIENT_BALANCE"
   }
 }
 ```
@@ -189,11 +190,8 @@
 | Payload 필드 | 타입 | 설명 |
 |--------------|------|------|
 | `paymentId` | UUID | 결제 ID (aggregateId와 동일) |
-| `paymentKey` | String | 결제 고유 키 (멱등성 키) |
 | `reservationId` | UUID | 연관 예매 ID |
-| `amount` | Integer | 시도된 결제 금액 (원) |
-| `failureReason` | String | 실패 사유 코드 |
-| `failedAt` | Timestamp | 실패 시각 |
+| `reason` | String | 실패 사유 |
 
 #### 3.2.3 ReservationCancelled
 <details>
