@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.event.config.CacheProperties
 import com.ticketqueue.event.dto.SeatDto
+import com.ticketqueue.event.entity.SeatStatus
 import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.repository.EventScheduleRepository
 import com.ticketqueue.event.repository.SeatRepository
@@ -61,7 +62,9 @@ class SeatService(
                 val grades = hashEntries.values
                     .map { objectMapper.convertValue(it, SeatDto.GradeGroup::class.java) }
                     .sortedBy { it.grade.ordinal }
-                return SeatDto.SeatsResponse(scheduleId = scheduleId, grades = grades)
+                val cachedResponse = SeatDto.SeatsResponse(scheduleId = scheduleId, grades = grades)
+                val holdSeatIds = getHoldSeatIds(scheduleId)
+                return overlayHoldStatus(cachedResponse, holdSeatIds)
             }
         } catch (e: DataAccessException) {
             log.warn("Redis cache read failed for key: $cacheKey", e)
@@ -104,7 +107,8 @@ class SeatService(
             }
         }
 
-        return response
+        val holdSeatIds = getHoldSeatIds(scheduleId)
+        return overlayHoldStatus(response, holdSeatIds)
     }
 
     /**
@@ -157,6 +161,41 @@ class SeatService(
         } catch (e: DataAccessException) {
             log.warn("Failed to evict seats cache: key=$cacheKey", e)
         }
+    }
+
+    /**
+     * Redis hold_seats:{scheduleId} SET에서 선점 중인 좌석 ID 목록을 조회한다.
+     *
+     * Redis 장애 시 emptySet()을 반환하여 오버레이 없이 정상 응답을 보장한다.
+     */
+    private fun getHoldSeatIds(scheduleId: UUID): Set<UUID> {
+        val holdKey = "hold_seats:$scheduleId"
+        return try {
+            redisTemplate.opsForSet().members(holdKey)
+                ?.mapNotNull { runCatching { UUID.fromString(it.toString()) }.getOrNull() }
+                ?.toSet() ?: emptySet()
+        } catch (e: DataAccessException) {
+            log.warn("Failed to read hold seats from Redis: key=$holdKey", e)
+            emptySet()
+        }
+    }
+
+    /**
+     * AVAILABLE 좌석 중 hold SET에 포함된 좌석의 상태를 HOLD로 오버레이한다.
+     *
+     * SOLD 좌석은 DB 상태를 우선하여 오버레이하지 않는다.
+     * 캐시 저장은 오버레이 전(AVAILABLE/SOLD 상태)으로 수행된다.
+     */
+    private fun overlayHoldStatus(response: SeatDto.SeatsResponse, holdSeatIds: Set<UUID>): SeatDto.SeatsResponse {
+        if (holdSeatIds.isEmpty()) return response
+        val overlaidGrades = response.grades.map { gradeGroup ->
+            gradeGroup.copy(seats = gradeGroup.seats.map { seat ->
+                if (seat.status == SeatStatus.AVAILABLE && seat.id in holdSeatIds)
+                    seat.copy(status = SeatStatus.HOLD)
+                else seat
+            })
+        }
+        return response.copy(grades = overlaidGrades)
     }
 
     private fun removeFromHoldSeatsRedis(scheduleId: UUID, seatIds: List<UUID>) {

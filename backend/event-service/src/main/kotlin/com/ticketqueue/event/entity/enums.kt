@@ -32,4 +32,4 @@ enum class ScheduleStatus {
         allowedTransitions[this]?.contains(target) ?: false
 }
 enum class SeatGrade { VIP, S, A, B }
-enum class SeatStatus { AVAILABLE, SOLD }
+enum class SeatStatus { AVAILABLE, HOLD, SOLD }
