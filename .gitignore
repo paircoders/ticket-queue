@@ -76,6 +76,7 @@ Thumbs.db
 .claude
 .mcp.json
 .omc
+PLAN.md
 
 # Frontend / Node.js
 node_modules/
