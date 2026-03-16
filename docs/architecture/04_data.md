@@ -1088,15 +1088,16 @@ COMMENT ON TABLE common.processed_events IS 'Kafka Consumer 멱등성 보장. (e
 | `queue:token:{token}` | String | Queue Token (qr_xxx) | 10분 | Queue |
 | `queue:active:{userId}` | String | 사용자 활성 대기열 (중복 방지) | 10분 | Queue |
 | `queue:active-schedules` | Set | 활성 대기열 scheduleId 추적 (정리 배치 기준) | 없음 | Queue |
+| `queue:user-token:{userId}` | String | 사용자 Queue Token 역참조 | 10분 | Queue |
 | `rate:ip:{ip}` | String (Integer) | IP 기반 Rate Limiting (Token Bucket) | 1분 | Gateway |
 | `rate:user:{userId}:{endpoint}` | String (Integer) | 사용자 기반 Rate Limiting | 1분 | Gateway |
 | `seat:hold:{scheduleId}:{seatId}` | String | 좌석 선점 락 (userId) | 5분 | Reservation |
 | `hold_seats:{scheduleId}` | Set | HOLD 좌석 ID 목록 (KEYS 대체) | 10분 | Reservation |
 | `token:blacklist:{jti}` | String | Access Token 블랙리스트 (jti 사용) | 1시간 | User |
 | `cache:event:list` | String (JSON) | 공연 목록 캐시 | 5분 | Event |
-| `cache:event:{eventId}` | Hash | 공연 메타정보 캐시 | 5분 | Event |
-| `cache:schedule:{scheduleId}` | Hash | 회차 상세정보 캐시 | 5분 | Event |
-| `cache:seats:{scheduleId}` | Hash | 좌석 재고 통계 캐시 | 5분 | Event |
+| `cache:event:{eventId}` | String (JSON) | 공연 메타정보 캐시 | 5분 | Event |
+| `cache:schedule:{scheduleId}` | String (JSON) | 회차 상세정보 캐시 | 5분 | Event |
+| `cache:seats:{scheduleId}` | String (JSON) | 좌석 재고 통계 캐시 | 5분 | Event |
 | `cache:layout:{hallId}` | String (JSON) | 좌석 배치도 (불변 데이터) | 24시간 | Event |
 
 #### 1.3.3 대기열 (Queue Service)

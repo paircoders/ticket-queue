@@ -71,13 +71,13 @@ X-Queue-Token: {Queue_Token}
 | GET | `/events/{id}` | 공연 상세 조회 | X |
 | GET | `/events/schedules/{scheduleId}/seats` | 좌석 정보 조회 | X |
 | POST | `/events` | 공연 생성 (Admin) | O |
-| PUT | `/events/{id}` | 공연 수정 (Admin) | O |
+| PATCH | `/events/{id}` | 공연 수정 (Admin) | O |
 | DELETE | `/events/{id}` | 공연 삭제 (Admin) | O |
 | POST | `/venues` | 공연장 생성 (Admin) | O |
-| PUT | `/venues/{id}` | 공연장 수정 (Admin) | O |
+| PATCH | `/venues/{id}` | 공연장 수정 (Admin) | O |
 | DELETE | `/venues/{id}` | 공연장 삭제 (Admin) | O |
 | POST | `/venues/{venueId}/halls` | 홀 생성 (Admin) | O |
-| PUT | `/venues/{venueId}/halls/{hallId}` | 홀 수정 (Admin) | O |
+| PATCH | `/venues/{venueId}/halls/{hallId}` | 홀 수정 (Admin) | O |
 | DELETE | `/venues/{venueId}/halls/{hallId}` | 홀 삭제 (Admin) | O |
 
 ### 3.3 Queue Service

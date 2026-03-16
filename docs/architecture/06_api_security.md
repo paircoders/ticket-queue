@@ -223,7 +223,7 @@ X-Forwarded-For: <client>, <proxy1>, <proxy2>
 **Access Token:**
 - 유효기간: 1시간
 - 포함 정보: userId, email, role (USER/ADMIN)
-- 서명 알고리즘: HS256 (HMAC-SHA256)
+- 서명 알고리즘: HS512 (HMAC-SHA512)
 
 **Refresh Token:**
 - 유효기간: 7일
