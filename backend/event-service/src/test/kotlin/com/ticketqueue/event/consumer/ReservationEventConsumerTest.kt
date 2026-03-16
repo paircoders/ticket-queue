@@ -1,5 +1,6 @@
 package com.ticketqueue.event.consumer
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.event.ReservationCancelledEvent
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.kafka.support.Acknowledgment
 import java.util.UUID
 
@@ -140,6 +142,33 @@ class ReservationEventConsumerTest {
 
             verify { ack.acknowledge() }
             verify(exactly = 0) { idempotentConsumerTemplate.process(any(), any(), any(), any()) }
+        }
+    }
+
+    @Nested
+    @DisplayName("Malformed JSON (Poison Pill)")
+    inner class MalformedJson {
+
+        @Test
+        @DisplayName("readTree 실패 시 JsonProcessingException을 던져 DLQ로 이동한다")
+        fun throwsJsonProcessingExceptionOnMalformedJson() {
+            val malformedJson = "{broken json"
+
+            assertThrows<JsonProcessingException> {
+                consumer.consume(record(malformedJson), ack)
+            }
+            verify(exactly = 0) { ack.acknowledge() }
+        }
+
+        @Test
+        @DisplayName("올바른 JSON이지만 이벤트 역직렬화 실패 시 JsonProcessingException을 던진다")
+        fun throwsJsonProcessingExceptionOnDeserializationFailure() {
+            val invalidJson = """{"eventType":"ReservationConfirmed","aggregateId":"not-a-uuid"}"""
+
+            assertThrows<JsonProcessingException> {
+                consumer.consume(record(invalidJson), ack)
+            }
+            verify(exactly = 0) { ack.acknowledge() }
         }
     }
 }
