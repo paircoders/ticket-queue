@@ -40,7 +40,7 @@ class BatchApproveScheduler(
                 val scheduleId = try {
                     UUID.fromString(rawId)
                 } catch (e: IllegalArgumentException) {
-                    logger.warn { "Invalid scheduleId format in active-schedules, skipping: $rawId" }
+                    logger.warn(e) { "Invalid scheduleId format in active-schedules, skipping: $rawId" }
                     continue
                 }
 

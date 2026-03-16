@@ -15,8 +15,13 @@ import reactor.core.publisher.Mono
  * REQ-GW-018: Payment 경로 전용 강화 Rate Limiting (replenishRate=1, burstCapacity=3, 사용자 기반)
  */
 @Configuration
-@EnableConfigurationProperties(JwtProperties::class)
-class GatewayConfig {
+@EnableConfigurationProperties(JwtProperties::class, GatewayRateLimitProperties::class)
+class GatewayConfig(
+    private val rateLimitProperties: GatewayRateLimitProperties,
+) {
+
+    private fun isTrustedProxy(remoteIp: String): Boolean =
+        rateLimitProperties.trustedProxyIps.contains(remoteIp)
 
     /**
      * 전역 IP 기반 Rate Limiter (REQ-GW-005)
@@ -40,16 +45,20 @@ class GatewayConfig {
     /**
      * IP 기반 KeyResolver (전역 Rate Limiting용)
      *
-     * X-Forwarded-For 헤더가 있는 경우 첫 번째 IP 사용 (trusted proxy 환경),
-     * 없는 경우 remoteAddress fallback.
+     * remoteAddress가 trustedProxyIps에 포함된 경우에만 X-Forwarded-For 헤더의
+     * 첫 번째 IP를 클라이언트 IP로 사용한다. 신뢰할 수 없는 출처의 XFF 헤더를
+     * 그대로 수용하면 임의 IP로 Rate Limiting을 우회할 수 있다.
      */
     @Bean
     @Primary
     fun ipKeyResolver(): KeyResolver = KeyResolver { exchange ->
-        val xff = exchange.request.headers.getFirst("X-Forwarded-For")
-        val ip = xff?.split(",")?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
-            ?: exchange.request.remoteAddress?.address?.hostAddress
-            ?: "unknown"
+        val remoteIp = exchange.request.remoteAddress?.address?.hostAddress ?: "unknown"
+        val ip = if (isTrustedProxy(remoteIp)) {
+            val xff = exchange.request.headers.getFirst("X-Forwarded-For")
+            xff?.split(",")?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() } ?: remoteIp
+        } else {
+            remoteIp
+        }
         Mono.just(ip)
     }
 

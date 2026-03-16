@@ -60,7 +60,8 @@ class QueueService(
      * - 4: 이미 배치 승인 완료 → ALREADY_APPROVED
      */
     fun enterQueue(userId: UUID, scheduleId: UUID): QueueDto.EnterResponse {
-        return enterTimer.recordCallable {
+        val sample = Timer.start(meterRegistry)
+        try {
             scheduleValidator.validateSchedule(scheduleId)
             val keys = listOf(
                 QueueRedisKeys.queue(scheduleId),
@@ -83,7 +84,7 @@ class QueueService(
             val code = (result.getOrNull(0) as? Long)?.toInt()
                 ?: throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR, "대기열 처리 결과를 읽을 수 없습니다.")
 
-            when (code) {
+            return when (code) {
                 0, 1 -> {
                     val rank = safeRank(result)
                     val logMsg = if (code == 0) "Queue entered" else "Queue re-entered (idempotent)"
@@ -110,7 +111,9 @@ class QueueService(
                 }
                 else -> throw QueueException(ErrorCode.INTERNAL_SERVER_ERROR)
             }
-        }!!
+        } finally {
+            sample.stop(enterTimer)
+        }
     }
 
     /**
@@ -297,12 +300,11 @@ class QueueService(
                 logger.warn(e) { "Failed to get ZCARD for scheduleId=$rawId" }
                 0L
             }
-            val batchCount = (waitingCount + batchSize - 1) / batchSize.coerceAtLeast(1)
-            val estimatedWaitMinutes = (batchCount * intervalMs + 59_999) / 60_000
             QueueDto.ScheduleStat(
                 scheduleId = rawId,
                 waitingCount = waitingCount,
-                estimatedWaitMinutes = estimatedWaitMinutes
+                activeCount = 0L,
+                tps = batchSize * 1000L / intervalMs
             )
         }
 

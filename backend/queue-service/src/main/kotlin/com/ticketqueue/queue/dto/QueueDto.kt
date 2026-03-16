@@ -37,7 +37,8 @@ class QueueDto {
     data class ScheduleStat(
         val scheduleId: String,
         val waitingCount: Long,
-        val estimatedWaitMinutes: Long
+        val activeCount: Long,
+        val tps: Long
     )
 
     data class AdminStatsResponse(
