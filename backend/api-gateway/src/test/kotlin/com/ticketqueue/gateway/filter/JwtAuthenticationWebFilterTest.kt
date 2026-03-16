@@ -109,6 +109,21 @@ class JwtAuthenticationWebFilterTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `만료된 토큰으로 보호 엔드포인트 접근 시 401 EXPIRED_TOKEN 반환`() {
+        val expiredToken = createValidToken(jwtSecret, userId = "user-1", role = "USER", expirationMs = -3_600_000L)
+
+        webTestClient.get()
+            .uri("/reservations/seats/1")
+            .header("Authorization", "Bearer $expiredToken")
+            .exchange()
+            .expectStatus().isUnauthorized
+            .expectBody(String::class.java)
+            .value { body ->
+                body shouldContain "\"code\":\"EXPIRED_TOKEN\""
+            }
+    }
+
+    @Test
     fun `유효한 토큰으로 보호 엔드포인트 접근 시 downstream으로 전달 (5xx는 downstream 부재 때문)`() {
         every { tokenBlacklistService.isBlacklisted(any()) } returns Mono.just(false)
 

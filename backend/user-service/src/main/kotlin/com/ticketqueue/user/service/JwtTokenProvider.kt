@@ -33,9 +33,9 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
         } catch (e: IllegalArgumentException) {
             throw IllegalStateException("JWT secret은 유효한 Base64 형식이어야 합니다.", e)
         }
-        if (decoded.size < 32) {
+        if (decoded.size < 64) {
             throw IllegalStateException(
-                "JWT secret은 최소 256비트(32바이트) 이상이어야 합니다. 현재: ${decoded.size}바이트"
+                "JWT secret은 최소 512비트(64바이트) 이상이어야 합니다 (HS512 서명 사용). 현재: ${decoded.size}바이트"
             )
         }
         Keys.hmacShaKeyFor(decoded)
@@ -57,7 +57,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .claim("email", email)
             .issuedAt(now)
             .expiration(expiry)
-            .signWith(secretKey)
+            .signWith(secretKey, Jwts.SIG.HS512)
             .compact()
 
         return Pair(token, jti)
@@ -78,7 +78,7 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
             .claim("type", "refresh")
             .issuedAt(now)
             .expiration(expiry)
-            .signWith(secretKey)
+            .signWith(secretKey, Jwts.SIG.HS512)
             .compact()
 
         return Pair(token, jti)
@@ -91,11 +91,18 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
      */
     fun parseAccessTokenJti(token: String): String {
         return try {
-            val claims = Jwts.parser().verifyWith(secretKey).build()
-                .parseSignedClaims(token).payload
+            val jws = Jwts.parser().verifyWith(secretKey).build()
+                .parseSignedClaims(token)
+            if (jws.header.algorithm != "HS512") {
+                throw JwtException("Algorithm mismatch detected")
+            }
+            val claims = jws.payload
             if (claims["type"] == "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
             claims.id ?: throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: ExpiredJwtException) {
+            if (e.header?.algorithm != "HS512") {
+                throw JwtException("Algorithm mismatch detected")
+            }
             if (e.claims["type"] == "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
             e.claims.id ?: throw UserException(ErrorCode.INVALID_TOKEN)
         } catch (e: UserException) {
@@ -116,15 +123,21 @@ class JwtTokenProvider(private val jwtProperties: JwtProperties) {
      */
     fun validateAndParseRefreshToken(token: String) {
         try {
-            val claims = Jwts.parser()
+            val jws = Jwts.parser()
                 .verifyWith(secretKey)
                 .build()
                 .parseSignedClaims(token)
-                .payload
+            if (jws.header.algorithm != "HS512") {
+                throw JwtException("Algorithm mismatch detected")
+            }
+            val claims = jws.payload
             if (claims["type"] != "refresh") throw UserException(ErrorCode.INVALID_TOKEN)
             if (claims.subject.isNullOrBlank()) throw UserException(ErrorCode.INVALID_TOKEN)
             UUID.fromString(claims.subject) // subject가 유효한 UUID인지 검증
         } catch (e: ExpiredJwtException) {
+            if (e.header?.algorithm != "HS512") {
+                throw JwtException("Algorithm mismatch detected")
+            }
             logger.error { "JWT token expired" }
             throw UserException(ErrorCode.EXPIRED_TOKEN)
         } catch (e: UserException) {
