@@ -1,5 +1,6 @@
 package com.ticketqueue.event.consumer
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.event.ReservationConfirmedEvent
@@ -37,17 +38,32 @@ class ReservationEventConsumer(
     )
     fun consume(record: ConsumerRecord<String, String>, ack: Acknowledgment) {
         val rawJson = record.value()
-        val eventType = objectMapper.readTree(rawJson).get("eventType")?.asText()
+        val eventType = try {
+            objectMapper.readTree(rawJson).get("eventType")?.asText()
+        } catch (e: JsonProcessingException) {
+            log.error("Malformed JSON in reservation.events, sending to DLQ: {}", rawJson, e)
+            throw e
+        }
 
         when (eventType) {
             "ReservationConfirmed" -> {
-                val event = objectMapper.readValue(rawJson, ReservationConfirmedEvent::class.java)
+                val event = try {
+                    objectMapper.readValue(rawJson, ReservationConfirmedEvent::class.java)
+                } catch (e: JsonProcessingException) {
+                    log.error("Malformed JSON in reservation.events, sending to DLQ: {}", rawJson, e)
+                    throw e
+                }
                 idempotentConsumerTemplate.process(event, CONSUMER_SERVICE, ack) { e ->
                     log.info("ReservationConfirmed: reservationId=${e.aggregateId}, scheduleId=${e.scheduleId} (SOLD 처리는 PaymentSuccess에서 수행)")
                 }
             }
             "ReservationCancelled" -> {
-                val event = objectMapper.readValue(rawJson, ReservationCancelledEvent::class.java)
+                val event = try {
+                    objectMapper.readValue(rawJson, ReservationCancelledEvent::class.java)
+                } catch (e: JsonProcessingException) {
+                    log.error("Malformed JSON in reservation.events, sending to DLQ: {}", rawJson, e)
+                    throw e
+                }
                 idempotentConsumerTemplate.process(event, CONSUMER_SERVICE, ack) { e ->
                     seatService.releaseHoldSeats(e.scheduleId, e.seatIds)
                 }
