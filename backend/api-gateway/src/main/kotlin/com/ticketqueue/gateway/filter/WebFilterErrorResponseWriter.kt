@@ -6,6 +6,7 @@ import org.springframework.http.MediaType
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 /**
@@ -32,7 +33,7 @@ internal object WebFilterErrorResponseWriter {
         val body = mapOf(
             "code" to code,
             "message" to message,
-            "timestamp" to LocalDateTime.now().format(TIMESTAMP_FORMATTER),
+            "timestamp" to LocalDateTime.now(ZoneOffset.UTC).format(TIMESTAMP_FORMATTER),
             "traceId" to traceId,
         )
 
