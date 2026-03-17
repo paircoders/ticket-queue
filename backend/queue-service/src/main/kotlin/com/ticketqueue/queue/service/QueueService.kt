@@ -11,6 +11,7 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.springframework.data.redis.connection.StringRedisConnection
+import org.springframework.data.redis.core.ScanOptions
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.script.DefaultRedisScript
 import org.springframework.stereotype.Service
@@ -275,13 +276,9 @@ class QueueService(
         val activeScheduleIds = getActiveScheduleIds()
 
         val batchSize = queueProperties.batch.size
-        val intervalMs = queueProperties.batch.interval.coerceAtLeast(1)
-        val intervalSeconds = intervalMs / 1000L
-        val throughputPerMinute = if (intervalSeconds > 0) {
-            batchSize.toLong() * 60L / intervalSeconds
-        } else {
-            batchSize.toLong() * 60L
-        }
+        val intervalMs = queueProperties.batch.interval.coerceAtLeast(1).toLong()
+        val intervalSeconds = (intervalMs + 999L) / 1000L
+        val throughputPerMinute = batchSize.toLong() * 60_000L / intervalMs
 
         if (activeScheduleIds.isEmpty()) {
             return QueueDto.AdminStatsResponse(
@@ -300,10 +297,16 @@ class QueueService(
                 logger.warn(e) { "Failed to get ZCARD for scheduleId=$rawId" }
                 0L
             }
+            val activeCount = try {
+                countActiveUsers(rawId)
+            } catch (e: Exception) {
+                logger.warn(e) { "Failed to count active users for scheduleId=$rawId" }
+                0L
+            }
             QueueDto.ScheduleStat(
                 scheduleId = rawId,
                 waitingCount = waitingCount,
-                activeCount = 0L,
+                activeCount = activeCount,
                 tps = batchSize * 1000L / intervalMs
             )
         }
@@ -332,6 +335,28 @@ class QueueService(
             logger.error(e) { "Failed to get active schedule IDs" }
             emptySet()
         }
+    }
+
+    /**
+     * 회차별 활성(승인된) 사용자 수를 SCAN으로 카운트한다.
+     *
+     * `queue:user-token:*:{scheduleId}` 패턴으로 SCAN하여 유효한 Queue Token 수를 반환한다.
+     * 관리자 전용 API에서만 호출되므로 SCAN 사용이 허용된다 (KEYS 명령은 금지).
+     * Redis 장애 시 호출부에서 0L로 fallback 처리한다.
+     */
+    private fun countActiveUsers(scheduleId: String): Long {
+        val pattern = "queue:user-token:*:$scheduleId"
+        val scanOptions = ScanOptions.scanOptions().match(pattern).count(100).build()
+        return stringRedisTemplate.execute { conn ->
+            var count = 0L
+            conn.scan(scanOptions).use { cursor ->
+                while (cursor.hasNext()) {
+                    cursor.next()
+                    count++
+                }
+            }
+            count
+        } ?: 0L
     }
 
     /**

@@ -35,7 +35,7 @@ class GatewayConfig(
 
     /**
      * Payment 경로 전용 강화 Rate Limiter (REQ-GW-018)
-     * - replenishRate=1: 초당 1개 토큰 보충 (20/분 ≒ 1개/3초를 엄격하게 적용)
+     * - replenishRate=1: 초당 1개 토큰 보충 (≈60/min; 명세 20/min 이하, 정수 제약으로 최소값 적용)
      * - burstCapacity=3: 최대 3개 버스트 허용
      * - requestedTokens=1: 요청당 1개 토큰 소비
      */
