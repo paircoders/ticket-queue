@@ -2,6 +2,8 @@ package com.ticketqueue.queue.scheduler
 
 import com.ticketqueue.queue.service.QueueService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -16,28 +18,37 @@ import java.util.UUID
  */
 @Component
 class BatchApproveScheduler(
-    private val queueService: QueueService
+    private val queueService: QueueService,
+    meterRegistry: MeterRegistry
 ) {
 
     private val logger = KotlinLogging.logger {}
 
+    private val batchProcessingTimer: Timer = Timer.builder("queue.batch.processing.time")
+        .description("배치 승인 처리 시간")
+        .tags("service", "queue")
+        .publishPercentileHistogram(true)
+        .register(meterRegistry)
+
     @Scheduled(fixedDelayString = "\${queue.batch.interval}")
     fun executeBatchApprove() {
-        val scheduleIds = queueService.getActiveScheduleIds()
-        if (scheduleIds.isEmpty()) return
+        batchProcessingTimer.recordCallable {
+            val scheduleIds = queueService.getActiveScheduleIds()
+            if (scheduleIds.isEmpty()) return@recordCallable
 
-        for (rawId in scheduleIds) {
-            val scheduleId = try {
-                UUID.fromString(rawId)
-            } catch (e: IllegalArgumentException) {
-                logger.warn(e) { "Invalid scheduleId format in active-schedules, skipping: $rawId" }
-                continue
-            }
+            for (rawId in scheduleIds) {
+                val scheduleId = try {
+                    UUID.fromString(rawId)
+                } catch (e: IllegalArgumentException) {
+                    logger.warn(e) { "Invalid scheduleId format in active-schedules, skipping: $rawId" }
+                    continue
+                }
 
-            try {
-                queueService.batchApprove(scheduleId)
-            } catch (e: Exception) {
-                logger.error(e) { "Batch approve failed for scheduleId=$scheduleId, continuing with remaining schedules" }
+                try {
+                    queueService.batchApprove(scheduleId)
+                } catch (e: Exception) {
+                    logger.error(e) { "Batch approve failed for scheduleId=$scheduleId, continuing with remaining schedules" }
+                }
             }
         }
     }

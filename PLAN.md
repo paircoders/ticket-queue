@@ -1,86 +1,79 @@
-# Issue #199: [Test] 보안/정확성 핵심 클래스 테스트 커버리지 강화
+# Issue #202: [Backend] 미구현 요구사항 트래킹 (REQ-GW, REQ-EVT, REQ-QUEUE)
 
 ## Overview
-
-리뷰에서 식별된 P0/P1 클래스들의 테스트 부재 및 품질 저하 문제를 해결합니다. 보안 취약점 수정(헤더 인젝션 #192, timing attack #195)과 버그 수정(DLQ replay #196, Queue Token prefix #193)이 실제로 방어되는지 검증하는 테스트를 우선 추가합니다. 추가로 테스트 인프라(`@MockitoBean` → `@MockkBean`, `Thread.sleep` → `Awaitility`)를 프로젝트 표준에 맞게 정비합니다.
+BACKEND-REVIEW.md 리뷰에서 식별된 미구현 선택 요구사항(Optional/Enhancement)을 구현합니다.
+API Gateway Rate Limiting, Event Service DLQ 처리, Queue Service 관리자 통계 및 성능 모니터링이 주요 작업입니다.
+Low 우선순위 항목(REQ-GW-013, REQ-EVT-024)은 백로그로 이동합니다.
 
 ## Branch
-`chore/199-test-security-core-classes`
+`feat/202-backend-unimplemented-reqs`
 
 ## Checklist
 
-### P0 — 테스트 없음 (즉시 추가)
-- [x] `common-jpa/src/test` 디렉토리 및 기본 테스트 구조 생성
-- [x] `IdempotentConsumerTemplate` 단위 테스트 (DLQ replay 차단, 멱등성 보장) — 4개 케이스
-- [x] `ExceptionClassifier` 단위 테스트 (retryable/non-retryable 분류 정확성) — 13개 케이스
-- [x] `GatewayAuthFilter` 단위/통합 테스트 (X-User-Id/X-User-Role 헤더 인젝션 방어 #192) — 7개 케이스
-- [x] `InternalApiKeyValidator` 단위 테스트 (timing attack 방어, 기본값 키 거부 검증 #195) — 기존 존재 확인
-- [x] `OutboxEventRepositoryCustomImpl` 슬라이스 테스트 (TestContainers, Outbox 폴링 쿼리 정확성) — 3개 케이스
+### API Gateway
+- [x] REQ-GW-005: `RequestRateLimiter` 필터 + Redis Token Bucket 기반 전역 Rate Limiting 구현
+- [x] REQ-GW-018: `/payment/**` 경로 전용 Rate Limiting 강화 설정
+- [ ] REQ-GW-013, REQ-EVT-024: 백로그 이슈로 분리 (gzip 압축, 캐시 TTL 동적 조정)
 
-### P1 — 테스트 보강
-- [x] `queue-enter.lua` 테스트 — 동시 진입, 정원 초과, 중복 진입 엣지 케이스 — 5개 케이스
-- [x] `batch-approve.lua` 테스트 — `qr_` prefix 생성 검증 (#193 연계) — 5개 케이스
-- [ ] `POST /queue/enter` 컨트롤러 테스트 — 유효성 검사 실패, 인증 실패 케이스
-- [x] `GlobalExceptionHandler` 테스트 — 각 예외 타입별 HTTP 응답 코드 검증 — 10개 케이스
-- [x] `JwtTokenProvider` 테스트 — 만료 토큰, 잘못된 알고리즘, 블랙리스트 토큰 — 6개 케이스
+### Event Service
+- [x] REQ-EVT-020: DefaultErrorHandler 방식 유지 (MANUAL_IMMEDIATE ack 모드 호환 이슈로 @RetryableTopic 미사용) + 전략 문서화
+- [x] REQ-EVT-023: Redis ↔ DB 좌석 재고 정합성 검증 스케줄러 구현 (`SeatConsistencyScheduler`)
 
-### 테스트 인프라 정비
-- [x] `Thread.sleep` 사용처 전체 검색 — 사용처 없음 확인
-- [x] `@MockitoBean` 사용처 전체 검색 — 사용처 없음 확인
+### Queue Service
+- [x] REQ-QUEUE-007: `GET /queue/admin/stats` 관리자 통계 API 구현 (`QueueAdminController`)
+- [x] REQ-QUEUE-009: `queue.enter.time`, `queue.batch.processing.time` Micrometer Timer 설치 (P95 히스토그램 포함)
 
 ## Implementation Plan
 
 ### Files likely to change
 
-```
-backend/
-├── common-jpa/
-│   └── src/test/kotlin/com/ticketqueue/common/
-│       ├── outbox/OutboxEventRepositoryCustomImplTest.kt  (신규)
-│       └── idempotent/IdempotentConsumerTemplateTest.kt   (신규)
-├── common/
-│   └── src/test/kotlin/com/ticketqueue/common/
-│       └── exception/ExceptionClassifierTest.kt           (신규)
-├── api-gateway/
-│   └── src/test/kotlin/com/ticketqueue/gateway/
-│       ├── filter/GatewayAuthFilterTest.kt                (신규)
-│       └── security/InternalApiKeyValidatorTest.kt        (신규)
-├── queue-service/
-│   └── src/test/
-│       ├── kotlin/com/ticketqueue/queue/
-│       │   └── controller/QueueControllerTest.kt          (보강)
-│       └── resources/lua/
-│           ├── QueueEnterLuaTest.kt                       (신규)
-│           └── BatchApproveLuaTest.kt                     (신규)
-└── **/  (Thread.sleep → Awaitility, @MockitoBean → @MockkBean 교체)
-```
+**API Gateway**
+- `api-gateway/src/main/resources/application.yml` — Rate Limiting 필터 설정
+- `api-gateway/src/main/kotlin/*/config/GatewayConfig.kt` — RedisRateLimiter Bean 설정
+
+**Event Service**
+- `event-service/src/main/resources/application.yml` — Kafka retry/DLQ 설정
+- `event-service/src/main/kotlin/*/kafka/` — ErrorHandler 또는 @RetryableTopic 설정
+
+**Queue Service**
+- `queue-service/src/main/kotlin/*/api/QueueAdminController.kt` — 신규 Admin Stats API
+- `queue-service/src/main/kotlin/*/service/QueueService.kt` — 통계 집계 로직
+- `queue-service/src/main/kotlin/*/config/MetricsConfig.kt` — Micrometer Timer 등록
 
 ### Approach
 
-1. **`common-jpa` 테스트 구조 생성**: `build.gradle.kts`에 testImplementation 의존성 추가 (JUnit 5, MockK, TestContainers PostgreSQL)
+#### REQ-GW-005 / REQ-GW-018: Rate Limiting
+Spring Cloud Gateway `RequestRateLimiterGatewayFilterFactory` + `RedisRateLimiter` 사용.
+- 전역: IP 기반 `KeyResolver` → `exchange.request.remoteAddress`
+- Payment 경로: 별도 `RouteLocator`에서 더 낮은 replenishRate/burstCapacity 지정
+- Valkey(Redis 호환) 기존 인프라 재사용
 
-2. **보안 관련 테스트 우선** (GatewayAuthFilter, InternalApiKeyValidator):
-   - `GatewayAuthFilter`: X-User-Id/X-User-Role 헤더가 외부 요청에서 제거되는지, JWT 검증 후 올바르게 주입되는지 검증
-   - `InternalApiKeyValidator`: `MessageDigest.isEqual()` 기반 constant-time 비교 검증, 빈 키/기본값 키 거부
+#### REQ-EVT-020: DLQ 처리
+Common 모듈의 `IdempotentConsumerTemplate` 패턴과 일관성 유지.
+`@RetryableTopic(attempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2.0))` 방식 검토.
+`DataIntegrityViolationException` 등 non-retryable 예외는 즉시 DLT 이동 (기존 Common 모듈 정책 준수).
 
-3. **멱등성/Outbox 테스트**:
-   - `IdempotentConsumerTemplate`: `DataIntegrityViolationException` 발생 시 DLQ replay 차단 확인, 정상 메시지 처리 확인
-   - `OutboxEventRepositoryCustomImpl`: TestContainers로 실제 PostgreSQL 연동, 미전송 이벤트 조회 쿼리 검증
+#### REQ-EVT-023: 재고 정합성 검증
+Redis Sorted Set의 남은 좌석 수와 DB `seat.is_available` 필드 비교.
+스케줄러(`@Scheduled`) + 불일치 감지 시 Alert 로깅 또는 Redis 보정.
 
-4. **Lua 스크립트 테스트**: Embedded Redis (it.ozimov:embedded-redis 또는 TestContainers Valkey)로 `queue-enter.lua`, `batch-approve.lua` 실행, 엣지 케이스 검증
+#### REQ-QUEUE-007: Admin Stats API
+`/internal/queue/admin/stats` (내부 API, `X-Service-Api-Key` 필수) 또는
+`/queue/admin/stats` (Admin Role JWT 필요) — 문서 확인 후 결정.
+Redis KEYS 금지 원칙 준수 → 별도 카운터 키(`queue:stats:*`) 활용.
 
-5. **인프라 정비**: `grep -r "Thread.sleep"`, `grep -r "@MockitoBean"` 결과 기반으로 일괄 교체
-
-### 테스트 기술 스택
-- 단위 테스트: JUnit 5 + MockK + Kotest assertions
-- 슬라이스 테스트: `@DataJpaTest` + TestContainers (PostgreSQL)
-- Lua 테스트: TestContainers Valkey 또는 `EmbeddedRedisServer`
-- 타이밍 테스트: Awaitility (Thread.sleep 대체)
+#### REQ-QUEUE-009: Micrometer Timer
+`MeterRegistry` 주입 후 대기열 진입/승인 처리 시간 측정.
+`management.endpoints.web.exposure.include=prometheus` 설정 확인.
+`docs/architecture/07_operations.md` P95 목표값 기준으로 SLO 정의.
 
 ## References
-- GitHub Issue: #199
-- 연관 PR: #192 (GatewayAuthFilter), #195 (InternalApiKeyValidator), #196 (IdempotentConsumerTemplate), #193 (Queue Token prefix)
-- 문서: `docs/architecture/07_operations.md` — 테스트 전략
-- Branch: `chore/199-test-security-core-classes`
-- Worktree path: `/Users/taekwon/work/project/ticket-queue-199`
+- GitHub Issue: #202
+- Branch: `feat/202-backend-unimplemented-reqs`
+- Worktree path: `/Users/taekwon/work/project/ticket-queue-202`
 - Created: 2026-03-16
+- 관련 문서:
+  - `docs/REQUIREMENTS.md` — REQ-GW-005, REQ-GW-013, REQ-GW-018, REQ-EVT-020, REQ-EVT-023, REQ-EVT-024, REQ-QUEUE-007, REQ-QUEUE-009
+  - `docs/architecture/07_operations.md` — 성능 목표 및 모니터링
+  - `docs/architecture/05_kafka.md` — DLQ 전략
+  - `docs/architecture/06_api_security.md` — 내부 API 보안

@@ -1,7 +1,9 @@
 package com.ticketqueue.event.repository
 
 import com.ticketqueue.event.entity.EventSchedule
+import com.ticketqueue.event.entity.ScheduleStatus
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
 import java.time.LocalDateTime
 import java.util.UUID
@@ -21,4 +23,13 @@ interface EventScheduleRepository : JpaRepository<EventSchedule, UUID>, EventSch
      * createSchedule의 중복 순번 방지를 위해 사용한다.
      */
     fun existsByEventIdAndPlaySequence(eventId: UUID, playSequence: Int): Boolean
+
+    /**
+     * 좌석 선점이 활성화된 회차 ID 목록을 조회한다 (SeatConsistencyScheduler 전용)
+     *
+     * UPCOMING/ONGOING 상태 회차만 대상으로 한다.
+     * Redis hold_seats SET이 존재할 수 있는 회차만 검증하면 충분하다.
+     */
+    @Query("SELECT s.id FROM EventSchedule s WHERE s.status IN :statuses")
+    fun findIdsByStatusIn(statuses: Collection<ScheduleStatus>): List<UUID>
 }
