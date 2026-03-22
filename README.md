@@ -18,7 +18,7 @@ MSA 기반 대규모 트래픽 콘서트 티켓팅 시스템
 | Name | Role | 개인 문서 |
 |------|------|--------|
 | <img src="https://avatars.githubusercontent.com/tk-choi" width="80"/> | Backend / API Gateway, Queue Service, Event Service | [최태권.md](docs/contributions/최태권.md) |
-| <img src="https://avatars.githubusercontent.com/HyunJung421" width="80"/> | Backend / User Service, Reservation Service, Payment Service | [임현정.md](docs/contributions/임현정.md) |
+| <img src="https://avatars.githubusercontent.com/hyunjung-lim" width="80"/> | Backend / User Service, Reservation Service, Payment Service | [임현정.md](docs/contributions/임현정.md) |
 
 
 ---
