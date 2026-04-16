@@ -51,4 +51,18 @@ class SeatDto {
         val scheduleId: UUID,
         val soldSeatIds: List<UUID>
     )
+
+    /** 내부 API 응답 - Reservation Service가 좌석 선점 시 스냅샷 저장용으로 사용 */
+    data class SeatDetailsResponse(
+        val scheduleId: UUID,
+        val eventId: UUID,
+        val seats: List<SeatDetail>
+    ) {
+        data class SeatDetail(
+            val seatId: UUID,
+            val seatNumber: String,
+            val grade: String,
+            val price: BigDecimal
+        )
+    }
 }
