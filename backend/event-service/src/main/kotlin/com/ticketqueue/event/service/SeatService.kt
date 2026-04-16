@@ -142,17 +142,23 @@ class SeatService(
      * 좌석 선점 시 스냅샷 저장을 위한 상세 정보 조회 (내부 API - Reservation Service 전용)
      *
      * seatIds 개수와 조회된 좌석 수가 불일치하면 RESOURCE_NOT_FOUND 예외를 던진다.
-     * eventId는 첫 번째 좌석의 eventSchedule.event.id 에서 추출한다 (동일 scheduleId이므로 모두 동일).
+     * AVAILABLE 상태가 아닌 좌석(HOLD/SOLD)이 포함되면 SEAT_NOT_AVAILABLE 예외를 던진다.
+     * eventId는 EventSchedule 로드 시 Hibernate 프록시의 FK 값을 직접 참조하여 추가 쿼리 없이 추출한다.
      */
     fun getSeatDetails(scheduleId: UUID, seatIds: List<UUID>): SeatDto.SeatDetailsResponse {
-        if (!eventScheduleRepository.existsById(scheduleId)) {
-            throw EventException(ErrorCode.SCHEDULE_NOT_FOUND)
-        }
+        val schedule = eventScheduleRepository.findById(scheduleId)
+            .orElseThrow { EventException(ErrorCode.SCHEDULE_NOT_FOUND) }
+
         val seats = seatRepository.findByEventScheduleIdAndIdIn(scheduleId, seatIds)
         if (seats.size != seatIds.size) {
             throw EventException(ErrorCode.RESOURCE_NOT_FOUND)
         }
-        val eventId = seats.first().eventSchedule.event.id!!
+
+        seats.find { it.status != SeatStatus.AVAILABLE }?.let {
+            throw EventException(ErrorCode.SEAT_NOT_AVAILABLE)
+        }
+
+        val eventId = schedule.event.id ?: throw EventException(ErrorCode.INTERNAL_SERVER_ERROR)
         return SeatDto.SeatDetailsResponse(
             scheduleId = scheduleId,
             eventId = eventId,

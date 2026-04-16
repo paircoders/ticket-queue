@@ -1,6 +1,7 @@
 package com.ticketqueue.reservation.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.redisson.api.RKeys
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
 import org.springframework.data.redis.core.SetOperations
@@ -28,6 +28,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -70,7 +71,7 @@ class ReservationServiceTest {
         eventServiceClient = mockk()
         reservationRepository = mockk()
         reservationSeatRepository = mockk()
-        objectMapper = ObjectMapper()
+        objectMapper = jacksonObjectMapper()
         transactionTemplate = mockk()
 
         every { stringRedisTemplate.opsForValue() } returns valueOps
@@ -132,7 +133,7 @@ class ReservationServiceTest {
     @DisplayName("분산 락 및 좌석 상태 검증")
     inner class LockAndSeatValidation {
         @Test
-        @DisplayName("사용자 락 획득 실패 시 RATE_LIMIT_EXCEEDED 예외를 던진다")
+        @DisplayName("사용자 락 획득 실패 시 RESERVATION_IN_PROGRESS 예외를 던진다")
         fun throwsWhenUserLockFails() {
             setUpTokenValid()
             setUpLockObjects()
@@ -141,7 +142,7 @@ class ReservationServiceTest {
             val ex = assertThrows<ReservationException> {
                 reservationService.holdSeats(userId, holdRequest(), validToken)
             }
-            ex.errorCode shouldBe ErrorCode.RATE_LIMIT_EXCEEDED
+            ex.errorCode shouldBe ErrorCode.RESERVATION_IN_PROGRESS
         }
 
         @Test
@@ -226,8 +227,6 @@ class ReservationServiceTest {
     }
 
     private fun setUpSoldAndDetails() {
-        every { eventServiceClient.getSoldSeats(scheduleId) } returns
-            EventServiceClient.SoldSeatsResponse(scheduleId, emptyList())
         every { eventServiceClient.getSeatDetails(scheduleId, any()) } returns
             EventServiceClient.SeatDetailsResponse(
                 scheduleId = scheduleId,
@@ -252,14 +251,17 @@ class ReservationServiceTest {
             totalAmount = BigDecimal("300000"),
             holdExpiresAt = LocalDateTime.now().plusMinutes(5)
         )
+        // afterCommit 콜백이 TransactionSynchronizationManager를 사용하므로 동기화 컨텍스트를 활성화한다.
+        // 단위 테스트에서는 afterCommit 콜백 실행 없이 컨텍스트만 초기화하여 예외를 방지한다.
         every { transactionTemplate.execute<Reservation>(any()) } answers {
-            firstArg<TransactionCallback<Reservation>>().doInTransaction(mockk<TransactionStatus>(relaxed = true))
+            TransactionSynchronizationManager.initSynchronization()
+            try {
+                firstArg<TransactionCallback<Reservation>>().doInTransaction(mockk<TransactionStatus>(relaxed = true))
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization()
+            }
         }
         every { reservationRepository.save(any()) } returns savedReservation
         every { reservationSeatRepository.saveAll(any<List<ReservationSeat>>()) } returns emptyList()
-        every { setOps.add(any(), *anyVararg<String>()) } returns 1L
-        val rKeys = mockk<RKeys>()
-        every { redissonClient.keys } returns rKeys
-        every { rKeys.expire(any<String>(), any<Long>(), any()) } returns true
     }
 }

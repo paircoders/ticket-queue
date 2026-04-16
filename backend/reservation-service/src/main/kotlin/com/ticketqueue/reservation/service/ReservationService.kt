@@ -15,10 +15,13 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.script.RedisScript
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
-import java.time.Duration
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -27,13 +30,13 @@ import java.util.concurrent.TimeUnit
  *
  * ## 선점 프로세스
  * 1. QueueToken 검증 — queue:token:{token} Redis 직접 조회
- * 2. 기존 선점 수량 검증 — PENDING 예매의 좌석 수 합산 (최대 4장)
- * 3. Redisson 분산 락 획득 — seat:hold:{scheduleId}:{seatId}, leaseTime=300s (watchdog 비활성)
+ * 2. Redisson 분산 락 획득 — user:hold:lock:{userId}:{scheduleId} + seat:hold:{scheduleId}:{seatId}
+ * 3. 기존 선점 수량 검증 — PENDING 예매의 좌석 수 합산, 사용자 락 내부에서 TOCTOU 방지 (최대 4장)
  * 4. Redis hold_seats SET 확인 — 이미 선점된 좌석 중복 방지
- * 5. Event Service SOLD 상태 확인 — Feign 내부 API 호출
- * 6. 좌석 상세 조회 — 스냅샷 저장용 (seatNumber, grade, price)
- * 7. DB 저장 + Redis hold_seats SET 업데이트 (TransactionTemplate 내부)
- *    — Redis 실패 시 예외가 전파되어 DB 트랜잭션이 롤백되므로 정합성이 유지됨
+ * 5. 좌석 상세 조회 — Event Service 내부 API, AVAILABLE 상태 검증 + 스냅샷(seatNumber, grade, price)
+ * 6. DB 저장 (TransactionTemplate) + afterCommit 콜백으로 Redis hold_seats SET 업데이트
+ *    — afterCommit 사용으로 DB commit 성공 후에만 Redis 갱신 (롤백 시 Redis 오염 없음)
+ *    — Redis 갱신 실패 시 경고 로그만 남기고 전파하지 않음 (hold_seats TTL 배치가 보정)
  *
  * ## 락 설계
  * tryLock(waitTime=0, leaseTime=300s)으로 락이 이미 선점 중이면 즉시 실패한다.
@@ -51,6 +54,25 @@ class ReservationService(
 ) {
 
     private val log = KotlinLogging.logger {}
+
+    // SADD + EXPIRE를 단일 RTT로 원자적 처리하는 Lua 스크립트
+    // ARGV[1]: TTL(초), ARGV[2..]: 좌석 ID 목록
+    private val holdSeatsSetScript = RedisScript.of<Long>(
+        """
+        redis.call('SADD', KEYS[1], unpack(ARGV, 2))
+        redis.call('EXPIRE', KEYS[1], ARGV[1])
+        return 1
+        """.trimIndent(),
+        Long::class.java
+    )
+
+    // Queue Service 토큰 페이로드 구조 (batch-approve.lua 발급 형식과 일치)
+    // issuedAt은 Lua cjson.encode가 ARGV 문자열을 JSON string으로 직렬화하므로 String? 타입
+    private data class QueueTokenPayload(
+        val userId: UUID,
+        val scheduleId: UUID,
+        val issuedAt: String? = null
+    )
 
     companion object {
         private const val MAX_HOLD_SEATS = 4
@@ -73,7 +95,7 @@ class ReservationService(
 
         // 락과 그에 따른 에러 코드를 페어로 관리하여 순회 획득
         val lockTargets = listOf(
-            userLock to ErrorCode.RATE_LIMIT_EXCEEDED,
+            userLock to ErrorCode.RESERVATION_IN_PROGRESS,
             multiSeatLock to ErrorCode.SEAT_ALREADY_HELD
         )
         val acquiredLocks = mutableListOf<RLock>()
@@ -87,29 +109,21 @@ class ReservationService(
                 acquiredLocks.add(lock)
             }
 
-            // 2. 수량 검증 (사용자 락 안에서 수행하여 TOCTOU 방지)
+            // 3. 수량 검증 (사용자 락 안에서 수행하여 TOCTOU 방지)
             validateSeatCount(userId, request.scheduleId, request.seatIds.size)
 
             // 4. Redis hold_seats SET 중복 확인
             checkHoldSeatsSet(request.scheduleId, request.seatIds)
 
-            // 5. Event Service SOLD 상태 확인
-            val soldSeatIds = eventServiceClient.getSoldSeats(request.scheduleId).soldSeatIds.toSet()
-            request.seatIds.forEach { seatId ->
-                if (seatId in soldSeatIds) {
-                    throw ReservationException(ErrorCode.SEAT_NOT_AVAILABLE)
-                }
-            }
-
-            // 6. 좌석 상세 조회 (스냅샷용)
+            // 5. 좌석 상세 조회 — AVAILABLE 상태 검증 + 스냅샷 (getSeatDetails 내부에서 SOLD/HOLD 거부)
             val seatDetailsResponse = eventServiceClient.getSeatDetails(request.scheduleId, request.seatIds)
             val seatDetailMap = seatDetailsResponse.seats.associateBy { it.seatId }
             if (seatDetailMap.size != request.seatIds.size) {
                 throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "요청한 좌석 정보를 찾을 수 없습니다.")
             }
 
-            // 7. DB 저장 + Redis hold_seats SET 업데이트 (원자적 처리)
-            val holdExpiresAt = LocalDateTime.now().plusMinutes(HOLD_MINUTES)
+            // 6. DB 저장 후 afterCommit 콜백으로 Redis hold_seats SET 업데이트
+            val holdExpiresAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(HOLD_MINUTES)
             val totalAmount = seatDetailsResponse.seats.sumOf { it.price }
             val reservation = transactionTemplate.execute {
                 val saved = reservationRepository.save(
@@ -134,7 +148,16 @@ class ReservationService(
                         )
                     }
                 )
-                updateHoldSeatsSet(request.scheduleId, request.seatIds)
+                // DB commit 성공 후에만 Redis 갱신 — 롤백 시 Redis 오염 없음
+                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                    override fun afterCommit() {
+                        try {
+                            updateHoldSeatsSet(request.scheduleId, request.seatIds)
+                        } catch (e: Exception) {
+                            log.warn(e) { "hold_seats SET 업데이트 실패 (scheduleId=${request.scheduleId}). 배치가 보정합니다." }
+                        }
+                    }
+                })
                 saved
             } ?: throw ReservationException(ErrorCode.INTERNAL_SERVER_ERROR, "좌석 선점 저장에 실패했습니다.")
 
@@ -162,16 +185,13 @@ class ReservationService(
         val tokenJson = stringRedisTemplate.opsForValue().get("queue:token:$token")
             ?: throw ReservationException(ErrorCode.QUEUE_TOKEN_EXPIRED)
 
-        try {
-            val node = objectMapper.readTree(tokenJson)
-            val tokenUserId = node.get("userId")?.asText()
-            val tokenScheduleId = node.get("scheduleId")?.asText()
-            if (tokenUserId != userId.toString() || tokenScheduleId != scheduleId.toString()) {
-                throw ReservationException(ErrorCode.QUEUE_TOKEN_INVALID)
-            }
-        } catch (e: ReservationException) {
-            throw e
+        val payload = try {
+            objectMapper.readValue(tokenJson, QueueTokenPayload::class.java)
         } catch (e: Exception) {
+            throw ReservationException(ErrorCode.QUEUE_TOKEN_INVALID)
+        }
+
+        if (payload.userId != userId || payload.scheduleId != scheduleId) {
             throw ReservationException(ErrorCode.QUEUE_TOKEN_INVALID)
         }
     }
@@ -202,17 +222,13 @@ class ReservationService(
     /**
      * hold_seats Redis SET에 좌석 ID를 추가하고 TTL을 설정한다.
      *
-     * 트랜잭션 내부에서 호출되므로 예외가 전파되어 DB 롤백을 트리거한다.
-     *
-     * stringRedisTemplate.expire() 대신 redissonClient.keys.expire() 를 사용하는 이유:
-     * redisson-spring-data-34:3.40.2 가 Spring Data Redis 3.5.x 에서 추가된
-     * pExpire(byte[], long, Condition) 3-arg 메서드를 미구현하여 DefaultedRedisConnection
-     * 에서 무한 재귀가 발생하는 호환성 버그 회피.
+     * Lua 스크립트로 SADD + EXPIRE를 단일 RTT에 원자적으로 처리한다.
+     * DB commit 성공 후 afterCommit 콜백에서 호출되므로 DB 롤백 시 Redis 오염이 발생하지 않는다.
      */
     private fun updateHoldSeatsSet(scheduleId: UUID, seatIds: List<UUID>) {
         val holdSeatsKey = "hold_seats:$scheduleId"
-        stringRedisTemplate.opsForSet().add(holdSeatsKey, *seatIds.map { it.toString() }.toTypedArray())
-        redissonClient.keys.expire(holdSeatsKey, HOLD_SEATS_SET_TTL_SECONDS, TimeUnit.SECONDS)
+        val args = (listOf(HOLD_SEATS_SET_TTL_SECONDS.toString()) + seatIds.map { it.toString() }).toTypedArray()
+        stringRedisTemplate.execute(holdSeatsSetScript, listOf(holdSeatsKey), *args)
     }
 
 }
