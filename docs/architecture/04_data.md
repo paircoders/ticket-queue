@@ -1165,40 +1165,19 @@ EXISTS queue:active:user-abc
 
 #### 1.3.4 좌석 선점 (Reservation Service)
 
-**분산 락 - Redisson**
+**분산 락 전략 - Redisson MultiLock**
 
-**Key:** `seat:hold:{scheduleId}:{seatId}`
-**Value:** `userId`
-**TTL:** 5분
+대규모 동시 요청 시 발생할 수 있는 데이터 정합성 문제와 데드락을 방지하기 위해 복합 락 전략을 사용합니다.
 
-<details>
-<summary>java code</summary>
+1. **사용자 락 (`user:hold:lock:{userId}:{scheduleId}`)**: 
+   - **목적**: 동일 사용자가 여러 요청을 동시에 보내 최대 선점 수량(4매) 제한을 우회하는 TOCTOU(Time-of-Check Time-of-Use) 경쟁 조건을 방지합니다.
+   - **정책**: `waitTime = 0`으로 설정하여 중복 클릭이나 비정상적인 다중 요청 발생 시 즉시 실패(`RATE_LIMIT_EXCEEDED`) 처리합니다.
+2. **좌석 락 (`seat:hold:{scheduleId}:{seatId}`)**: 
+   - **목적**: 특정 좌석에 대한 중복 선점을 차단합니다.
+   - **정책**: 요청된 좌석 ID들을 `UUID` 순으로 **정렬**한 후 `MultiLock`으로 묶어 원자적으로 획득함으로써 데드락을 원천 차단합니다.
 
-```java
-// Redisson 분산 락
-RLock lock = redissonClient.getLock("seat:hold:schedule-001:seat-456");
-
-boolean acquired = lock.tryLock(15, 300, TimeUnit.SECONDS);  // waitTime: 15초, leaseTime: 300초
-
-if (acquired) {
-    try {
-        redisTemplate.opsForSet().add("hold_seats:schedule-001", "seat-456");
-
-        // 좌석 선점 로직
-        // 예매 정보 DB 저장 (PENDING)
-    } finally {
-        lock.unlock();
-        redisTemplate.opsForSet().remove("hold_seats:schedule-001", "seat-456");
-    }
-} else {
-    throw new SeatAlreadyHoldException();
-}
-
-// HOLD 상태 조회 (KEYS 대신 SET 사용)
-Set<String> holdSeatIds = redisTemplate.opsForSet().members("hold_seats:schedule-001");
-```
-</details>
-
+**락 획득/해제 흐름:**
+- 사용자 락 시도 → 좌석 MultiLock 시도 → 비즈니스 로직(수량 검증, DB 저장) → `finally` 블록에서 모든 락 안전 해제.
 
 **수동 락 관리 (대안):**
 ```redis
