@@ -40,6 +40,7 @@ enum class ErrorCode(
     MAX_SEATS_EXCEEDED(HttpStatus.BAD_REQUEST, "MAX_SEATS_EXCEEDED", "최대 좌석 수를 초과했습니다. (최대 4석)"),
     HOLD_EXPIRED(HttpStatus.GONE, "HOLD_EXPIRED", "좌석 선점 시간이 만료되었습니다."),
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "존재하지 않는 예매입니다."),
+    RESERVATION_IN_PROGRESS(HttpStatus.CONFLICT, "RESERVATION_IN_PROGRESS", "이미 진행 중인 선점 요청이 있습니다. 잠시 후 다시 시도해주세요."),
 
     // Payment
     PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT_FAILED", "결제에 실패했습니다."),

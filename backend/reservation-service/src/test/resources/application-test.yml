@@ -1,0 +1,38 @@
+spring:
+  config:
+    import: ""   # aws-secretsmanager import 비활성화
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+  # Kafka auto-configuration 제외 (테스트에서 Kafka 브로커 불필요)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: reservation_service
+
+feign:
+  client:
+    config:
+      event-service:
+        url: http://localhost:8082
+
+internal:
+  api:
+    key: test-internal-api-key
+
+# Outbox 폴러 및 정리 배치 비활성화
+outbox:
+  poller:
+    enabled: false
+  cleanup:
+    enabled: false
+
+processed-event:
+  cleanup:
+    enabled: false

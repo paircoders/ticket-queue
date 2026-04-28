@@ -11,4 +11,5 @@ interface ReservationRepository : JpaRepository<Reservation, UUID> {
     fun findByIdAndUserId(id: UUID, userId: UUID): Reservation?
     fun existsByUserIdAndScheduleIdAndStatusIn(userId: UUID, scheduleId: UUID, statuses: List<ReservationStatus>): Boolean
     fun findAllByStatusAndHoldExpiresAtBefore(status: ReservationStatus, now: LocalDateTime): List<Reservation>
+    fun findByUserIdAndScheduleIdAndStatus(userId: UUID, scheduleId: UUID, status: ReservationStatus): List<Reservation>
 }

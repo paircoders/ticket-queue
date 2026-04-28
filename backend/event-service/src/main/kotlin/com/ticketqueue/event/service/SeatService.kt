@@ -139,6 +139,47 @@ class SeatService(
     }
 
     /**
+     * 좌석 선점 시 스냅샷 저장을 위한 상세 정보 조회 (내부 API - Reservation Service 전용)
+     *
+     * seatIds 개수와 조회된 좌석 수가 불일치하면 RESOURCE_NOT_FOUND 예외를 던진다.
+     * AVAILABLE 상태가 아닌 좌석(HOLD/SOLD)이 포함되면 SEAT_NOT_AVAILABLE 예외를 던진다.
+     * eventId는 EventSchedule 로드 시 Hibernate 프록시의 FK 값을 직접 참조하여 추가 쿼리 없이 추출한다.
+     */
+    fun getSeatDetails(scheduleId: UUID, seatIds: List<UUID>): SeatDto.SeatDetailsResponse {
+        val schedule = eventScheduleRepository.findById(scheduleId)
+            .orElseThrow { EventException(ErrorCode.SCHEDULE_NOT_FOUND) }
+
+        if (seatIds.isEmpty()) throw EventException(ErrorCode.INVALID_INPUT)
+        val distinctIds = seatIds.toSet()
+        if (distinctIds.size != seatIds.size) {
+            throw EventException(ErrorCode.INVALID_INPUT)
+        }
+
+        val seats = seatRepository.findByEventScheduleIdAndIdIn(scheduleId, distinctIds.toList())
+        if (seats.size != distinctIds.size) {
+            throw EventException(ErrorCode.RESOURCE_NOT_FOUND)
+        }
+
+        seats.find { it.status != SeatStatus.AVAILABLE }?.let {
+            throw EventException(ErrorCode.SEAT_NOT_AVAILABLE)
+        }
+
+        val eventId = schedule.event.id ?: throw EventException(ErrorCode.INTERNAL_SERVER_ERROR)
+        return SeatDto.SeatDetailsResponse(
+            scheduleId = scheduleId,
+            eventId = eventId,
+            seats = seats.map { seat ->
+                SeatDto.SeatDetailsResponse.SeatDetail(
+                    seatId = seat.id!!,
+                    seatNumber = seat.seatNumber,
+                    grade = seat.grade.name,
+                    price = seat.price
+                )
+            }
+        )
+    }
+
+    /**
      * 좌석을 AVAILABLE로 복원하고 Redis hold_seats Set에서 선점 해제된 좌석을 제거한다 (Kafka Consumer - ReservationCancelled 처리)
      *
      * DB AVAILABLE 복원이 트랜잭션 내에서 우선 보장되고, Redis는 best-effort로 정리한다.
