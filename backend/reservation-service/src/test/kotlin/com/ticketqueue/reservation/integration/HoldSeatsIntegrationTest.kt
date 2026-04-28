@@ -8,7 +8,8 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -170,8 +171,7 @@ class HoldSeatsIntegrationTest {
             ).andExpect(status().isCreated)
 
             val members = stringRedisTemplate.opsForSet().members("hold_seats:$scheduleId")
-            assertTrue(members?.contains(seatId.toString()) == true,
-                "hold_seats SET에 $seatId 가 존재해야 합니다. 실제 members: $members")
+            members.shouldNotBeNull().shouldContain(seatId.toString())
         }
 
         @Test
@@ -258,15 +258,6 @@ class HoldSeatsIntegrationTest {
         fun returns400WhenFiveSeatsRequested() {
             seedQueueToken(validToken)
             val fiveSeats = (1..5).map { UUID.randomUUID() }
-            // 5개 seats에 대한 details mock
-            every { eventServiceClient.getSeatDetails(scheduleId, any()) } returns
-                EventServiceClient.SeatDetailsResponse(
-                    scheduleId = scheduleId,
-                    eventId = eventId,
-                    seats = fiveSeats.map { id ->
-                        EventServiceClient.SeatDetailsResponse.SeatDetail(id, "X-$id", "VIP", BigDecimal("150000"))
-                    }
-                )
 
             mockMvc.perform(
                 post("/reservations/hold")

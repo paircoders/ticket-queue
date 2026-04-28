@@ -216,10 +216,14 @@ class ReservationService(
 
     private fun checkHoldSeatsSet(scheduleId: UUID, seatIds: List<UUID>) {
         val holdSeatsKey = "hold_seats:$scheduleId"
-        seatIds.forEach { seatId ->
-            if (stringRedisTemplate.opsForSet().isMember(holdSeatsKey, seatId.toString()) == true) {
-                throw ReservationException(ErrorCode.SEAT_ALREADY_HELD)
-            }
+        val result: List<Boolean>? = stringRedisTemplate.execute { conn ->
+            conn.setCommands().sMIsMember(
+                holdSeatsKey.toByteArray(Charsets.UTF_8),
+                *seatIds.map { it.toString().toByteArray(Charsets.UTF_8) }.toTypedArray()
+            )
+        }
+        if (result?.any { it == true } == true) {
+            throw ReservationException(ErrorCode.SEAT_ALREADY_HELD)
         }
     }
 

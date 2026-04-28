@@ -28,6 +28,7 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * 좌석 선점 동시성 테스트
@@ -183,6 +184,7 @@ class HoldSeatsConcurrencyTest {
         startLatch.countDown()
         val statuses = futures.map { it.get() }
         executor.shutdown()
+        if (!executor.awaitTermination(5, TimeUnit.SECONDS)) executor.shutdownNow()
 
         // HTTP 응답 검증
         statuses.count { it == 201 } shouldBe 1

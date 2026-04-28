@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.redisson.api.RLock
 import org.redisson.api.RedissonClient
+import org.springframework.data.redis.core.RedisCallback
 import org.springframework.data.redis.core.SetOperations
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
@@ -173,7 +174,7 @@ class ReservationServiceTest {
             setUpUserLockSuccess()
             setUpMultiLockSuccess()
             setUpNoPendingReservation()
-            every { setOps.isMember(any(), any()) } returns false
+            every { stringRedisTemplate.execute(any<RedisCallback<*>>()) } returns listOf(false)
             setUpSoldAndDetails()
             setUpSaveSuccess()
 
@@ -182,6 +183,7 @@ class ReservationServiceTest {
             response.status shouldBe ReservationStatus.PENDING
             verify { multiLock.unlock() }
             verify { userLock.unlock() }
+            verify { stringRedisTemplate.execute(any<RedisScript<Long>>(), any<List<String>>(), *anyVararg()) }
         }
 
         @Test
@@ -192,7 +194,7 @@ class ReservationServiceTest {
             setUpUserLockSuccess()
             setUpMultiLockSuccess()
             setUpNoPendingReservation()
-            every { setOps.isMember(any(), any()) } returns false
+            every { stringRedisTemplate.execute(any<RedisCallback<*>>()) } returns listOf(false)
             setUpSoldAndDetails()
 
             // 트랜잭션 콜백 실행 중 예외 발생 — afterCommit 호출 없이 롤백
@@ -285,12 +287,13 @@ class ReservationServiceTest {
             totalAmount = BigDecimal("300000"),
             holdExpiresAt = LocalDateTime.now().plusMinutes(5)
         )
-        // afterCommit 콜백이 TransactionSynchronizationManager를 사용하므로 동기화 컨텍스트를 활성화한다.
-        // 단위 테스트에서는 afterCommit 콜백 실행 없이 컨텍스트만 초기화하여 예외를 방지한다.
+        every { stringRedisTemplate.execute(any<RedisScript<Long>>(), any<List<String>>(), *anyVararg()) } returns 1L
         every { transactionTemplate.execute<Reservation>(any()) } answers {
             TransactionSynchronizationManager.initSynchronization()
             try {
-                firstArg<TransactionCallback<Reservation>>().doInTransaction(mockk<TransactionStatus>(relaxed = true))
+                val result = firstArg<TransactionCallback<Reservation>>().doInTransaction(mockk<TransactionStatus>(relaxed = true))
+                TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
+                result
             } finally {
                 TransactionSynchronizationManager.clearSynchronization()
             }
