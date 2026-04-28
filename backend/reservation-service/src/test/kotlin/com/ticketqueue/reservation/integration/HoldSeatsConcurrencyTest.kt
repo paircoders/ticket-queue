@@ -280,16 +280,13 @@ class HoldSeatsConcurrencyTest {
     /**
      * 동일 유저가 동일 회차의 서로 다른 좌석을 동시에 1장씩 요청하는 경우.
      *
-     * 주의: validateSeatCount는 락 획득 전에 실행되므로, 여러 요청이 동시에
-     * "현재 PENDING 0장"으로 읽어 모두 통과할 수 있다 (낙관적 읽기 경쟁).
-     * 이 테스트는 해당 경쟁 조건을 문서화한다.
-     *
-     * 동일 유저 4장 제한 보장이 필요하다면 DB 레벨 unique constraint나
-     * 유저 단위 락 추가를 검토해야 한다.
+     * user:hold:lock:{userId}:{scheduleId} 의 waitTime=0 정책에 의해
+     * 동일 유저의 동시 요청은 직렬화된다: 락을 먼저 획득한 1건만 201로 성공하고
+     * 나머지 (concurrency - 1) 건은 즉시 409 RESERVATION_IN_PROGRESS로 실패한다.
      */
     @Test
-    @DisplayName("동일 유저가 서로 다른 좌석 4개를 동시 요청하면 모두 성공할 수 있다 (낙관적 읽기 경쟁)")
-    fun sameUserConcurrentDifferentSeatsCanAllSucceed() {
+    @DisplayName("동일 유저가 서로 다른 좌석을 동시 요청하면 유저 락 직렬화로 1개만 성공한다")
+    fun sameUserConcurrentDifferentSeatsOnlyOneSucceeds() {
         val concurrency = 4
         val seatIds = List(concurrency) { UUID.randomUUID() }
         val userId = UUID.randomUUID()
@@ -320,12 +317,9 @@ class HoldSeatsConcurrencyTest {
         val statuses = futures.map { it.get() }
         executor.shutdown()
 
-        // 각 좌석에 대한 분산 락은 독립적이므로 모두 성공하는 경로가 존재함
-        // (validateSeatCount가 동시에 "기존 0장"으로 읽는 경쟁 조건)
-        val successCount = statuses.count { it == 201 }
-        val dbCount = reservationRepository.findAll().size
-
-        // DB 저장 건수와 HTTP 성공 건수가 일치해야 한다
-        dbCount shouldBe successCount
+        // waitTime=0 유저 락으로 동시 요청은 직렬화 — 정확히 1건만 성공
+        statuses.count { it == 201 } shouldBe 1
+        statuses.count { it == 409 } shouldBe (concurrency - 1)
+        reservationRepository.findAll().size shouldBe 1
     }
 }

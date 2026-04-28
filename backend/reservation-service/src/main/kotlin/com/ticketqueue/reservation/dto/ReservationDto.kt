@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
-import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.util.UUID
 
 class ReservationDto {
@@ -19,6 +19,6 @@ class ReservationDto {
         val reservationId: UUID,
         val status: ReservationStatus,
         val totalAmount: BigDecimal,
-        val holdExpiresAt: LocalDateTime
+        val holdExpiresAt: OffsetDateTime
     )
 }

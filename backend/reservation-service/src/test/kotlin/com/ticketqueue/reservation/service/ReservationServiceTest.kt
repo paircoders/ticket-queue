@@ -26,6 +26,7 @@ import org.redisson.api.RedissonClient
 import org.springframework.data.redis.core.SetOperations
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
+import org.springframework.data.redis.core.script.RedisScript
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionSynchronizationManager
@@ -181,6 +182,39 @@ class ReservationServiceTest {
             response.status shouldBe ReservationStatus.PENDING
             verify { multiLock.unlock() }
             verify { userLock.unlock() }
+        }
+
+        @Test
+        @DisplayName("트랜잭션 롤백 시 Redis hold_seats SET을 갱신하지 않는다")
+        fun doesNotUpdateRedisOnRollback() {
+            setUpTokenValid()
+            setUpLockObjects()
+            setUpUserLockSuccess()
+            setUpMultiLockSuccess()
+            setUpNoPendingReservation()
+            every { setOps.isMember(any(), any()) } returns false
+            setUpSoldAndDetails()
+
+            // 트랜잭션 콜백 실행 중 예외 발생 — afterCommit 호출 없이 롤백
+            every { transactionTemplate.execute<Reservation>(any()) } answers {
+                TransactionSynchronizationManager.initSynchronization()
+                try {
+                    firstArg<TransactionCallback<Reservation>>().doInTransaction(
+                        mockk<TransactionStatus>(relaxed = true)
+                    )
+                    throw RuntimeException("forced rollback")
+                } finally {
+                    TransactionSynchronizationManager.clearSynchronization()
+                }
+            }
+            every { reservationRepository.save(any()) } returns mockk(relaxed = true)
+            every { reservationSeatRepository.saveAll(any<List<ReservationSeat>>()) } returns emptyList()
+
+            assertThrows<RuntimeException> {
+                reservationService.holdSeats(userId, holdRequest(), validToken)
+            }
+
+            verify(exactly = 0) { stringRedisTemplate.execute(any<RedisScript<Long>>(), any<List<String>>(), *anyVararg()) }
         }
     }
 

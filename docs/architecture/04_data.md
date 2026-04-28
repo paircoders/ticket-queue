@@ -1171,7 +1171,7 @@ EXISTS queue:active:user-abc
 
 1. **사용자 락 (`user:hold:lock:{userId}:{scheduleId}`)**: 
    - **목적**: 동일 사용자가 여러 요청을 동시에 보내 최대 선점 수량(4매) 제한을 우회하는 TOCTOU(Time-of-Check Time-of-Use) 경쟁 조건을 방지합니다.
-   - **정책**: `waitTime = 0`으로 설정하여 중복 클릭이나 비정상적인 다중 요청 발생 시 즉시 실패(`RATE_LIMIT_EXCEEDED`) 처리합니다.
+   - **정책**: `waitTime = 0`으로 설정하여 중복 클릭이나 비정상적인 다중 요청 발생 시 즉시 실패(`RESERVATION_IN_PROGRESS`) 처리합니다.
 2. **좌석 락 (`seat:hold:{scheduleId}:{seatId}`)**: 
    - **목적**: 특정 좌석에 대한 중복 선점을 차단합니다.
    - **정책**: 요청된 좌석 ID들을 `UUID` 순으로 **정렬**한 후 `MultiLock`으로 묶어 원자적으로 획득함으로써 데드락을 원천 차단합니다.

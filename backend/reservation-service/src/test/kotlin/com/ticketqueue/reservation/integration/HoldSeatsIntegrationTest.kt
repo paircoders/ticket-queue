@@ -8,6 +8,7 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -169,9 +170,8 @@ class HoldSeatsIntegrationTest {
             ).andExpect(status().isCreated)
 
             val members = stringRedisTemplate.opsForSet().members("hold_seats:$scheduleId")
-            assert(members?.contains(seatId.toString()) == true) {
-                "hold_seats SET에 $seatId 가 존재해야 합니다. 실제 members: $members"
-            }
+            assertTrue(members?.contains(seatId.toString()) == true,
+                "hold_seats SET에 $seatId 가 존재해야 합니다. 실제 members: $members")
         }
 
         @Test

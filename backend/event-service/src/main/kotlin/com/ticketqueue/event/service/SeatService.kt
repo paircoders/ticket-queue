@@ -149,8 +149,13 @@ class SeatService(
         val schedule = eventScheduleRepository.findById(scheduleId)
             .orElseThrow { EventException(ErrorCode.SCHEDULE_NOT_FOUND) }
 
-        val seats = seatRepository.findByEventScheduleIdAndIdIn(scheduleId, seatIds)
-        if (seats.size != seatIds.size) {
+        val distinctIds = seatIds.toSet()
+        if (distinctIds.size != seatIds.size) {
+            throw EventException(ErrorCode.INVALID_INPUT)
+        }
+
+        val seats = seatRepository.findByEventScheduleIdAndIdIn(scheduleId, distinctIds.toList())
+        if (seats.size != distinctIds.size) {
             throw EventException(ErrorCode.RESOURCE_NOT_FOUND)
         }
 

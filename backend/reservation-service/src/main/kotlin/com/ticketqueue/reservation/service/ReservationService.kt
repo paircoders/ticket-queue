@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -167,7 +168,7 @@ class ReservationService(
                 reservationId = reservation.id!!,
                 status = reservation.status,
                 totalAmount = reservation.totalAmount,
-                holdExpiresAt = reservation.holdExpiresAt
+                holdExpiresAt = reservation.holdExpiresAt.atOffset(ZoneOffset.UTC)
             )
         } finally {
             // 획득한 락을 역순으로 안전하게 해제
@@ -197,6 +198,9 @@ class ReservationService(
     }
 
     private fun validateSeatCount(userId: UUID, scheduleId: UUID, requestedCount: Int) {
+        if (requestedCount > MAX_HOLD_SEATS) {
+            throw ReservationException(ErrorCode.MAX_SEATS_EXCEEDED)
+        }
         val pendingReservations = reservationRepository.findByUserIdAndScheduleIdAndStatus(
             userId, scheduleId, ReservationStatus.PENDING
         )
