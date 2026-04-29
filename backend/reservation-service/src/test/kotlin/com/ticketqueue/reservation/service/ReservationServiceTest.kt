@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
+import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
 import com.ticketqueue.reservation.entity.Reservation
 import com.ticketqueue.reservation.entity.ReservationSeat
 import com.ticketqueue.reservation.entity.ReservationStatus
@@ -217,6 +218,67 @@ class ReservationServiceTest {
             }
 
             verify(exactly = 0) { stringRedisTemplate.execute(any<RedisScript<Long>>(), any<List<String>>(), *anyVararg()) }
+        }
+    }
+
+    @Nested
+    @DisplayName("좌석 상태 조회")
+    inner class SeatStatusQuery {
+
+        @Test
+        @DisplayName("Queue Token이 없으면 QUEUE_TOKEN_EXPIRED 예외를 던진다")
+        fun throwsWhenTokenExpired() {
+            every { valueOps.get("queue:token:$validToken") } returns null
+            val ex = assertThrows<ReservationException> {
+                reservationService.getSeatStatus(userId, scheduleId, validToken)
+            }
+            ex.errorCode shouldBe ErrorCode.QUEUE_TOKEN_EXPIRED
+        }
+
+        @Test
+        @DisplayName("SOLD와 HOLD 좌석을 합산하여 available을 정확히 계산한다")
+        fun returnsCorrectSeatStatus() {
+            val soldId1 = UUID.randomUUID()
+            val soldId2 = UUID.randomUUID()
+            val holdId1 = UUID.randomUUID()
+            setUpTokenValid()
+            every { eventServiceClient.getSoldSeats(scheduleId) } returns
+                EventServiceClient.SoldSeatsResponse(
+                    scheduleId = scheduleId,
+                    soldSeatIds = listOf(soldId1, soldId2),
+                    totalSeats = 100
+                )
+            every { stringRedisTemplate.opsForSet().members("hold_seats:$scheduleId") } returns setOf(holdId1.toString())
+
+            val result = reservationService.getSeatStatus(userId, scheduleId, validToken)
+
+            result.seats.total shouldBe 100
+            result.seats.sold shouldBe 2
+            result.seats.hold shouldBe 1
+            result.seats.available shouldBe 97
+            result.sold shouldBe listOf(soldId1, soldId2)
+            result.hold shouldBe listOf(holdId1)
+        }
+
+        @Test
+        @DisplayName("hold_seats SET이 Redis에 없으면 hold는 빈 리스트로 반환한다")
+        fun returnsEmptyHoldWhenSetAbsent() {
+            setUpTokenValid()
+            every { eventServiceClient.getSoldSeats(scheduleId) } returns
+                EventServiceClient.SoldSeatsResponse(
+                    scheduleId = scheduleId,
+                    soldSeatIds = emptyList(),
+                    totalSeats = 50
+                )
+            every { stringRedisTemplate.opsForSet().members("hold_seats:$scheduleId") } returns null
+
+            val result = reservationService.getSeatStatus(userId, scheduleId, validToken)
+
+            result.seats.total shouldBe 50
+            result.seats.sold shouldBe 0
+            result.seats.hold shouldBe 0
+            result.seats.available shouldBe 50
+            result.hold shouldBe emptyList<UUID>()
         }
     }
 

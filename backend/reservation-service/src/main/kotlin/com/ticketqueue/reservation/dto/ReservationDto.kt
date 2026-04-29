@@ -21,4 +21,13 @@ class ReservationDto {
         val totalAmount: BigDecimal,
         val holdExpiresAt: OffsetDateTime
     )
+
+    data class SeatStatusResponse(
+        val scheduleId: UUID,
+        val seats: SeatSummary,
+        val sold: List<UUID>,
+        val hold: List<UUID>
+    ) {
+        data class SeatSummary(val total: Int, val available: Int, val sold: Int, val hold: Int)
+    }
 }

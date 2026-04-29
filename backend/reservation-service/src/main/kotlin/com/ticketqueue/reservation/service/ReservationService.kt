@@ -5,6 +5,7 @@ import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.HoldResponse
+import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
 import com.ticketqueue.reservation.entity.Reservation
 import com.ticketqueue.reservation.entity.ReservationSeat
 import com.ticketqueue.reservation.entity.ReservationStatus
@@ -180,6 +181,31 @@ class ReservationService(
                 }
             }
         }
+    }
+
+    fun getSeatStatus(userId: UUID, scheduleId: UUID, queueToken: String): SeatStatusResponse {
+        validateQueueToken(queueToken, userId, scheduleId)
+
+        val soldResponse = eventServiceClient.getSoldSeats(scheduleId)
+
+        val holdIds = stringRedisTemplate.opsForSet()
+            .members("hold_seats:$scheduleId")
+            ?.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?: emptyList()
+
+        val availableCount = maxOf(0, soldResponse.totalSeats - soldResponse.soldSeatIds.size - holdIds.size)
+
+        return SeatStatusResponse(
+            scheduleId = scheduleId,
+            seats = SeatStatusResponse.SeatSummary(
+                total = soldResponse.totalSeats,
+                available = availableCount,
+                sold = soldResponse.soldSeatIds.size,
+                hold = holdIds.size
+            ),
+            sold = soldResponse.soldSeatIds,
+            hold = holdIds
+        )
     }
 
     private fun validateQueueToken(token: String, userId: UUID, scheduleId: UUID) {

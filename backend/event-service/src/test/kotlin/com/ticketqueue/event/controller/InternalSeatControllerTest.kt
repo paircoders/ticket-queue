@@ -52,7 +52,8 @@ class InternalSeatControllerTest {
             val soldId = UUID.randomUUID()
             val response = SeatDto.SoldSeatsResponse(
                 scheduleId = scheduleId,
-                soldSeatIds = listOf(soldId)
+                soldSeatIds = listOf(soldId),
+                totalSeats = 1
             )
             every { seatService.getSoldSeatIds(scheduleId) } returns response
 
@@ -67,7 +68,8 @@ class InternalSeatControllerTest {
         fun noSoldSeats() {
             val response = SeatDto.SoldSeatsResponse(
                 scheduleId = scheduleId,
-                soldSeatIds = emptyList()
+                soldSeatIds = emptyList(),
+                totalSeats = 0
             )
             every { seatService.getSoldSeatIds(scheduleId) } returns response
 

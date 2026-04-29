@@ -313,11 +313,13 @@ class SeatServiceTest {
             val soldIds = listOf(UUID.randomUUID(), UUID.randomUUID())
             every { eventScheduleRepository.existsById(scheduleId) } returns true
             every { seatRepository.findSoldSeatIdsByScheduleId(scheduleId) } returns soldIds
+            every { seatRepository.countByEventScheduleId(scheduleId) } returns soldIds.size.toLong()
 
             val response = seatService.getSoldSeatIds(scheduleId)
 
             assertEquals(scheduleId, response.scheduleId)
             assertEquals(soldIds, response.soldSeatIds)
+            assertEquals(soldIds.size, response.totalSeats)
         }
 
         @Test
@@ -325,11 +327,13 @@ class SeatServiceTest {
         fun returnsEmptyListWhenNoSoldSeats() {
             every { eventScheduleRepository.existsById(scheduleId) } returns true
             every { seatRepository.findSoldSeatIdsByScheduleId(scheduleId) } returns emptyList()
+            every { seatRepository.countByEventScheduleId(scheduleId) } returns 0L
 
             val response = seatService.getSoldSeatIds(scheduleId)
 
             assertEquals(scheduleId, response.scheduleId)
             assertTrue(response.soldSeatIds.isEmpty())
+            assertEquals(0, response.totalSeats)
         }
 
         @Test

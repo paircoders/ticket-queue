@@ -122,7 +122,8 @@ class SeatService(
         }
 
         val soldSeatIds = seatRepository.findSoldSeatIdsByScheduleId(scheduleId)
-        return SeatDto.SoldSeatsResponse(scheduleId = scheduleId, soldSeatIds = soldSeatIds)
+        val totalSeats = seatRepository.countByEventScheduleId(scheduleId)
+        return SeatDto.SoldSeatsResponse(scheduleId = scheduleId, soldSeatIds = soldSeatIds, totalSeats = totalSeats.toInt())
     }
 
     /**

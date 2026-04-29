@@ -21,7 +21,8 @@ interface EventServiceClient {
 
     data class SoldSeatsResponse(
         val scheduleId: UUID,
-        val soldSeatIds: List<UUID>
+        val soldSeatIds: List<UUID>,
+        val totalSeats: Int
     )
 
     data class SeatDetailsResponse(
