@@ -28,6 +28,6 @@ class ReservationDto {
         val sold: List<UUID>,
         val hold: List<UUID>
     ) {
-        data class SeatSummary(val total: Int, val available: Int, val sold: Int, val hold: Int)
+        data class SeatSummary(val total: Long, val available: Int, val sold: Int, val hold: Int)
     }
 }

@@ -193,18 +193,23 @@ class ReservationService(
             ?.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
             ?: emptyList()
 
-        val availableCount = maxOf(0, soldResponse.totalSeats - soldResponse.soldSeatIds.size - holdIds.size)
+        val soldSet  = soldResponse.soldSeatIds.toSet()
+        val holdSet  = holdIds.toSet()
+        val overlap  = soldSet intersect holdSet
+        val soldUniq = soldSet - overlap
+        val holdUniq = holdSet - overlap
+        val available = maxOf(0L, soldResponse.totalSeats - soldUniq.size - holdUniq.size)
 
         return SeatStatusResponse(
             scheduleId = scheduleId,
             seats = SeatStatusResponse.SeatSummary(
-                total = soldResponse.totalSeats,
-                available = availableCount,
-                sold = soldResponse.soldSeatIds.size,
-                hold = holdIds.size
+                total     = soldResponse.totalSeats,
+                available = available.toInt(),
+                sold      = soldUniq.size,
+                hold      = holdUniq.size
             ),
-            sold = soldResponse.soldSeatIds,
-            hold = holdIds
+            sold = soldUniq.toList(),
+            hold = holdUniq.toList()
         )
     }
 

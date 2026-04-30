@@ -26,7 +26,7 @@ class ReservationController(
     private val log = KotlinLogging.logger {}
 
     /**
-     * 좌석 선점 (REQ-RSV-001)
+     * 좌석 상태 조회 (REQ-RSV-003)
      *
      * Gateway가 JWT를 검증하고 X-User-Id 헤더로 userId를 주입한다.
      * Queue Token은 X-Queue-Token 헤더로 전달되며, Reservation Service에서 Redis 직접 조회로 검증한다.
@@ -40,6 +40,12 @@ class ReservationController(
         return reservationService.getSeatStatus(userId, scheduleId, queueToken)
     }
 
+    /**
+     * 좌석 선점 (REQ-RSV-001)
+     *
+     * Gateway가 JWT를 검증하고 X-User-Id 헤더로 userId를 주입한다.
+     * Queue Token은 X-Queue-Token 헤더로 전달되며, Reservation Service에서 Redis 직접 조회로 검증한다.
+     */
     @PostMapping("/hold")
     @ResponseStatus(HttpStatus.CREATED)
     fun holdSeats(

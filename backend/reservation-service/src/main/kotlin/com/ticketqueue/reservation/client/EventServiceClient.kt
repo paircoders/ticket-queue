@@ -7,7 +7,11 @@ import org.springframework.web.bind.annotation.RequestParam
 import java.math.BigDecimal
 import java.util.UUID
 
-@FeignClient(name = "event-service", url = "\${feign.client.config.event-service.url}")
+@FeignClient(
+    name = "event-service",
+    url = "\${feign.client.config.event-service.url}",
+    fallbackFactory = EventServiceClientFallbackFactory::class
+)
 interface EventServiceClient {
 
     @GetMapping("/internal/seats/status/{scheduleId}")
@@ -22,7 +26,7 @@ interface EventServiceClient {
     data class SoldSeatsResponse(
         val scheduleId: UUID,
         val soldSeatIds: List<UUID>,
-        val totalSeats: Int
+        val totalSeats: Long
     )
 
     data class SeatDetailsResponse(

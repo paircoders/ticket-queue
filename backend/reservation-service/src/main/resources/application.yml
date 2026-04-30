@@ -81,6 +81,8 @@ processed-event:
 # OpenFeign (서비스 간 내부 통신)
 # ============================================================
 feign:
+  circuitbreaker:
+    enabled: true
   client:
     config:
       default:
@@ -90,6 +92,29 @@ feign:
         url: http://localhost:8082
         connect-timeout: 2000
         read-timeout: 3000
+
+# ============================================================
+# Resilience4j (Event Service 연쇄 장애 방지)
+# ============================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      event-service:
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 3
+  retry:
+    instances:
+      event-service:
+        maxAttempts: 3
+        waitDuration: 500ms
+        retryExceptions:
+          - feign.RetryableException
+  timelimiter:
+    instances:
+      event-service:
+        timeoutDuration: 3s
 
 # ============================================================
 # 내부 서비스 API Key
