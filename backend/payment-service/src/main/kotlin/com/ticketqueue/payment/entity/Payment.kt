@@ -57,6 +57,12 @@ class Payment(
     @Column(name = "updated_at", nullable = false)
     val updatedAt: LocalDateTime? = null,
 ) {
+    init {
+        require(paymentKey.isNotBlank()) { "paymentKey must not be blank" }
+        require(paymentKey.length <= 200) { "paymentKey must not exceed 200 characters" }
+        require(amount > BigDecimal.ZERO) { "amount must be positive" }
+    }
+
     fun markSuccess(transactionId: String, response: String, paidAt: LocalDateTime) {
         require(status.canTransitionTo(PaymentStatus.SUCCESS)) {
             "Cannot transition from $status to SUCCESS"
