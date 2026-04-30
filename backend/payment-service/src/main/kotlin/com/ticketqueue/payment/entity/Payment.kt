@@ -64,6 +64,7 @@ class Payment(
     }
 
     fun markSuccess(transactionId: String, response: String, paidAt: LocalDateTime) {
+        if (status == PaymentStatus.SUCCESS) return
         require(status.canTransitionTo(PaymentStatus.SUCCESS)) {
             "Cannot transition from $status to SUCCESS"
         }
@@ -74,6 +75,7 @@ class Payment(
     }
 
     fun markFailed(reason: String, response: String? = null) {
+        if (status == PaymentStatus.FAILED) return
         require(status.canTransitionTo(PaymentStatus.FAILED)) {
             "Cannot transition from $status to FAILED"
         }
