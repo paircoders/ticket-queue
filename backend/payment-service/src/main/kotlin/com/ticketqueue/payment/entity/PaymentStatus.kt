@@ -1,0 +1,17 @@
+package com.ticketqueue.payment.entity
+
+enum class PaymentStatus {
+    PENDING, SUCCESS, FAILED, REFUNDED;
+
+    private companion object {
+        val allowedTransitions = mapOf(
+            PENDING to setOf(SUCCESS, FAILED),
+            SUCCESS to setOf(REFUNDED),
+            FAILED to emptySet<PaymentStatus>(),
+            REFUNDED to emptySet<PaymentStatus>(),
+        )
+    }
+
+    fun canTransitionTo(target: PaymentStatus): Boolean =
+        allowedTransitions[this]?.contains(target) ?: false
+}
