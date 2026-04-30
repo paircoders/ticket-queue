@@ -102,12 +102,12 @@ resilience4j:
       event-service:
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
-        slidingWindowSize: 10
+        slidingWindowSize: 100
         permittedNumberOfCallsInHalfOpenState: 3
   retry:
     instances:
       event-service:
-        maxAttempts: 3
+        maxAttempts: 2
         waitDuration: 500ms
         retryExceptions:
           - feign.RetryableException

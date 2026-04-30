@@ -194,21 +194,18 @@ class ReservationService(
             ?: emptyList()
 
         val soldSet  = soldResponse.soldSeatIds.toSet()
-        val holdSet  = holdIds.toSet()
-        val overlap  = soldSet intersect holdSet
-        val soldUniq = soldSet - overlap
-        val holdUniq = holdSet - overlap
-        val available = maxOf(0L, soldResponse.totalSeats - soldUniq.size - holdUniq.size)
+        val holdUniq = holdIds.toSet() - soldSet
+        val available = maxOf(0L, soldResponse.totalSeats - (soldSet union holdUniq).size)
 
         return SeatStatusResponse(
             scheduleId = scheduleId,
             seats = SeatStatusResponse.SeatSummary(
                 total     = soldResponse.totalSeats,
-                available = available.toInt(),
-                sold      = soldUniq.size,
+                available = available,
+                sold      = soldSet.size,
                 hold      = holdUniq.size
             ),
-            sold = soldUniq.toList(),
+            sold = soldSet.toList(),
             hold = holdUniq.toList()
         )
     }
