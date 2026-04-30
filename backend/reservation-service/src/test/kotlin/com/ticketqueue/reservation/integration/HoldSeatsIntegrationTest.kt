@@ -107,7 +107,7 @@ class HoldSeatsIntegrationTest {
         justRun { multiLock.unlock() }
 
         every { eventServiceClient.getSoldSeats(scheduleId) } returns
-            EventServiceClient.SoldSeatsResponse(scheduleId, emptyList())
+            EventServiceClient.SoldSeatsResponse(scheduleId, emptyList(), 0)
         every { eventServiceClient.getSeatDetails(scheduleId, any()) } returns
             EventServiceClient.SeatDetailsResponse(
                 scheduleId = scheduleId,

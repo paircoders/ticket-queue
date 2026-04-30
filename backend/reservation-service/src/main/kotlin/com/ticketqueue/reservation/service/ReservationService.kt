@@ -5,6 +5,7 @@ import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.HoldResponse
+import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
 import com.ticketqueue.reservation.entity.Reservation
 import com.ticketqueue.reservation.entity.ReservationSeat
 import com.ticketqueue.reservation.entity.ReservationStatus
@@ -26,23 +27,6 @@ import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-/**
- * 좌석 선점 서비스 (REQ-RSV-001, REQ-RSV-005, REQ-RSV-008)
- *
- * ## 선점 프로세스
- * 1. QueueToken 검증 — queue:token:{token} Redis 직접 조회
- * 2. Redisson 분산 락 획득 — user:hold:lock:{userId}:{scheduleId} + seat:hold:{scheduleId}:{seatId}
- * 3. 기존 선점 수량 검증 — PENDING 예매의 좌석 수 합산, 사용자 락 내부에서 TOCTOU 방지 (최대 4장)
- * 4. Redis hold_seats SET 확인 — 이미 선점된 좌석 중복 방지
- * 5. 좌석 상세 조회 — Event Service 내부 API, AVAILABLE 상태 검증 + 스냅샷(seatNumber, grade, price)
- * 6. DB 저장 (TransactionTemplate) + afterCommit 콜백으로 Redis hold_seats SET 업데이트
- *    — afterCommit 사용으로 DB commit 성공 후에만 Redis 갱신 (롤백 시 Redis 오염 없음)
- *    — Redis 갱신 실패 시 경고 로그만 남기고 전파하지 않음 (hold_seats TTL 배치가 보정)
- *
- * ## 락 설계
- * tryLock(waitTime=0, leaseTime=300s)으로 락이 이미 선점 중이면 즉시 실패한다.
- * 성공/실패 모두 finally 블록에서 즉시 해제 — 선점 마커는 hold_seats SET(600s TTL)이 담당.
- */
 @Service
 class ReservationService(
     private val stringRedisTemplate: StringRedisTemplate,
@@ -82,6 +66,23 @@ class ReservationService(
         private const val HOLD_SEATS_SET_TTL_SECONDS = 600L
     }
 
+    /**
+     * 좌석 선점 서비스 (REQ-RSV-001, REQ-RSV-005, REQ-RSV-008)
+     *
+     * ## 선점 프로세스
+     * 1. QueueToken 검증 — queue:token:{token} Redis 직접 조회
+     * 2. Redisson 분산 락 획득 — user:hold:lock:{userId}:{scheduleId} + seat:hold:{scheduleId}:{seatId}
+     * 3. 기존 선점 수량 검증 — PENDING 예매의 좌석 수 합산, 사용자 락 내부에서 TOCTOU 방지 (최대 4장)
+     * 4. Redis hold_seats SET 확인 — 이미 선점된 좌석 중복 방지
+     * 5. 좌석 상세 조회 — Event Service 내부 API, AVAILABLE 상태 검증 + 스냅샷(seatNumber, grade, price)
+     * 6. DB 저장 (TransactionTemplate) + afterCommit 콜백으로 Redis hold_seats SET 업데이트
+     *    — afterCommit 사용으로 DB commit 성공 후에만 Redis 갱신 (롤백 시 Redis 오염 없음)
+     *    — Redis 갱신 실패 시 경고 로그만 남기고 전파하지 않음 (hold_seats TTL 배치가 보정)
+     *
+     * ## 락 설계
+     * tryLock(waitTime=0, leaseTime=300s)으로 락이 이미 선점 중이면 즉시 실패한다.
+     * 성공/실패 모두 finally 블록에서 즉시 해제 — 선점 마커는 hold_seats SET(600s TTL)이 담당.
+     */
     fun holdSeats(userId: UUID, request: HoldRequest, queueToken: String): HoldResponse {
         // 1. QueueToken 검증
         validateQueueToken(queueToken, userId, request.scheduleId)
@@ -180,6 +181,36 @@ class ReservationService(
                 }
             }
         }
+    }
+
+    /**
+     *  좌석 상태 조회
+     */
+    fun getSeatStatus(userId: UUID, scheduleId: UUID, queueToken: String): SeatStatusResponse {
+        validateQueueToken(queueToken, userId, scheduleId)
+
+        val soldResponse = eventServiceClient.getSoldSeats(scheduleId)
+
+        val holdIds = stringRedisTemplate.opsForSet()
+            .members("hold_seats:$scheduleId")
+            ?.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?: emptyList()
+
+        val soldSet  = soldResponse.soldSeatIds.toSet()
+        val holdUniq = holdIds.toSet() - soldSet
+        val available = maxOf(0L, soldResponse.totalSeats - (soldSet union holdUniq).size)
+
+        return SeatStatusResponse(
+            scheduleId = scheduleId,
+            seats = SeatStatusResponse.SeatSummary(
+                total     = soldResponse.totalSeats,
+                available = available,
+                sold      = soldSet.size,
+                hold      = holdUniq.size
+            ),
+            sold = soldSet.toList(),
+            hold = holdUniq.toList()
+        )
     }
 
     private fun validateQueueToken(token: String, userId: UUID, scheduleId: UUID) {

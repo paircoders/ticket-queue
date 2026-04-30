@@ -49,7 +49,8 @@ class SeatDto {
     /** 내부 API 응답 - Reservation Service가 SOLD 좌석 조회 시 사용 */
     data class SoldSeatsResponse(
         val scheduleId: UUID,
-        val soldSeatIds: List<UUID>
+        val soldSeatIds: List<UUID>,
+        val totalSeats: Long
     )
 
     /** 내부 API 응답 - Reservation Service가 좌석 선점 시 스냅샷 저장용으로 사용 */

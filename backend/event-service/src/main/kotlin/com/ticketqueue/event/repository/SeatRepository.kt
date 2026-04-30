@@ -10,4 +10,5 @@ import java.util.UUID
 interface SeatRepository : JpaRepository<Seat, UUID>, SeatRepositoryCustom {
     fun existsByEventScheduleIdAndStatus(eventScheduleId: UUID, status: SeatStatus): Boolean
     fun findByEventScheduleIdAndIdIn(eventScheduleId: UUID, ids: List<UUID>): List<Seat>
+    fun countByEventScheduleId(eventScheduleId: UUID): Long
 }

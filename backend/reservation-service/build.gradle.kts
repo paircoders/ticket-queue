@@ -19,6 +19,10 @@ dependencies {
     // Redis with Redisson for distributed locks
     implementation(libs.redisson.spring.boot.starter)
 
+    // Resilience4j (Circuit Breaker, Retry, TimeLimiter for EventServiceClient)
+    implementation(libs.spring.cloud.starter.circuitbreaker.resilience4j)
+    implementation(libs.bundles.resilience4j)
+
     // Test
     testImplementation(libs.bundles.test.base)
     testImplementation(libs.bundles.testcontainers)

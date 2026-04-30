@@ -116,7 +116,7 @@ class HoldSeatsConcurrencyTest {
      */
     private fun mockAllSeatsAvailable() {
         every { eventServiceClient.getSoldSeats(scheduleId) } returns
-            EventServiceClient.SoldSeatsResponse(scheduleId, emptyList())
+            EventServiceClient.SoldSeatsResponse(scheduleId, emptyList(), 0)
 
         every { eventServiceClient.getSeatDetails(scheduleId, any()) } answers {
             val requestedIds = arg<List<UUID>>(1)

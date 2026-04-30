@@ -52,7 +52,8 @@ class InternalSeatControllerTest {
             val soldId = UUID.randomUUID()
             val response = SeatDto.SoldSeatsResponse(
                 scheduleId = scheduleId,
-                soldSeatIds = listOf(soldId)
+                soldSeatIds = listOf(soldId),
+                totalSeats = 1L
             )
             every { seatService.getSoldSeatIds(scheduleId) } returns response
 
@@ -60,6 +61,7 @@ class InternalSeatControllerTest {
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$.scheduleId").value(scheduleId.toString()))
                 .andExpect(jsonPath("$.soldSeatIds[0]").value(soldId.toString()))
+                .andExpect(jsonPath("$.totalSeats").value(1L))
         }
 
         @Test
@@ -67,7 +69,8 @@ class InternalSeatControllerTest {
         fun noSoldSeats() {
             val response = SeatDto.SoldSeatsResponse(
                 scheduleId = scheduleId,
-                soldSeatIds = emptyList()
+                soldSeatIds = emptyList(),
+                totalSeats = 0L
             )
             every { seatService.getSoldSeatIds(scheduleId) } returns response
 
@@ -75,6 +78,7 @@ class InternalSeatControllerTest {
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$.soldSeatIds").isArray)
                 .andExpect(jsonPath("$.soldSeatIds").isEmpty)
+                .andExpect(jsonPath("$.totalSeats").value(0L))
         }
 
         @Test
