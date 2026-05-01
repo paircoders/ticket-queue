@@ -35,6 +35,24 @@
   --color-background: oklch(0.99 0 0); /* 배경색 (#F9FAFB) */
   --color-text: oklch(0.2 0 0); /* 기본 텍스트 (#111827) */
 
+  /* Apple Design System */
+  --apple-primary: #0066cc;
+  --apple-primary-focus: #0071e3;
+  --apple-primary-on-dark: #2997ff;
+  --apple-ink: #1d1d1f;
+  --apple-ink-muted-80: #333333;
+  --apple-ink-muted-48: #7a7a7a;
+  --apple-canvas: #ffffff;
+  --apple-canvas-parchment: #f5f5f7;
+  --apple-surface-pearl: #fafafc;
+  --apple-surface-tile-1: #272729;
+  --apple-surface-tile-2: #2a2a2c;
+  --apple-surface-black: #000000;
+  --apple-hairline: #e0e0e0;
+  --apple-divider-soft: #f0f0f0;
+  --apple-on-dark: #ffffff;
+  --apple-body-muted: #cccccc;
+
   /* Gray Scale - 중성 회색 */
   --color-gray-50: oklch(0.98 0 0);
   --color-gray-100: oklch(0.96 0 0);
@@ -82,7 +100,8 @@
      폰트 (Fonts)
      ============================================ */
 
-  --font-sans: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+  --font-sans: 'SF Pro Text', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'SF Pro Display', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ============================================
      브레이크포인트 (Breakpoints)

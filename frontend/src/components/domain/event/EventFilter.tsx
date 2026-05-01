@@ -3,9 +3,6 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 const STATUS_OPTIONS = [
   { value: '', label: '전체' },
@@ -47,24 +44,75 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-8">
-      <Input
-        type="text"
-        placeholder="공연명, 아티스트 검색"
-        value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className="sm:w-72"
-      />
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '40px' }}>
+      {/* Apple pill 검색 input */}
+      <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '360px' }}>
+        <Search
+          style={{
+            position: 'absolute',
+            left: '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: '16px',
+            height: '16px',
+            color: 'var(--apple-ink-muted-48)',
+            pointerEvents: 'none',
+          }}
+          aria-hidden="true"
+        />
+        <input
+          type="text"
+          placeholder="공연명, 아티스트 검색"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: '100%',
+            height: '44px',
+            paddingLeft: '40px',
+            paddingRight: '20px',
+            borderRadius: '9999px',
+            border: '1px solid rgba(0,0,0,0.08)',
+            backgroundColor: 'var(--apple-canvas)',
+            fontFamily: 'var(--font-sans)',
+            fontSize: '17px',
+            fontWeight: 400,
+            lineHeight: 1.47,
+            letterSpacing: '-0.374px',
+            color: 'var(--apple-ink)',
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = 'var(--apple-primary)'
+            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,102,204,0.15)'
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'
+            e.currentTarget.style.boxShadow = 'none'
+          }}
+        />
+      </div>
 
+      {/* 상태 필터 pill select */}
       <select
         value={status}
         onChange={(e) => setStatus(e.target.value)}
-        className={cn(
-          'border-input h-9 rounded-md border bg-background px-3 py-1 text-sm shadow-xs transition-colors',
-          'focus-visible:outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-          'sm:w-36',
-        )}
+        style={{
+          height: '44px',
+          padding: '0 20px',
+          borderRadius: '9999px',
+          border: '1px solid rgba(0,0,0,0.08)',
+          backgroundColor: 'var(--apple-canvas)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '14px',
+          fontWeight: 400,
+          letterSpacing: '-0.224px',
+          color: 'var(--apple-ink)',
+          outline: 'none',
+          cursor: 'pointer',
+          appearance: 'auto',
+        }}
       >
         {STATUS_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -73,10 +121,33 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
         ))}
       </select>
 
-      <Button onClick={handleSearch} size="md" className="sm:w-auto">
-        <Search className="size-4" />
+      {/* Apple button-primary pill CTA */}
+      <button
+        onClick={handleSearch}
+        style={{
+          height: '44px',
+          padding: '0 22px',
+          borderRadius: '9999px',
+          border: 'none',
+          backgroundColor: 'var(--apple-primary)',
+          color: '#ffffff',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '17px',
+          fontWeight: 400,
+          letterSpacing: '-0.374px',
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          transition: 'transform 0.1s ease',
+        }}
+        onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.95)' }}
+        onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+      >
+        <Search style={{ width: '16px', height: '16px' }} aria-hidden="true" />
         검색
-      </Button>
+      </button>
     </div>
   )
 }
