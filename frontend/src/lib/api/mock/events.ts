@@ -97,12 +97,25 @@ export const MOCK_EVENTS: EventSummary[] = [
 export function getMockEventsPage(
   page: number,
   size: number,
+  options?: { keyword?: string; status?: string },
 ): PaginatedResponse<EventSummary> {
+  let filtered = MOCK_EVENTS
+  if (options?.keyword) {
+    const kw = options.keyword.toLowerCase()
+    filtered = filtered.filter(
+      (e) =>
+        e.title?.toLowerCase().includes(kw) ||
+        e.artist?.toLowerCase().includes(kw),
+    )
+  }
+  if (options?.status) {
+    filtered = filtered.filter((e) => e.status === options.status)
+  }
   const start = page * size
-  const list = MOCK_EVENTS.slice(start, start + size)
+  const list = filtered.slice(start, start + size)
   return {
     list,
-    totalElements: MOCK_EVENTS.length,
+    totalElements: filtered.length,
     page,
     size,
   }

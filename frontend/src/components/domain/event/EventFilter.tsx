@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 
@@ -20,10 +20,17 @@ interface EventFilterProps {
 export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFilterProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [keyword, setKeyword] = useState(defaultKeyword)
-  const [status, setStatus] = useState(defaultStatus)
+  const [keyword, setKeyword] = useState(() => searchParams.get('keyword') ?? defaultKeyword)
+  const [status, setStatus] = useState(() => searchParams.get('status') ?? defaultStatus)
 
-  function handleSearch() {
+  // searchParams 변경 시 stale state 방지: URL이 바뀌면 state 동기화
+  useEffect(() => {
+    setKeyword(searchParams.get('keyword') ?? defaultKeyword)
+    setStatus(searchParams.get('status') ?? defaultStatus)
+  }, [searchParams, defaultKeyword, defaultStatus])
+
+  function handleSearch(e?: React.FormEvent) {
+    e?.preventDefault()
     const params = new URLSearchParams(searchParams.toString())
     if (keyword.trim()) {
       params.set('keyword', keyword.trim())
@@ -39,12 +46,12 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
     router.push('/events?' + params.toString())
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') handleSearch()
-  }
-
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '40px' }}>
+    <form
+      role="search"
+      onSubmit={handleSearch}
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', marginBottom: '40px' }}
+    >
       {/* Apple pill 검색 input */}
       <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '360px' }}>
         <Search
@@ -62,10 +69,11 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
         />
         <input
           type="text"
+          aria-label="공연명, 아티스트 검색"
           placeholder="공연명, 아티스트 검색"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          onKeyDown={handleKeyDown}
+          className="focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--apple-primary)]"
           style={{
             width: '100%',
             height: '44px',
@@ -80,24 +88,17 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
             lineHeight: 1.47,
             letterSpacing: '-0.374px',
             color: 'var(--apple-ink)',
-            outline: 'none',
             boxSizing: 'border-box',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--apple-primary)'
-            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,102,204,0.15)'
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'
-            e.currentTarget.style.boxShadow = 'none'
           }}
         />
       </div>
 
       {/* 상태 필터 pill select */}
       <select
+        aria-label="상태 필터"
         value={status}
         onChange={(e) => setStatus(e.target.value)}
+        className="focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--apple-primary)]"
         style={{
           height: '44px',
           padding: '0 20px',
@@ -109,7 +110,6 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
           fontWeight: 400,
           letterSpacing: '-0.224px',
           color: 'var(--apple-ink)',
-          outline: 'none',
           cursor: 'pointer',
           appearance: 'auto',
         }}
@@ -123,7 +123,7 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
 
       {/* Apple button-primary pill CTA */}
       <button
-        onClick={handleSearch}
+        type="submit"
         style={{
           height: '44px',
           padding: '0 22px',
@@ -148,6 +148,6 @@ export function EventFilter({ defaultKeyword = '', defaultStatus = '' }: EventFi
         <Search style={{ width: '16px', height: '16px' }} aria-hidden="true" />
         검색
       </button>
-    </div>
+    </form>
   )
 }

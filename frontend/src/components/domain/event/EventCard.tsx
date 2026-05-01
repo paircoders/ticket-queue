@@ -26,11 +26,15 @@ const secondaryTextStyle: CSSProperties = {
 }
 
 function formatDateRange(startDate: string, endDate: string): string {
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return ''
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+  const parseLocal = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number)
+    return { y, m, d }
+  }
+  const fmt = ({ y, m, d }: { y: number; m: number; d: number }) =>
+    `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`
+  const start = parseLocal(startDate)
+  const end = parseLocal(endDate)
+  if (!start.y || !end.y) return ''
   if (startDate === endDate) return fmt(start)
   return `${fmt(start)} – ${fmt(end)}`
 }
@@ -40,7 +44,10 @@ export function EventCard({ event, priority = false }: EventCardProps) {
   const isOpen = event.status === 'OPEN'
 
   return (
-    <Link href={`/events/${event.id}`} className="block group focus:outline-none">
+    <Link
+      href={`/events/${event.id}`}
+      className="block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--apple-primary-focus)] focus-visible:rounded-[18px]"
+    >
       <article
         style={{
           backgroundColor: 'var(--apple-canvas)',
@@ -49,7 +56,7 @@ export function EventCard({ event, priority = false }: EventCardProps) {
           overflow: 'hidden',
           transition: 'border-color 0.2s ease, transform 0.2s ease',
         }}
-        className="group-hover:[border-color:var(--apple-primary)] group-hover:scale-[0.99] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-[var(--apple-primary-focus)]"
+        className="group-hover:[border-color:var(--apple-primary)] group-hover:scale-[0.99]"
       >
         <div className="relative w-full" style={{ aspectRatio: '3/4' }}>
           {event.posterUrl ? (

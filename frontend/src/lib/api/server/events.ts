@@ -9,9 +9,9 @@ function ensureApiBaseUrl(): string {
   return API_BASE_URL
 }
 
-export async function getEventsServer(
+export const getEventsServer = cache(async (
   params?: EventListParams
-): Promise<PaginatedResponse<EventSummary>> {
+): Promise<PaginatedResponse<EventSummary>> => {
   const base = ensureApiBaseUrl()
 
   const searchParams = new URLSearchParams()
@@ -21,10 +21,14 @@ export async function getEventsServer(
   if (params?.city) searchParams.set('city', params.city)
   if (params?.keyword) searchParams.set('keyword', params.keyword)
 
-  const res = await fetch(`${base}/events?${searchParams.toString()}`, { next: { revalidate: 300 } })
+  const fetchOptions = params?.keyword
+    ? { cache: 'no-store' as const }
+    : { next: { revalidate: 300 } }
+
+  const res = await fetch(`${base}/events?${searchParams.toString()}`, fetchOptions)
   if (!res.ok) throw new Error(`Failed to fetch events: ${res.status}`)
   return res.json()
-}
+})
 
 export const getEventDetailServer = cache(async (id: string): Promise<EventDetail | null> => {
   const base = ensureApiBaseUrl()

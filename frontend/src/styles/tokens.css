@@ -100,8 +100,8 @@
      폰트 (Fonts)
      ============================================ */
 
-  --font-sans: 'SF Pro Text', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'SF Pro Display', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'SF Pro Text', 'Pretendard', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'SF Pro Display', 'Pretendard', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ============================================
      브레이크포인트 (Breakpoints)

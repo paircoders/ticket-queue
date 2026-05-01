@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { getEventsServer } from '@/lib/api/server/events'
-import { getMockEventsPage } from '@/lib/api/mock/events'
+import { getMockEventsPage, MOCK_EVENTS } from '@/lib/api/mock/events'
 import { EventList } from '@/components/domain/event/EventList'
 import { EventFilter } from '@/components/domain/event/EventFilter'
 import { Pagination } from '@/components/ui/Pagination'
@@ -28,7 +28,7 @@ interface EventsPageProps {
 export default async function EventsPage({ searchParams }: EventsPageProps) {
   const { page: pageParam, keyword, status } = await searchParams
 
-  const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1)
+  let page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1)
 
   let events: EventSummary[] = []
   let totalPages = 0
@@ -52,14 +52,17 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
       })
       events = corrected.list
       totalPages = Math.ceil(corrected.totalElements / PAGE_SIZE)
+      page = totalPages
     }
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('Failed to fetch events — using mock data', error)
-      const maxMockPage = Math.ceil(9 / PAGE_SIZE) - 1
-      const mockData = getMockEventsPage(Math.min(page - 1, maxMockPage), PAGE_SIZE)
+      const maxMockPage = Math.ceil(MOCK_EVENTS.length / PAGE_SIZE) - 1
+      const mockData = getMockEventsPage(Math.min(page - 1, maxMockPage), PAGE_SIZE, { keyword, status })
       events = mockData.list
       totalPages = Math.ceil(mockData.totalElements / PAGE_SIZE)
+    } else {
+      throw error
     }
   }
 

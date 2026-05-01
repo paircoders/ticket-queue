@@ -159,8 +159,9 @@ components:
     textColor: "{colors.on-primary}"
     rounded: "{rounded.pill}"
   button-secondary-pill:
-    backgroundColor: "{colors.canvas}"
+    backgroundColor: "transparent"
     textColor: "{colors.primary}"
+    border: "1px solid {colors.primary}"
     typography: "{typography.body}"
     rounded: "{rounded.pill}"
     padding: 11px 22px
