@@ -33,4 +33,28 @@ interface PortoneFeignClient {
         @RequestParam("storeId") storeId: String?,
         @RequestHeader("Authorization") token: String
     ): PortoneIdentityV2Response
+
+    /**
+     * 결제 사전 등록 (Prepare) — 금액 위변조 방지용 사전 검증 등록
+     * @param paymentId 가맹점 결제 ID (paymentKey)
+     * @param request 사전 등록 요청 (storeId, totalAmount 등)
+     * @param token Authorization: Bearer {ACCESS_TOKEN}
+     */
+    @PostMapping("/payments/{paymentId}/pre-register")
+    fun preRegisterPayment(
+        @PathVariable("paymentId") paymentId: String,
+        @RequestBody request: PortonePreRegisterRequest,
+        @RequestHeader("Authorization") token: String
+    )
+
+    /**
+     * 결제 단건 조회 — 클라이언트 결제 완료 후 서버에서 결과 검증
+     * @param paymentId 가맹점 결제 ID (paymentKey)
+     * @param token Authorization: Bearer {ACCESS_TOKEN}
+     */
+    @GetMapping("/payments/{paymentId}")
+    fun getPayment(
+        @PathVariable("paymentId") paymentId: String,
+        @RequestHeader("Authorization") token: String
+    ): PortonePaymentResponse
 }
