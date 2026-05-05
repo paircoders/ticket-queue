@@ -1,48 +1,60 @@
-'use client'
-
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import type { CSSProperties } from 'react'
 
 interface PaginationProps {
   currentPage: number
   totalPages: number
-  createPageUrl: (page: number) => string
+  keyword?: string
+  status?: string
+  basePath?: string
 }
 
-export function Pagination({ currentPage, totalPages, createPageUrl }: PaginationProps) {
+export function Pagination({ currentPage, totalPages, keyword, status, basePath = '/events' }: PaginationProps) {
   if (totalPages <= 1) return null
 
-  const pages: (number | 'ellipsis')[] = []
+  function createPageUrl(p: number) {
+    const params = new URLSearchParams()
+    if (keyword) params.set('keyword', keyword)
+    if (status) params.set('status', status)
+    params.set('page', String(p))
+    return basePath + '?' + params.toString()
+  }
 
-  // 페이지 윈도우 계산: 현재 페이지 ±2, 첫/마지막 페이지
+  const pages: (number | 'ellipsis')[] = []
   const windowStart = Math.max(2, currentPage - 2)
   const windowEnd = Math.min(totalPages - 1, currentPage + 2)
 
   pages.push(1)
-
   if (windowStart > 2) pages.push('ellipsis')
+  for (let i = windowStart; i <= windowEnd; i++) pages.push(i)
+  if (windowEnd < totalPages - 1) pages.push('ellipsis')
+  pages.push(totalPages)
 
-  for (let i = windowStart; i <= windowEnd; i++) {
-    pages.push(i)
+  const navItemBase: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '9999px',
+    fontFamily: 'var(--font-sans)',
+    fontSize: '14px',
+    fontWeight: 400,
+    letterSpacing: '-0.224px',
+    transition: 'background-color 0.15s ease, color 0.15s ease',
+    textDecoration: 'none',
   }
 
-  if (windowEnd < totalPages - 1) pages.push('ellipsis')
-
-  if (totalPages > 1) pages.push(totalPages)
-
   return (
-    <nav aria-label="페이지 네비게이션" className="flex items-center justify-center gap-1 mt-8">
+    <nav aria-label="페이지 네비게이션" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '48px' }}>
       {currentPage === 1 ? (
-        <span
-          aria-disabled="true"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors pointer-events-none border-border text-muted-foreground opacity-50"
-        >
+        <span style={{ ...navItemBase, color: 'var(--apple-ink-muted-48)', opacity: 0.4, cursor: 'default' }}>
           ←
         </span>
       ) : (
         <Link
           href={createPageUrl(currentPage - 1)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors border-border bg-background hover:bg-accent hover:text-accent-foreground"
+          style={{ ...navItemBase, color: 'var(--apple-primary)' }}
         >
           ←
         </Link>
@@ -50,14 +62,19 @@ export function Pagination({ currentPage, totalPages, createPageUrl }: Paginatio
 
       {pages.map((page, idx) =>
         page === 'ellipsis' ? (
-          <span key={`ellipsis-${idx}`} className="inline-flex h-9 w-9 items-center justify-center text-sm text-muted-foreground">
+          <span key={`ellipsis-${idx}`} style={{ ...navItemBase, color: 'var(--apple-ink-muted-48)', cursor: 'default' }}>
             …
           </span>
         ) : page === currentPage ? (
           <span
             key={page}
             aria-current="page"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-primary bg-primary text-primary-foreground"
+            style={{
+              ...navItemBase,
+              backgroundColor: 'var(--apple-primary)',
+              color: '#ffffff',
+              fontWeight: 600,
+            }}
           >
             {page}
           </span>
@@ -65,7 +82,7 @@ export function Pagination({ currentPage, totalPages, createPageUrl }: Paginatio
           <Link
             key={page}
             href={createPageUrl(page)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-border bg-background hover:bg-accent hover:text-accent-foreground"
+            style={{ ...navItemBase, color: 'var(--apple-primary)' }}
           >
             {page}
           </Link>
@@ -73,16 +90,13 @@ export function Pagination({ currentPage, totalPages, createPageUrl }: Paginatio
       )}
 
       {currentPage === totalPages ? (
-        <span
-          aria-disabled="true"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors pointer-events-none border-border text-muted-foreground opacity-50"
-        >
+        <span style={{ ...navItemBase, color: 'var(--apple-ink-muted-48)', opacity: 0.4, cursor: 'default' }}>
           →
         </span>
       ) : (
         <Link
           href={createPageUrl(currentPage + 1)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm transition-colors border-border bg-background hover:bg-accent hover:text-accent-foreground"
+          style={{ ...navItemBase, color: 'var(--apple-primary)' }}
         >
           →
         </Link>
