@@ -1,11 +1,16 @@
 package com.ticketqueue.queue.client
 
+import com.ticketqueue.common.config.InternalFeignConfig
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import java.util.UUID
 
-@FeignClient(name = "event-service", url = "\${spring.cloud.openfeign.client.config.event-service.url}")
+@FeignClient(
+    name = "event-service",
+    url = "\${spring.cloud.openfeign.client.config.event-service.url}",
+    configuration = [InternalFeignConfig::class]
+)
 interface EventServiceClient {
 
     @GetMapping("/internal/schedules/{scheduleId}/sellable")

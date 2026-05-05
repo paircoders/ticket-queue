@@ -1,7 +1,5 @@
 package com.ticketqueue.common.external.portone
 
-import com.fasterxml.jackson.annotation.JsonProperty
-import java.math.BigDecimal
 import java.time.OffsetDateTime
 
 /**
@@ -71,8 +69,8 @@ data class PortoneIdentityV2Response(
 /** 결제 사전 등록 요청 */
 data class PortonePreRegisterRequest(
     val storeId: String,
-    val totalAmount: BigDecimal,
-    val taxFreeAmount: BigDecimal? = null
+    val totalAmount: Long,
+    val taxFreeAmount: Long? = null
 )
 
 /** 결제 단건 조회 응답 */
@@ -83,12 +81,13 @@ data class PortonePaymentResponse(
     val amount: PortonePaymentAmount,
     val paidAt: OffsetDateTime? = null,
     val failure: PortonePaymentFailure? = null,
-    val pgTxId: String? = null
+    val pgTxId: String? = null,
+    val storeId: String? = null
 )
 
 /** 결제 금액 상세 */
 data class PortonePaymentAmount(
-    val total: BigDecimal
+    val total: Long
 )
 
 /** 결제 실패 상세 */

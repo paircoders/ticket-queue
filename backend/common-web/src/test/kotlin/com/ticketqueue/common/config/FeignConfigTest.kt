@@ -9,12 +9,12 @@ import io.kotest.matchers.shouldNotBe
 class FeignConfigTest : DescribeSpec({
 
     val apiKey = "test-internal-api-key-for-unit-test"
-    val feignConfig = FeignConfig(apiKey)
+    val internalFeignConfig = InternalFeignConfig(apiKey)
 
-    describe("FeignConfig - RequestInterceptor") {
-        context("Feign 요청 전송 시") {
-            it("모든 요청에 X-Service-Api-Key 헤더가 자동으로 추가된다") {
-                val interceptor = feignConfig.internalApiKeyRequestInterceptor()
+    describe("InternalFeignConfig - RequestInterceptor") {
+        context("내부 서비스 간 Feign 요청 전송 시") {
+            it("X-Service-Api-Key 헤더가 자동으로 추가된다") {
+                val interceptor = internalFeignConfig.internalApiKeyRequestInterceptor()
                 val template = RequestTemplate()
 
                 interceptor.apply(template)
@@ -25,7 +25,7 @@ class FeignConfigTest : DescribeSpec({
             }
 
             it("헤더 이름은 X-Service-Api-Key 상수와 일치한다") {
-                val interceptor = feignConfig.internalApiKeyRequestInterceptor()
+                val interceptor = internalFeignConfig.internalApiKeyRequestInterceptor()
                 val template = RequestTemplate()
 
                 interceptor.apply(template)
