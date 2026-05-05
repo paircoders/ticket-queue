@@ -79,6 +79,7 @@ data class PortonePaymentResponse(
     val transactionId: String? = null,
     val status: String,
     val amount: PortonePaymentAmount,
+    val currency: String? = null,
     val paidAt: OffsetDateTime? = null,
     val failure: PortonePaymentFailure? = null,
     val pgTxId: String? = null,
