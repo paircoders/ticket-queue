@@ -1,5 +1,6 @@
 package com.ticketqueue.reservation.client
 
+import com.ticketqueue.common.config.InternalFeignConfig
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -10,7 +11,8 @@ import java.util.UUID
 @FeignClient(
     name = "event-service",
     url = "\${feign.client.config.event-service.url}",
-    fallbackFactory = EventServiceClientFallbackFactory::class
+    fallbackFactory = EventServiceClientFallbackFactory::class,
+    configuration = [InternalFeignConfig::class]
 )
 interface EventServiceClient {
 
