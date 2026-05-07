@@ -70,25 +70,42 @@ data class PortoneIdentityV2Response(
 data class PortonePreRegisterRequest(
     val storeId: String,
     val totalAmount: Long,
-    val taxFreeAmount: Long? = null
+    val taxFreeAmount: Long? = null,
+    val currency: String? = null
 )
 
 /** 결제 단건 조회 응답 */
 data class PortonePaymentResponse(
     val id: String,
-    val transactionId: String? = null,
-    val status: String,
+    val transactionId: String,
+    val merchantId: String,
+    val storeId: String,
+    val status: String, // READY, PENDING, PAID, VIRTUAL_ACCOUNT_ISSUED, PARTIALLY_CANCELLED, CANCELLED, FAILED
     val amount: PortonePaymentAmount,
-    val currency: String? = null,
+    val currency: String,
+    val channel: PortoneSelectedChannel,
+    val version: String,
+    val requestedAt: OffsetDateTime,
+    val updatedAt: OffsetDateTime,
+    val statusChangedAt: OffsetDateTime,
+    val orderName: String,
+    val customer: PortoneCustomer,
+    val method: Map<String, Any?>? = null,
     val paidAt: OffsetDateTime? = null,
     val failure: PortonePaymentFailure? = null,
-    val pgTxId: String? = null,
-    val storeId: String? = null
+    val pgTxId: String? = null
 )
 
 /** 결제 금액 상세 */
 data class PortonePaymentAmount(
-    val total: Long
+    val total: Long,
+    val taxFree: Long,
+    val vat: Long? = null,
+    val supply: Long? = null,
+    val discount: Long,
+    val paid: Long,
+    val cancelled: Long,
+    val cancelledTaxFree: Long
 )
 
 /** 결제 실패 상세 */
@@ -96,4 +113,25 @@ data class PortonePaymentFailure(
     val reason: String? = null,
     val pgCode: String? = null,
     val pgMessage: String? = null
+)
+
+/** 선택된 채널 정보 */
+data class PortoneSelectedChannel(
+    val type: String, // LIVE, TEST
+    val pgProvider: String,
+    val pgMerchantId: String,
+    val id: String? = null,
+    val key: String? = null,
+    val name: String? = null
+)
+
+/** 고객 정보 */
+data class PortoneCustomer(
+    val id: String? = null,
+    val name: String? = null,
+    val birthYear: String? = null,
+    val gender: String? = null,
+    val email: String? = null,
+    val phoneNumber: String? = null,
+    val zipcode: String? = null
 )

@@ -55,6 +55,7 @@ interface PortoneFeignClient {
     @GetMapping("/payments/{paymentId}")
     fun getPayment(
         @PathVariable("paymentId") paymentId: String,
+        @RequestParam("storeId") storeId: String?,
         @RequestHeader("Authorization") token: String
     ): PortonePaymentResponse
 }
