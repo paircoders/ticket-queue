@@ -231,20 +231,7 @@ class ReservationService(
 
                 // DB commit 성공 후에만 Redis 갱신
                 registerAfterCommit {
-                    if (seatsToRelease.isNotEmpty()) {
-                        try {
-                            removeFromHoldSeatsSet(reservation.scheduleId, seatsToRelease)
-                        } catch (e: Exception) {
-                            log.warn(e) { "hold_seats SREM 실패 (scheduleId=${reservation.scheduleId}). 배치가 보정합니다." }
-                        }
-                    }
-                    if (seatsToAcquire.isNotEmpty()) {
-                        try {
-                            updateHoldSeatsSet(reservation.scheduleId, seatsToAcquire)
-                        } catch (e: Exception) {
-                            log.warn(e) { "hold_seats SADD 실패 (scheduleId=${reservation.scheduleId}). 배치가 보정합니다." }
-                        }
-                    }
+                    scheduleHoldSeatsReconciliation(reservation.scheduleId, seatsToRelease, seatsToAcquire)
                 }
             }
 
@@ -391,6 +378,27 @@ class ReservationService(
         val detail = seatDetailMap[seatId]
             ?: throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "좌석 상세 정보 없음: $seatId")
         return ReservationSeat(reservationId = reservationId, seatId = seatId, seatNumber = detail.seatNumber, grade = detail.grade, price = detail.price)
+    }
+
+    private fun scheduleHoldSeatsReconciliation(
+        scheduleId: UUID,
+        seatsToRelease: List<UUID>,
+        seatsToAcquire: List<UUID>
+    ) {
+        if (seatsToRelease.isNotEmpty()) {
+            try {
+                removeFromHoldSeatsSet(scheduleId, seatsToRelease)
+            } catch (e: Exception) {
+                log.warn(e) { "hold_seats SREM 실패 (scheduleId=$scheduleId). 배치가 보정합니다." }
+            }
+        }
+        if (seatsToAcquire.isNotEmpty()) {
+            try {
+                updateHoldSeatsSet(scheduleId, seatsToAcquire)
+            } catch (e: Exception) {
+                log.warn(e) { "hold_seats SADD 실패 (scheduleId=$scheduleId). 배치가 보정합니다." }
+            }
+        }
     }
 
     private fun registerAfterCommit(action: () -> Unit) {

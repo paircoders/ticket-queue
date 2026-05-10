@@ -68,7 +68,7 @@ class ChangeSeatsConcurrencyTest {
 
         @Container
         @JvmStatic
-        val valkey = GenericContainer("valkey/valkey:8.1-alpine")
+        val valkey = GenericContainer("valkey/valkey:8.1.5-alpine3.23")
             .withExposedPorts(6379)
 
         @DynamicPropertySource
@@ -188,8 +188,8 @@ class ChangeSeatsConcurrencyTest {
         }, executor)
 
         startLatch.countDown()
-        val statusA = futureA.get()
-        val statusB = futureB.get()
+        val statusA = futureA.get(10, TimeUnit.SECONDS)
+        val statusB = futureB.get(10, TimeUnit.SECONDS)
         executor.shutdown()
         executor.awaitTermination(5, TimeUnit.SECONDS)
 
@@ -250,8 +250,8 @@ class ChangeSeatsConcurrencyTest {
         }, executor)
 
         startLatch.countDown()
-        val changeStatus = changeFuture.get()
-        val holdStatus = holdFuture.get()
+        val changeStatus = changeFuture.get(10, TimeUnit.SECONDS)
+        val holdStatus = holdFuture.get(10, TimeUnit.SECONDS)
         executor.shutdown()
         executor.awaitTermination(5, TimeUnit.SECONDS)
 
@@ -263,5 +263,8 @@ class ChangeSeatsConcurrencyTest {
         stringRedisTemplate.opsForSet().size("hold_seats:$scheduleId") shouldBe
             if (changeStatus == 200) 1L  // initialSeatId 제거됨
             else 2L  // initialSeatId + contestedSeatId
+
+        stringRedisTemplate.opsForSet().isMember("hold_seats:$scheduleId", contestedSeatId.toString()) shouldBe true
+        stringRedisTemplate.opsForSet().isMember("hold_seats:$scheduleId", initialSeatId.toString()) shouldBe (changeStatus != 200)
     }
 }

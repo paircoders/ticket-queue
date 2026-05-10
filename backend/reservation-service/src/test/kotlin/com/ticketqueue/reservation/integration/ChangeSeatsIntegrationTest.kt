@@ -261,6 +261,9 @@ class ChangeSeatsIntegrationTest {
             seats.map { it.seatId }.shouldContain(anotherNewSeatId)
             seats.map { it.seatId }.shouldNotContain(oldSeatId)
             seats.size shouldBe 2
+
+            val reservation = reservationRepository.findById(UUID.fromString(reservationId)).get()
+            reservation.totalAmount shouldBe BigDecimal("300000")
         }
     }
 
