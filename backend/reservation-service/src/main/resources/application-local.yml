@@ -4,7 +4,7 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:postgresql://192.168.50.111:5432/ticket_queue?currentSchema=reservation_service,common
+    url: jdbc:postgresql://localhost:5432/ticket_queue?currentSchema=reservation_service,common
     username: reservation_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver

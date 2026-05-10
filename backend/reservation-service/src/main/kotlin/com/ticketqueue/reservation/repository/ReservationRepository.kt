@@ -3,6 +3,7 @@ package com.ticketqueue.reservation.repository
 import com.ticketqueue.reservation.entity.Reservation
 import com.ticketqueue.reservation.entity.ReservationStatus
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -12,4 +13,12 @@ interface ReservationRepository : JpaRepository<Reservation, UUID> {
     fun existsByUserIdAndScheduleIdAndStatusIn(userId: UUID, scheduleId: UUID, statuses: List<ReservationStatus>): Boolean
     fun findAllByStatusAndHoldExpiresAtBefore(status: ReservationStatus, now: LocalDateTime): List<Reservation>
     fun findByUserIdAndScheduleIdAndStatus(userId: UUID, scheduleId: UUID, status: ReservationStatus): List<Reservation>
+
+    @Query("SELECT r FROM Reservation r WHERE r.userId = :userId AND r.scheduleId = :scheduleId AND r.status = :status AND r.id <> :excludeId")
+    fun findByUserIdAndScheduleIdAndStatusExcluding(
+        userId: UUID,
+        scheduleId: UUID,
+        status: ReservationStatus,
+        excludeId: UUID
+    ): List<Reservation>
 }
