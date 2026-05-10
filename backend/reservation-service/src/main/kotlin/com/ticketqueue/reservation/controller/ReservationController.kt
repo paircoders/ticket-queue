@@ -1,5 +1,7 @@
 package com.ticketqueue.reservation.controller
 
+import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
+import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsResponse
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.HoldResponse
 import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
@@ -10,6 +12,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
@@ -25,6 +28,11 @@ class ReservationController(
 
     private val log = KotlinLogging.logger {}
 
+    companion object {
+        private const val HEADER_USER_ID = "X-User-Id"
+        private const val HEADER_QUEUE_TOKEN = "X-Queue-Token"
+    }
+
     /**
      * 좌석 상태 조회 (REQ-RSV-003)
      *
@@ -33,8 +41,8 @@ class ReservationController(
      */
     @GetMapping("/seats/{scheduleId}")
     fun getSeatStatus(
-        @RequestHeader("X-User-Id") userId: UUID,
-        @RequestHeader("X-Queue-Token") queueToken: String,
+        @RequestHeader(HEADER_USER_ID) userId: UUID,
+        @RequestHeader(HEADER_QUEUE_TOKEN) queueToken: String,
         @PathVariable scheduleId: UUID
     ): SeatStatusResponse {
         return reservationService.getSeatStatus(userId, scheduleId, queueToken)
@@ -49,11 +57,26 @@ class ReservationController(
     @PostMapping("/hold")
     @ResponseStatus(HttpStatus.CREATED)
     fun holdSeats(
-        @RequestHeader("X-User-Id") userId: UUID,
-        @RequestHeader("X-Queue-Token") queueToken: String,
+        @RequestHeader(HEADER_USER_ID) userId: UUID,
+        @RequestHeader(HEADER_QUEUE_TOKEN) queueToken: String,
         @RequestBody @Valid request: HoldRequest
     ): HoldResponse {
         log.info { "Request to hold seat $request" }
         return reservationService.holdSeats(userId, request, queueToken)
+    }
+
+    /**
+     * 선점 좌석 변경 (REQ-RSV-002)
+     *
+     * PENDING 상태 예매의 좌석을 교체한다.
+     */
+    @PutMapping("/hold/{reservationId}")
+    fun changeSeats(
+        @RequestHeader(HEADER_USER_ID) userId: UUID,
+        @RequestHeader(HEADER_QUEUE_TOKEN) queueToken: String,
+        @PathVariable reservationId: UUID,
+        @RequestBody @Valid request: ChangeSeatsRequest
+    ): ChangeSeatsResponse {
+        return reservationService.changeSeats(userId, reservationId, request, queueToken)
     }
 }

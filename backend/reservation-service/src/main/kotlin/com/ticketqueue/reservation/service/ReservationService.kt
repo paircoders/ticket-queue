@@ -3,6 +3,8 @@ package com.ticketqueue.reservation.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.reservation.client.EventServiceClient
+import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
+import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsResponse
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.HoldResponse
 import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
@@ -84,14 +86,13 @@ class ReservationService(
      * 성공/실패 모두 finally 블록에서 즉시 해제 — 선점 마커는 hold_seats SET(600s TTL)이 담당.
      */
     fun holdSeats(userId: UUID, request: HoldRequest, queueToken: String): HoldResponse {
-        // 1. QueueToken 검증
         validateQueueToken(queueToken, userId, request.scheduleId)
 
         // 락 목록 준비 (사용자 락 + 좌석 MultiLock)
-        val userLock = redissonClient.getLock("user:hold:lock:$userId:${request.scheduleId}")
+        val userLock = redissonClient.getLock(RedisKeys.userHoldLock(userId, request.scheduleId))
         val multiSeatLock = redissonClient.getMultiLock(
-            *request.seatIds.sorted().map { 
-                redissonClient.getLock("seat:hold:${request.scheduleId}:$it") 
+            *request.seatIds.sorted().map {
+                redissonClient.getLock(RedisKeys.seatHold(request.scheduleId, it))
             }.toTypedArray()
         )
 
@@ -100,31 +101,19 @@ class ReservationService(
             userLock to ErrorCode.RESERVATION_IN_PROGRESS,
             multiSeatLock to ErrorCode.SEAT_ALREADY_HELD
         )
-        val acquiredLocks = mutableListOf<RLock>()
-
-        try {
-            // 모든 락 획득 시도 (waitTime=0)
-            for ((lock, errorCode) in lockTargets) {
-                if (!lock.tryLock(0, HOLD_TTL_SECONDS, TimeUnit.SECONDS)) {
-                    throw ReservationException(errorCode)
-                }
-                acquiredLocks.add(lock)
-            }
-
-            // 3. 수량 검증 (사용자 락 안에서 수행하여 TOCTOU 방지)
+        return withSeatLocks(lockTargets) {
+            // 수량 검증 (사용자 락 안에서 수행하여 TOCTOU 방지)
             validateSeatCount(userId, request.scheduleId, request.seatIds.size)
 
-            // 4. Redis hold_seats SET 중복 확인
             checkHoldSeatsSet(request.scheduleId, request.seatIds)
 
-            // 5. 좌석 상세 조회 — AVAILABLE 상태 검증 + 스냅샷 (getSeatDetails 내부에서 SOLD/HOLD 거부)
+            // 좌석 상세 조회 — AVAILABLE 상태 검증 + 스냅샷 (getSeatDetails 내부에서 SOLD/HOLD 거부)
             val seatDetailsResponse = eventServiceClient.getSeatDetails(request.scheduleId, request.seatIds)
             val seatDetailMap = seatDetailsResponse.seats.associateBy { it.seatId }
             if (seatDetailMap.size != request.seatIds.size) {
                 throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "요청한 좌석 정보를 찾을 수 없습니다.")
             }
 
-            // 6. DB 저장 후 afterCommit 콜백으로 Redis hold_seats SET 업데이트
             val holdExpiresAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(HOLD_MINUTES)
             val totalAmount = seatDetailsResponse.seats.sumOf { it.price }
             val reservation = transactionTemplate.execute {
@@ -138,53 +127,127 @@ class ReservationService(
                     )
                 )
                 reservationSeatRepository.saveAll(
-                    request.seatIds.map { seatId ->
-                        val detail = seatDetailMap[seatId]
-                            ?: throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "좌석 상세 정보 없음: $seatId")
-                        ReservationSeat(
-                            reservationId = saved.id!!,
-                            seatId = seatId,
-                            seatNumber = detail.seatNumber,
-                            grade = detail.grade,
-                            price = detail.price
-                        )
-                    }
+                    request.seatIds.map { seatId -> buildReservationSeat(saved.id!!, seatId, seatDetailMap = seatDetailMap) }
                 )
                 // DB commit 성공 후에만 Redis 갱신 — 롤백 시 Redis 오염 없음
-                TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-                    override fun afterCommit() {
-                        try {
-                            updateHoldSeatsSet(request.scheduleId, request.seatIds)
-                        } catch (e: Exception) {
-                            log.warn(e) { "hold_seats SET 업데이트 실패 (scheduleId=${request.scheduleId}). 배치가 보정합니다." }
-                        }
+                registerAfterCommit {
+                    try {
+                        updateHoldSeatsSet(request.scheduleId, request.seatIds)
+                    } catch (e: Exception) {
+                        log.warn(e) { "hold_seats SET 업데이트 실패 (scheduleId=${request.scheduleId}). 배치가 보정합니다." }
                     }
-                })
+                }
                 saved
             } ?: throw ReservationException(ErrorCode.INTERNAL_SERVER_ERROR, "좌석 선점 저장에 실패했습니다.")
 
             log.info { "Seats held: userId=$userId, scheduleId=${request.scheduleId}, seatIds=${request.seatIds}, reservationId=${reservation.id}" }
 
-            return HoldResponse(
+            HoldResponse(
                 reservationId = reservation.id!!,
                 status = reservation.status,
                 totalAmount = reservation.totalAmount,
-                holdExpiresAt = reservation.holdExpiresAt.atOffset(ZoneOffset.UTC)
+                holdExpiresAt = reservation.holdExpiresAt.toUtcOffset()
             )
-        } finally {
-            // 획득한 락을 역순으로 안전하게 해제
-            acquiredLocks.reversed().forEach { lock ->
-                try {
-                    if (lock.isHeldByCurrentThread) lock.unlock()
-                } catch (e: Exception) {
-                    log.warn(e) { "Failed to release lock: ${lock.name}" }
-                }
-            }
         }
     }
 
     /**
-     *  좌석 상태 조회
+     * 좌석 변경 서비스 (REQ-RSV-002)
+     *
+     * ## 변경 프로세스
+     * 1. 기존 + 신규 좌석 전체를 정렬하여 MultiLock 획득 — 데드락 방지
+     * 2. 신규 좌석(seatsToAcquire)만 hold_seats SET 중복 확인 — 기존 좌석 오탐 방지
+     * 3. DB 트랜잭션 + afterCommit 콜백으로 Redis hold_seats SET 갱신 — DB 롤백 시 Redis 오염 없음
+     */
+    fun changeSeats(userId: UUID, reservationId: UUID, request: ChangeSeatsRequest, queueToken: String): ChangeSeatsResponse {
+        val reservation = reservationRepository.findByIdAndUserId(reservationId, userId)
+            ?: throw ReservationException(ErrorCode.RESERVATION_NOT_FOUND)
+
+        validateForChange(reservation)
+        validateQueueToken(queueToken, userId, reservation.scheduleId)
+
+        val oldSeats = reservationSeatRepository.findByReservationId(reservationId)
+        val oldSeatIds = oldSeats.map { it.seatId }
+        val newSeatIds = request.newSeatIds
+
+        if (newSeatIds.size > MAX_HOLD_SEATS) {
+            throw ReservationException(ErrorCode.MAX_SEATS_EXCEEDED)
+        }
+
+        // 변경 대상 분류
+        val seatsToRelease = oldSeatIds.filterNot { it in newSeatIds }
+        val seatsToAcquire = newSeatIds.filterNot { it in oldSeatIds }
+
+        // 락 획득 전 수행하여 락 점유 시간 최소화 — 락 후 checkHoldSeatsSet이 Redis 상태를 재검증하므로 TOCTOU 위험 없음
+        val newSeatDetailMap = fetchNewSeatDetails(reservation.scheduleId, seatsToAcquire)
+
+        val keptSeatMap = oldSeats.filter { it.seatId in newSeatIds }.associateBy { it.seatId }
+        val newTotalAmount = newSeatIds.sumOf { seatId ->
+            keptSeatMap[seatId]?.price
+                ?: newSeatDetailMap[seatId]?.price
+                ?: throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "좌석 상세 정보 없음: $seatId")
+        }
+
+        // 락 목록 준비 — 기존 + 신규 전체 정렬하여 데드락 방지
+        val userLock = redissonClient.getLock(RedisKeys.userHoldLock(userId, reservation.scheduleId))
+        // distinct: 유지 좌석이 old/new 양쪽에 포함되어 MultiLock에 중복 키가 전달되는 것을 방지
+        val allSeatIds = (oldSeatIds + newSeatIds).distinct().sorted()
+        val multiSeatLock = redissonClient.getMultiLock(
+            *allSeatIds.map { redissonClient.getLock(RedisKeys.seatHold(reservation.scheduleId, it)) }.toTypedArray()
+        )
+
+        val lockTargets = listOf(
+            userLock to ErrorCode.RESERVATION_IN_PROGRESS,
+            multiSeatLock to ErrorCode.SEAT_ALREADY_HELD
+        )
+        return withSeatLocks(lockTargets) {
+            // 다른 PENDING 예매와 합산한 좌석 한도 검증 (사용자 락 내부에서 수행)
+            validateSeatCount(userId, reservation.scheduleId, newSeatIds.size, excludeReservationId = reservationId)
+
+            // 신규 좌석만 hold_seats SET 중복 확인 (기존 좌석은 이미 보유 중이므로 제외)
+            if (seatsToAcquire.isNotEmpty()) {
+                checkHoldSeatsSet(reservation.scheduleId, seatsToAcquire)
+            }
+
+            val newHoldExpiresAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(HOLD_MINUTES)
+
+            transactionTemplate.executeWithoutResult {
+                // 락 획득 후 예매 상태 재검증 (TOCTOU 방지) + dirty checking 겸용 — SELECT 1회로 통합
+                val freshReservation = reservationRepository.findByIdAndUserId(reservationId, userId)
+                    ?: throw ReservationException(ErrorCode.RESERVATION_NOT_FOUND)
+                if (freshReservation.status != ReservationStatus.PENDING) {
+                    throw ReservationException(ErrorCode.RESERVATION_NOT_CHANGEABLE)
+                }
+                if (LocalDateTime.now(ZoneOffset.UTC).isAfter(freshReservation.holdExpiresAt)) {
+                    throw ReservationException(ErrorCode.HOLD_EXPIRED)
+                }
+
+                reservationSeatRepository.deleteAllByReservationId(reservationId)
+                reservationSeatRepository.saveAll(
+                    newSeatIds.map { seatId -> buildReservationSeat(reservationId, seatId, keptSeatMap, newSeatDetailMap) }
+                )
+                freshReservation.updateTotalAmount(newTotalAmount)
+                freshReservation.updateHoldExpiresAt(newHoldExpiresAt)
+
+                // DB commit 성공 후에만 Redis 갱신
+                registerAfterCommit {
+                    scheduleHoldSeatsReconciliation(reservation.scheduleId, seatsToRelease, seatsToAcquire)
+                }
+            }
+
+            log.info { "Seats changed: userId=$userId, reservationId=$reservationId, oldSeatIds=$oldSeatIds, newSeatIds=$newSeatIds" }
+
+            ChangeSeatsResponse(
+                reservationId = reservationId,
+                status = ReservationStatus.PENDING,
+                newTotalAmount = newTotalAmount,
+                holdExpiresAt = newHoldExpiresAt.toUtcOffset()
+            )
+        }
+    }
+
+    /**
+     * 좌석 상태 조회
      */
     fun getSeatStatus(userId: UUID, scheduleId: UUID, queueToken: String): SeatStatusResponse {
         validateQueueToken(queueToken, userId, scheduleId)
@@ -192,7 +255,7 @@ class ReservationService(
         val soldResponse = eventServiceClient.getSoldSeats(scheduleId)
 
         val holdIds = stringRedisTemplate.opsForSet()
-            .members("hold_seats:$scheduleId")
+            .members(RedisKeys.holdSeatsSet(scheduleId))
             ?.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
             ?: emptyList()
 
@@ -213,8 +276,29 @@ class ReservationService(
         )
     }
 
+    private fun validateForChange(reservation: Reservation) {
+        if (reservation.status != ReservationStatus.PENDING) {
+            throw ReservationException(ErrorCode.RESERVATION_NOT_CHANGEABLE)
+        }
+        if (LocalDateTime.now(ZoneOffset.UTC).isAfter(reservation.holdExpiresAt)) {
+            throw ReservationException(ErrorCode.HOLD_EXPIRED)
+        }
+    }
+
+    private fun fetchNewSeatDetails(
+        scheduleId: UUID,
+        seatsToAcquire: List<UUID>
+    ): Map<UUID, EventServiceClient.SeatDetailsResponse.SeatDetail> {
+        if (seatsToAcquire.isEmpty()) return emptyMap()
+        val response = eventServiceClient.getSeatDetails(scheduleId, seatsToAcquire)
+        if (response.seats.size != seatsToAcquire.size) {
+            throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "요청한 좌석 정보를 찾을 수 없습니다.")
+        }
+        return response.seats.associateBy { it.seatId }
+    }
+
     private fun validateQueueToken(token: String, userId: UUID, scheduleId: UUID) {
-        val tokenJson = stringRedisTemplate.opsForValue().get("queue:token:$token")
+        val tokenJson = stringRedisTemplate.opsForValue().get(RedisKeys.queueToken(token))
             ?: throw ReservationException(ErrorCode.QUEUE_TOKEN_EXPIRED)
 
         val payload = try {
@@ -228,13 +312,20 @@ class ReservationService(
         }
     }
 
-    private fun validateSeatCount(userId: UUID, scheduleId: UUID, requestedCount: Int) {
+    private fun validateSeatCount(
+        userId: UUID,
+        scheduleId: UUID,
+        requestedCount: Int,
+        excludeReservationId: UUID? = null
+    ) {
         if (requestedCount > MAX_HOLD_SEATS) {
             throw ReservationException(ErrorCode.MAX_SEATS_EXCEEDED)
         }
-        val pendingReservations = reservationRepository.findByUserIdAndScheduleIdAndStatus(
-            userId, scheduleId, ReservationStatus.PENDING
-        )
+        val pendingReservations = if (excludeReservationId != null)
+            reservationRepository.findByUserIdAndScheduleIdAndStatusExcluding(userId, scheduleId, ReservationStatus.PENDING, excludeReservationId)
+        else
+            reservationRepository.findByUserIdAndScheduleIdAndStatus(userId, scheduleId, ReservationStatus.PENDING)
+
         if (pendingReservations.isEmpty()) return
 
         val existingCount = reservationSeatRepository.countByReservationIdIn(
@@ -246,7 +337,7 @@ class ReservationService(
     }
 
     private fun checkHoldSeatsSet(scheduleId: UUID, seatIds: List<UUID>) {
-        val holdSeatsKey = "hold_seats:$scheduleId"
+        val holdSeatsKey = RedisKeys.holdSeatsSet(scheduleId)
         val result: List<Boolean>? = stringRedisTemplate.execute { conn ->
             conn.setCommands().sMIsMember(
                 holdSeatsKey.toByteArray(Charsets.UTF_8),
@@ -258,6 +349,11 @@ class ReservationService(
         }
     }
 
+    private fun removeFromHoldSeatsSet(scheduleId: UUID, seatIds: List<UUID>) {
+        stringRedisTemplate.opsForSet()
+            .remove(RedisKeys.holdSeatsSet(scheduleId), *seatIds.map { it.toString() }.toTypedArray())
+    }
+
     /**
      * hold_seats Redis SET에 좌석 ID를 추가하고 TTL을 설정한다.
      *
@@ -265,9 +361,74 @@ class ReservationService(
      * DB commit 성공 후 afterCommit 콜백에서 호출되므로 DB 롤백 시 Redis 오염이 발생하지 않는다.
      */
     private fun updateHoldSeatsSet(scheduleId: UUID, seatIds: List<UUID>) {
-        val holdSeatsKey = "hold_seats:$scheduleId"
+        val holdSeatsKey = RedisKeys.holdSeatsSet(scheduleId)
         val args = (listOf(HOLD_SEATS_SET_TTL_SECONDS.toString()) + seatIds.map { it.toString() }).toTypedArray()
         stringRedisTemplate.execute(holdSeatsSetScript, listOf(holdSeatsKey), *args)
     }
 
+    private fun buildReservationSeat(
+        reservationId: UUID,
+        seatId: UUID,
+        keptSeatMap: Map<UUID, ReservationSeat> = emptyMap(),
+        seatDetailMap: Map<UUID, EventServiceClient.SeatDetailsResponse.SeatDetail>
+    ): ReservationSeat {
+        keptSeatMap[seatId]?.let { kept ->
+            return ReservationSeat(reservationId = reservationId, seatId = seatId, seatNumber = kept.seatNumber, grade = kept.grade, price = kept.price)
+        }
+        val detail = seatDetailMap[seatId]
+            ?: throw ReservationException(ErrorCode.RESOURCE_NOT_FOUND, "좌석 상세 정보 없음: $seatId")
+        return ReservationSeat(reservationId = reservationId, seatId = seatId, seatNumber = detail.seatNumber, grade = detail.grade, price = detail.price)
+    }
+
+    private fun scheduleHoldSeatsReconciliation(
+        scheduleId: UUID,
+        seatsToRelease: List<UUID>,
+        seatsToAcquire: List<UUID>
+    ) {
+        if (seatsToRelease.isNotEmpty()) {
+            try {
+                removeFromHoldSeatsSet(scheduleId, seatsToRelease)
+            } catch (e: Exception) {
+                log.warn(e) { "hold_seats SREM 실패 (scheduleId=$scheduleId). 배치가 보정합니다." }
+            }
+        }
+        if (seatsToAcquire.isNotEmpty()) {
+            try {
+                updateHoldSeatsSet(scheduleId, seatsToAcquire)
+            } catch (e: Exception) {
+                log.warn(e) { "hold_seats SADD 실패 (scheduleId=$scheduleId). 배치가 보정합니다." }
+            }
+        }
+    }
+
+    private fun registerAfterCommit(action: () -> Unit) {
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() { action() }
+        })
+    }
+
+    // lockTargets 순서대로 tryLock(waitTime=0) 획득 후 block 실행, finally에서 역순 해제
+    private inline fun <T> withSeatLocks(lockTargets: List<Pair<RLock, ErrorCode>>, block: () -> T): T {
+        val acquiredLocks = mutableListOf<RLock>()
+        try {
+            for ((lock, errorCode) in lockTargets) {
+                if (!lock.tryLock(0, HOLD_TTL_SECONDS, TimeUnit.SECONDS)) {
+                    throw ReservationException(errorCode)
+                }
+                acquiredLocks.add(lock)
+            }
+            return block()
+        } finally {
+            acquiredLocks.reversed().forEach { lock ->
+                try {
+                    if (lock.isHeldByCurrentThread) lock.unlock()
+                } catch (e: Exception) {
+                    log.warn(e) { "Failed to release lock: ${lock.name}" }
+                }
+            }
+        }
+    }
+
 }
+
+private fun LocalDateTime.toUtcOffset(): OffsetDateTime = atOffset(ZoneOffset.UTC)
