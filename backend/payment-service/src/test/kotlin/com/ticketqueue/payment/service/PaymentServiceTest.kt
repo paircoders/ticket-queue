@@ -203,6 +203,20 @@ class PaymentServiceTest {
         }
 
         @Test
+        @DisplayName("holdExpiresAt이 현재 시각과 정확히 같으면 HOLD_EXPIRED 예외가 발생한다")
+        fun holdExpiredAtExactBoundary() {
+            val now = LocalDateTime.now(ZoneOffset.UTC)
+            every { reservationServiceClient.getReservation(reservationId) } returns
+                buildReservation(holdExpiresAt = now)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.HOLD_EXPIRED
+        }
+
+        @Test
         @DisplayName("PortOne pre-register 실패 시 Payment가 FAILED로 저장되고 PORTONE_PRE_REGISTER_FAILED 예외가 발생한다")
         fun portonePreRegisterFails() {
             every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()

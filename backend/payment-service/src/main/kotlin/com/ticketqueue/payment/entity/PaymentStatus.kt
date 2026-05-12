@@ -6,8 +6,8 @@ enum class PaymentStatus {
     private companion object {
         val allowedTransitions = mapOf(
             PENDING to setOf(SUCCESS, FAILED),
-            SUCCESS to setOf(SUCCESS, REFUNDED),
-            FAILED to setOf(FAILED),
+            SUCCESS to setOf(REFUNDED),
+            FAILED to emptySet(),
             REFUNDED to emptySet<PaymentStatus>(),
         )
     }

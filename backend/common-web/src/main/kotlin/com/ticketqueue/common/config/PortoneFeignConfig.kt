@@ -8,9 +8,6 @@ import org.springframework.context.annotation.Bean
 class PortoneFeignConfig {
 
     @Bean
-    fun portoneLoggerLevel(): Logger.Level = Logger.Level.BASIC
-
-    @Bean
     fun portoneLogger(): Logger = object : Logger() {
         private val log = LoggerFactory.getLogger(PortoneFeignClient::class.java)
 

@@ -5,6 +5,11 @@ spring:
     aws:
       secretsmanager:
         enabled: false
+    openfeign:
+      client:
+        config:
+          reservation-service:
+            url: http://localhost:8084
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
@@ -14,12 +19,6 @@ spring:
     properties:
       hibernate:
         default_schema: payment_service
-  cloud:
-    openfeign:
-      client:
-        config:
-          reservation-service:
-            url: http://localhost:8084
 
 external:
   portone:

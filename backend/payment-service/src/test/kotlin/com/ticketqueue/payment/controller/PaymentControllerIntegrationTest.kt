@@ -186,6 +186,19 @@ class PaymentControllerIntegrationTest {
                     .content(objectMapper.writeValueAsString(body))
             ).andExpect(status().isBadRequest)
         }
+
+        @Test
+        @DisplayName("알 수 없는 paymentMethod 값 입력 시 400 반환")
+        fun invalidPaymentMethod() {
+            val body = mapOf("reservationId" to reservationId, "amount" to amount, "paymentMethod" to "BITCOIN")
+            mockMvc.perform(
+                post("/payments")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(body))
+            ).andExpect(status().isBadRequest)
+        }
     }
 
     @Nested

@@ -16,6 +16,7 @@ import com.ticketqueue.payment.repository.PaymentRepository
 import feign.FeignException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.UUID
@@ -51,21 +52,7 @@ class PaymentService(
             throw PaymentException(ErrorCode.INTERNAL_SERVER_ERROR)
         }
 
-        if (reservation.userId != userId) {
-            throw PaymentException(ErrorCode.FORBIDDEN)
-        }
-
-        if (reservation.status != ReservationStatus.PENDING.name) {
-            throw PaymentException(ErrorCode.RESERVATION_NOT_PAYABLE)
-        }
-
-        if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(reservation.holdExpiresAt)) {
-            throw PaymentException(ErrorCode.HOLD_EXPIRED)
-        }
-
-        if (reservation.totalAmount.compareTo(request.amount) != 0) {
-            throw PaymentException(ErrorCode.PAYMENT_AMOUNT_MISMATCH)
-        }
+        validateReservation(reservation, userId, request.amount)
 
         val paymentKey = UUID.randomUUID().toString()
 
@@ -103,5 +90,16 @@ class PaymentService(
             channelKey = channelKey,
             paymentKey = paymentKey
         )
+    }
+
+    private fun validateReservation(
+        reservation: ReservationServiceClient.ReservationDetailResponse,
+        userId: UUID,
+        requestedAmount: BigDecimal
+    ) {
+        if (reservation.userId != userId) throw PaymentException(ErrorCode.FORBIDDEN)
+        if (reservation.status != ReservationStatus.PENDING.name) throw PaymentException(ErrorCode.RESERVATION_NOT_PAYABLE)
+        if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(reservation.holdExpiresAt)) throw PaymentException(ErrorCode.HOLD_EXPIRED)
+        if (reservation.totalAmount.compareTo(requestedAmount) != 0) throw PaymentException(ErrorCode.PAYMENT_AMOUNT_MISMATCH)
     }
 }
