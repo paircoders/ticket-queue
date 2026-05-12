@@ -7,8 +7,10 @@ import com.ticketqueue.common.external.portone.PortoneTokenService
 import com.ticketqueue.payment.client.ReservationServiceClient
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.entity.Payment
+import com.ticketqueue.payment.entity.PaymentStatus
 import com.ticketqueue.payment.exception.PaymentException
 import com.ticketqueue.payment.repository.PaymentRepository
+import feign.FeignException
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.justRun
@@ -53,6 +55,7 @@ class PaymentServiceTest {
         every { portoneProperties.storeId } returns storeId
         every { portoneProperties.channelKey } returns channelKey
         every { portoneTokenService.getAccessToken() } returns bearerToken
+        every { paymentRepository.existsByReservationIdAndStatusIn(any(), any()) } returns false
 
         paymentService = PaymentService(
             paymentRepository,
@@ -133,7 +136,7 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("예매 상태가 PENDING이 아니면 HOLD_EXPIRED 예외가 발생한다")
+        @DisplayName("예매 상태가 PENDING이 아니면 RESERVATION_NOT_PAYABLE 예외가 발생한다")
         fun holdExpiredWhenNotPending() {
             every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(status = "CONFIRMED")
 
@@ -141,7 +144,48 @@ class PaymentServiceTest {
                 paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
             }
 
-            ex.errorCode shouldBe ErrorCode.HOLD_EXPIRED
+            ex.errorCode shouldBe ErrorCode.RESERVATION_NOT_PAYABLE
+        }
+
+        @Test
+        @DisplayName("예매 서비스가 404를 반환하면 RESERVATION_NOT_FOUND 예외가 발생한다")
+        fun reservationNotFound() {
+            every { reservationServiceClient.getReservation(reservationId) } throws mockk<FeignException.NotFound>()
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.RESERVATION_NOT_FOUND
+        }
+
+        @Test
+        @DisplayName("예매 서비스 네트워크 오류 시 INTERNAL_SERVER_ERROR 예외가 발생한다")
+        fun reservationServiceUnavailable() {
+            every { reservationServiceClient.getReservation(reservationId) } throws mockk<FeignException.ServiceUnavailable>()
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.INTERNAL_SERVER_ERROR
+        }
+
+        @Test
+        @DisplayName("동일 reservationId에 PENDING 결제가 이미 존재하면 PAYMENT_ALREADY_EXISTS 예외가 발생한다")
+        fun duplicatePayment() {
+            every {
+                paymentRepository.existsByReservationIdAndStatusIn(
+                    reservationId, listOf(PaymentStatus.PENDING, PaymentStatus.SUCCESS)
+                )
+            } returns true
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_ALREADY_EXISTS
+            verify(exactly = 0) { reservationServiceClient.getReservation(any()) }
         }
 
         @Test

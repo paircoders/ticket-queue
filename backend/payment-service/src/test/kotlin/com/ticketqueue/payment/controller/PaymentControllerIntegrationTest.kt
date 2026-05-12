@@ -227,7 +227,7 @@ class PaymentControllerIntegrationTest {
         }
 
         @Test
-        @DisplayName("예매 상태가 PENDING이 아니면 410과 HOLD_EXPIRED 반환")
+        @DisplayName("예매 상태가 PENDING이 아니면 422와 RESERVATION_NOT_PAYABLE 반환")
         fun holdExpiredByStatus() {
             every { reservationServiceClient.getReservation(reservationId) } returns
                 buildReservation(status = "CONFIRMED")
@@ -239,8 +239,8 @@ class PaymentControllerIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(createRequestBody()))
             )
-                .andExpect(status().isGone)
-                .andExpect(jsonPath("$.code").value(ErrorCode.HOLD_EXPIRED.code))
+                .andExpect(status().isUnprocessableEntity)
+                .andExpect(jsonPath("$.code").value(ErrorCode.RESERVATION_NOT_PAYABLE.code))
         }
 
         @Test
@@ -258,6 +258,28 @@ class PaymentControllerIntegrationTest {
             )
                 .andExpect(status().isGone)
                 .andExpect(jsonPath("$.code").value(ErrorCode.HOLD_EXPIRED.code))
+        }
+
+        @Test
+        @DisplayName("동일 reservationId로 결제를 두 번 요청하면 두 번째는 409와 PAYMENT_ALREADY_EXISTS 반환")
+        fun duplicatePayment() {
+            mockMvc.perform(
+                post("/payments")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(createRequestBody()))
+            ).andExpect(status().isOk)
+
+            mockMvc.perform(
+                post("/payments")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(createRequestBody()))
+            )
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.code").value(ErrorCode.PAYMENT_ALREADY_EXISTS.code))
         }
     }
 }

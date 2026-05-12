@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
 
@@ -52,7 +53,7 @@ class ReservationInternalControllerTest {
         scheduleId = scheduleId,
         eventId = UUID.randomUUID(),
         totalAmount = BigDecimal("300000"),
-        holdExpiresAt = LocalDateTime.now().plusMinutes(5)
+        holdExpiresAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5)
     )
 
     private fun buildSeat() = ReservationSeat(

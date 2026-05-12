@@ -18,6 +18,8 @@ interface ReservationServiceClient {
     @GetMapping("/internal/reservations/{reservationId}")
     fun getReservation(@PathVariable reservationId: UUID): ReservationDetailResponse
 
+    enum class ReservationStatus { PENDING, CONFIRMED, CANCELLED, EXPIRED }
+
     data class ReservationDetailResponse(
         val reservationId: UUID,
         val userId: UUID,

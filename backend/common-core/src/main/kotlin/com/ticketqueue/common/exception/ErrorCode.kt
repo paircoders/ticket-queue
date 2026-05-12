@@ -43,6 +43,8 @@ enum class ErrorCode(
     RESERVATION_IN_PROGRESS(HttpStatus.CONFLICT, "RESERVATION_IN_PROGRESS", "이미 진행 중인 선점 요청이 있습니다. 잠시 후 다시 시도해주세요."),
 
     // Payment
+    RESERVATION_NOT_PAYABLE(HttpStatus.UNPROCESSABLE_ENTITY, "RESERVATION_NOT_PAYABLE", "결제 불가 상태의 예매입니다."),
+    PAYMENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "PAYMENT_ALREADY_EXISTS", "이미 진행 중이거나 완료된 결제가 존재합니다."),
     PAYMENT_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT_FAILED", "결제에 실패했습니다."),
     PAYMENT_TIMEOUT(HttpStatus.REQUEST_TIMEOUT, "PAYMENT_TIMEOUT", "결제 처리 시간이 초과되었습니다."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_AMOUNT_MISMATCH", "결제 금액이 일치하지 않습니다."),
