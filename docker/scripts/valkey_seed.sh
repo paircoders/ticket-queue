@@ -34,7 +34,7 @@ if [ -f "docker/secrets/valkey_pw.txt" ]; then
 fi
 
 if [ -n "$VALKEY_PW" ]; then
-    CLI="docker exec $CONTAINER valkey-cli --no-auth-warning -a $VALKEY_PW"
+    CLI="docker exec -e REDISCLI_AUTH=$VALKEY_PW $CONTAINER valkey-cli --no-auth-warning"
 else
     CLI="docker exec $CONTAINER valkey-cli"
 fi
@@ -63,10 +63,21 @@ $CLI SADD "queue:active-schedules" "$SCHEDULE_ID"
 echo "[3/4] 좌석 선점 hold 키 삽입 (TTL 300s)..."
 
 DB_CONTAINER="ticket-postgres"
-SEAT_ID=$(docker exec "$DB_CONTAINER" psql -U ticket -d ticket_queue -t -c \
+if ! docker exec "$DB_CONTAINER" pg_isready -U ticket -d ticket_queue -q; then
+    echo "[ERROR] DB 컨테이너($DB_CONTAINER)에 연결할 수 없습니다." >&2
+    exit 1
+fi
+
+SEAT_ID_RAW=$(docker exec "$DB_CONTAINER" psql -U ticket -d ticket_queue -t -c \
     "SELECT id FROM event_service.seats \
-     WHERE event_schedule_id = '${SCHEDULE_ID}' AND seat_number = 'A-3';" \
-    2>/dev/null | tr -d ' \n')
+     WHERE event_schedule_id = '${SCHEDULE_ID}' AND seat_number = 'A-3';")
+PSQL_EXIT=$?
+SEAT_ID=$(echo "$SEAT_ID_RAW" | tr -d ' \n')
+
+if [ $PSQL_EXIT -ne 0 ]; then
+    echo "[ERROR] DB 쿼리 실패 (컨테이너: $DB_CONTAINER, SCHEDULE_ID: $SCHEDULE_ID)" >&2
+    exit 1
+fi
 
 if [ -n "$SEAT_ID" ]; then
     $CLI SET "seat:hold:${SCHEDULE_ID}:${SEAT_ID}" "$USER_A_ID" EX 300

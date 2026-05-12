@@ -18,7 +18,6 @@
 --   schedule-2(UPCOMING) : a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a31
 --   schedule-3(ENDED)    : a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a32
 --   user-a    : b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b01
---   user-b    : b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b02
 --   res-1(PENDING)    : c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c01
 --   res-2(CONFIRMED)  : c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02
 --   res-3(CANCELLED)  : c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c03
@@ -126,14 +125,14 @@ SELECT
 FROM generate_series(1, 20) AS n
 ON CONFLICT (event_schedule_id, seat_number) DO NOTHING;
 
--- B행: S 120,000원 (B-1·B-2 SOLD, 나머지 AVAILABLE)
+-- B행: S 120,000원 (B-1 SOLD, 나머지 AVAILABLE)
 INSERT INTO event_service.seats (event_schedule_id, seat_number, grade, price, status)
 SELECT
     'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a30',
     'B-' || n,
     'S',
     120000,
-    CASE WHEN n <= 2 THEN 'SOLD' ELSE 'AVAILABLE' END
+    CASE WHEN n = 1 THEN 'SOLD' ELSE 'AVAILABLE' END
 FROM generate_series(1, 20) AS n
 ON CONFLICT (event_schedule_id, seat_number) DO NOTHING;
 
@@ -190,7 +189,7 @@ VALUES
     (
         -- res-2: CONFIRMED (결제 완료, B-1 좌석 SOLD)
         'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02',
-        'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b02',
+        'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b01',
         'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a30',
         'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20',
         'CONFIRMED', 120000, NOW() + INTERVAL '5 minutes',
@@ -204,7 +203,7 @@ VALUES
         'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a30',
         'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a20',
         'CANCELLED', 70000, NOW() - INTERVAL '1 hour',
-        NULL, NULL
+        NULL, 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380d02'
     )
 ON CONFLICT (id) DO NOTHING;
 
@@ -253,7 +252,7 @@ VALUES
         -- pay-1: SUCCESS (res-2)
         'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380d01',
         'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02',
-        'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b02',
+        'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b01',
         'pm-seed-test-001',
         120000, 'CARD', 'SUCCESS',
         'tx-seed-test-001',
@@ -289,7 +288,7 @@ VALUES
         'Payment',
         'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380d01',
         'PaymentSuccess',
-        '{"paymentId":"d0eebc99-9c0b-4ef8-bb6d-6bb9bd380d01","reservationId":"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02","userId":"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b02","amount":120000}'::jsonb,
+        '{"paymentId":"d0eebc99-9c0b-4ef8-bb6d-6bb9bd380d01","reservationId":"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c02","userId":"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b01","amount":120000}'::jsonb,
         true,
         NOW() - INTERVAL '59 minutes'
     ),
