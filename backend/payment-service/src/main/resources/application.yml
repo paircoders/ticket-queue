@@ -34,6 +34,20 @@ spring:
         spring.json.trusted.packages: com.ticketqueue.*
     listener:
       ack-mode: MANUAL_IMMEDIATE
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 10000
+          portone-v2-client:
+            connect-timeout: 2000
+            read-timeout: 10000
+          reservation-service:
+            url: http://localhost:8084
 
 outbox:
   poller:
@@ -45,20 +59,6 @@ outbox:
     enabled: true
     aggregate-type: Payment
     retention-days: 7
-
-feign:
-  circuitbreaker:
-    enabled: true
-  client:
-    config:
-      default:
-        connect-timeout: 2000
-        read-timeout: 10000
-      portone-v2-client:
-        connect-timeout: 2000
-        read-timeout: 10000
-      reservation-service:
-        url: http://localhost:8084
 
 resilience4j:
   circuitbreaker:

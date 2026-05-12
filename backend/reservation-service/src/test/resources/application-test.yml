@@ -15,12 +15,12 @@ spring:
     properties:
       hibernate:
         default_schema: reservation_service
-
-feign:
-  client:
-    config:
-      event-service:
-        url: http://localhost:8082
+  cloud:
+    openfeign:
+      client:
+        config:
+          event-service:
+            url: http://localhost:8082
 
 internal:
   api:

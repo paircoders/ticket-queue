@@ -40,6 +40,19 @@ spring:
         spring.json.trusted.packages: com.ticketqueue.*
     listener:
       ack-mode: MANUAL_IMMEDIATE
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      client:
+        config:
+          default:
+            connect-timeout: 5000
+            read-timeout: 10000
+          event-service:
+            url: http://localhost:8082
+            connect-timeout: 2000
+            read-timeout: 3000
 
 # ============================================================
 # 예매 비즈니스 설정
@@ -76,22 +89,6 @@ processed-event:
   cleanup:
     enabled: true
     retention-days: 30
-
-# ============================================================
-# OpenFeign (서비스 간 내부 통신)
-# ============================================================
-feign:
-  circuitbreaker:
-    enabled: true
-  client:
-    config:
-      default:
-        connect-timeout: 5000
-        read-timeout: 10000
-      event-service:
-        url: http://localhost:8082
-        connect-timeout: 2000
-        read-timeout: 3000
 
 # ============================================================
 # Resilience4j (Event Service 연쇄 장애 방지)
