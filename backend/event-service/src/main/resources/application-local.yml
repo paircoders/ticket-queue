@@ -7,13 +7,13 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:postgresql://192.168.50.111:5432/ticket_queue?currentSchema=event_service,common
+    url: jdbc:postgresql://localhost:5432/ticket_queue?currentSchema=event_service,common
     username: event_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver
 
   kafka:
-    bootstrap-servers: 192.168.50.111:9092
+    bootstrap-servers: localhost:9092
     consumer:
       # 기본값. 각 Consumer의 실제 group-id는 @KafkaListener(groupId=...) 어노테이션이 오버라이드함.
       # - event-reservation-consumer (ReservationEventConsumer)

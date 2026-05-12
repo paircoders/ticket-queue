@@ -138,7 +138,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 SPRING_CLOUD_AWS_REGION_STATIC=ap-northeast-2
 SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY=test
 SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY=test
-SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://192.168.50.111:4566
+SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT=http://localhost:4566
 INTERNAL_API_KEY=local-dev-internal-api-key
 ```
 

@@ -4,7 +4,7 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:postgresql://192.168.50.111:5432/ticket_queue?currentSchema=payment_service,common
+    url: jdbc:postgresql://localhost:5432/ticket_queue?currentSchema=payment_service,common
     username: payment_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver

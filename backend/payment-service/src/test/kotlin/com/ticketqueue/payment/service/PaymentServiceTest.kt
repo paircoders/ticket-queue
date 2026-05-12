@@ -1,0 +1,179 @@
+package com.ticketqueue.payment.service
+
+import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneFeignClient
+import com.ticketqueue.common.external.portone.PortoneProperties
+import com.ticketqueue.common.external.portone.PortoneTokenService
+import com.ticketqueue.payment.client.ReservationServiceClient
+import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
+import com.ticketqueue.payment.entity.Payment
+import com.ticketqueue.payment.exception.PaymentException
+import com.ticketqueue.payment.repository.PaymentRepository
+import io.kotest.matchers.shouldBe
+import io.mockk.every
+import io.mockk.justRun
+import io.mockk.mockk
+import io.mockk.verify
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.math.BigDecimal
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.util.UUID
+
+@DisplayName("PaymentService 단위 테스트")
+class PaymentServiceTest {
+
+    private lateinit var paymentRepository: PaymentRepository
+    private lateinit var reservationServiceClient: ReservationServiceClient
+    private lateinit var portoneClient: PortoneFeignClient
+    private lateinit var portoneTokenService: PortoneTokenService
+    private lateinit var portoneProperties: PortoneProperties
+    private lateinit var paymentService: PaymentService
+
+    private val userId = UUID.randomUUID()
+    private val reservationId = UUID.randomUUID()
+    private val scheduleId = UUID.randomUUID()
+    private val amount = BigDecimal("300000")
+    private val storeId = "test-store-id"
+    private val channelKey = "test-channel-key"
+    private val bearerToken = "Bearer test-token"
+
+    @BeforeEach
+    fun setUp() {
+        paymentRepository = mockk()
+        reservationServiceClient = mockk()
+        portoneClient = mockk()
+        portoneTokenService = mockk()
+        portoneProperties = mockk()
+
+        every { portoneProperties.storeId } returns storeId
+        every { portoneProperties.channelKey } returns channelKey
+        every { portoneTokenService.getAccessToken() } returns bearerToken
+
+        paymentService = PaymentService(
+            paymentRepository,
+            reservationServiceClient,
+            portoneClient,
+            portoneTokenService,
+            portoneProperties
+        )
+    }
+
+    private fun buildReservation(
+        ownerId: UUID = userId,
+        totalAmount: BigDecimal = amount,
+        status: String = "PENDING",
+        holdExpiresAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5)
+    ) = ReservationServiceClient.ReservationDetailResponse(
+        reservationId = reservationId,
+        userId = ownerId,
+        scheduleId = scheduleId,
+        totalAmount = totalAmount,
+        status = status,
+        holdExpiresAt = holdExpiresAt,
+        seatIds = listOf(UUID.randomUUID())
+    )
+
+    @Nested
+    @DisplayName("createPayment")
+    inner class CreatePayment {
+
+        @Test
+        @DisplayName("정상 흐름: Payment가 PENDING 상태로 저장되고 CreateResponse를 반환한다")
+        fun success() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            justRun { portoneClient.preRegisterPayment(any(), any(), any()) }
+            every { paymentRepository.save(any()) } answers {
+                val p = firstArg<Payment>()
+                Payment(
+                    id = UUID.randomUUID(),
+                    reservationId = p.reservationId,
+                    userId = p.userId,
+                    paymentKey = p.paymentKey,
+                    amount = p.amount,
+                    paymentMethod = p.paymentMethod
+                )
+            }
+
+            val response = paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+
+            response.amount shouldBe amount
+            response.storeId shouldBe storeId
+            response.channelKey shouldBe channelKey
+            verify(exactly = 1) { portoneClient.preRegisterPayment(any(), any(), bearerToken) }
+            verify(exactly = 1) { paymentRepository.save(any()) }
+        }
+
+        @Test
+        @DisplayName("예매 소유자가 다르면 FORBIDDEN 예외가 발생한다")
+        fun forbiddenWhenDifferentUser() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(ownerId = UUID.randomUUID())
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.FORBIDDEN
+        }
+
+        @Test
+        @DisplayName("요청 금액과 예매 금액이 다르면 PAYMENT_AMOUNT_MISMATCH 예외가 발생한다")
+        fun amountMismatch() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(totalAmount = BigDecimal("200000"))
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_AMOUNT_MISMATCH
+        }
+
+        @Test
+        @DisplayName("예매 상태가 PENDING이 아니면 HOLD_EXPIRED 예외가 발생한다")
+        fun holdExpiredWhenNotPending() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(status = "CONFIRMED")
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.HOLD_EXPIRED
+        }
+
+        @Test
+        @DisplayName("holdExpiresAt이 현재 시각보다 과거이면 HOLD_EXPIRED 예외가 발생한다")
+        fun holdExpiredWhenTimeOver() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(
+                holdExpiresAt = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1)
+            )
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.HOLD_EXPIRED
+        }
+
+        @Test
+        @DisplayName("PortOne pre-register 실패 시 Payment가 FAILED로 저장되고 PORTONE_PRE_REGISTER_FAILED 예외가 발생한다")
+        fun portonePreRegisterFails() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { paymentRepository.save(any()) } answers { firstArg() }
+            every { portoneClient.preRegisterPayment(any(), any(), any()) } throws
+                RuntimeException("PortOne connection failed")
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.PORTONE_PRE_REGISTER_FAILED
+            // PENDING 저장 1회 + PortOne 실패 후 FAILED 저장 1회
+            verify(exactly = 2) { paymentRepository.save(any()) }
+            verify(exactly = 1) { portoneClient.preRegisterPayment(any(), any(), any()) }
+        }
+    }
+}

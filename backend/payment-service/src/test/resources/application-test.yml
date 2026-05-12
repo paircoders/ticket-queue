@@ -1,0 +1,43 @@
+spring:
+  config:
+    import: ""   # aws-secretsmanager import 비활성화
+  cloud:
+    aws:
+      secretsmanager:
+        enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_service
+  cloud:
+    openfeign:
+      client:
+        config:
+          reservation-service:
+            url: http://localhost:8084
+
+external:
+  portone:
+    enabled: true
+    api-secret: "test-api-secret-for-testing"
+    store-id: "test-store-id"
+    channel-key: "test-channel-key"
+
+internal:
+  api:
+    key: test-internal-api-key
+
+outbox:
+  poller:
+    enabled: false
+  cleanup:
+    enabled: false
+
+processed-event:
+  cleanup:
+    enabled: false

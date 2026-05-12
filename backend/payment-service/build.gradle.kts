@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":common-web"))
 
     // Spring Boot
+    implementation(libs.spring.boot.starter.security)
     implementation(libs.spring.boot.starter.webflux)  // For WebClient
 
     // Resilience4j for circuit breaker
