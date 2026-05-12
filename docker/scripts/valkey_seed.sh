@@ -79,10 +79,11 @@ if [ $PSQL_EXIT -ne 0 ]; then
     exit 1
 fi
 
+HOLD_TTL=300
 if [ -n "$SEAT_ID" ]; then
-    $CLI SET "seat:hold:${SCHEDULE_ID}:${SEAT_ID}" "$USER_A_ID" EX 300
+    $CLI SET "seat:hold:${SCHEDULE_ID}:${SEAT_ID}" "$USER_A_ID" EX $HOLD_TTL
     $CLI SADD "hold_seats:${SCHEDULE_ID}" "$SEAT_ID"
-    $CLI EXPIRE "hold_seats:${SCHEDULE_ID}" 600
+    $CLI EXPIRE "hold_seats:${SCHEDULE_ID}" $HOLD_TTL
     echo "    A-3 좌석 hold 완료 (seat_id: ${SEAT_ID})"
 else
     echo "    [SKIP] A-3 seat_id를 DB에서 찾을 수 없습니다. DB seed가 완료됐는지 확인하세요."
