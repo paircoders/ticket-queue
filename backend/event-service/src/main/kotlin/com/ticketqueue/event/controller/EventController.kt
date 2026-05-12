@@ -71,12 +71,6 @@ class EventController(
         return eventService.getEvent(eventId)
     }
 
-    /** 회차별 좌석 정보 조회 (REQ-EVT-006) - 공개 API, 등급별 그룹핑 + Redis 캐싱 */
-    @GetMapping("/schedules/{scheduleId}/seats")
-    fun getSeats(@PathVariable scheduleId: UUID): SeatDto.SeatsResponse {
-        return seatService.getSeats(scheduleId)
-    }
-
     /** 공연 수정 (REQ-EVT-002) - ADMIN 권한 필요, 판매 후 artist 변경 불가 */
     @PatchMapping("/{eventId}")
     fun updateEvent(
