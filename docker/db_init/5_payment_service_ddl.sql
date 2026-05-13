@@ -27,6 +27,9 @@ CREATE INDEX idx_payments_reservation ON payment_service.payments(reservation_id
 CREATE INDEX idx_payments_user_created ON payment_service.payments(user_id, created_at DESC);
 CREATE INDEX idx_payments_status_created ON payment_service.payments(status, created_at DESC);
 CREATE INDEX idx_payments_portone_response ON payment_service.payments USING GIN (portone_response);
+CREATE UNIQUE INDEX idx_payments_reservation_pending_success
+    ON payment_service.payments(reservation_id)
+    WHERE status IN ('PENDING', 'SUCCESS');
 
 -- updated_at 트리거 (payment_service.update_timestamp() 함수는 0_init_users_and_schemas.sh에서 이미 생성됨)
 CREATE TRIGGER trg_payments_updated_at

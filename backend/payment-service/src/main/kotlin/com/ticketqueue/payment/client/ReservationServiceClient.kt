@@ -25,7 +25,7 @@ interface ReservationServiceClient {
         val userId: UUID,
         val scheduleId: UUID,
         val totalAmount: BigDecimal,
-        val status: String,
+        val status: ReservationStatus,
         val holdExpiresAt: LocalDateTime,
         val seatIds: List<UUID>
     )

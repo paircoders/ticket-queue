@@ -90,7 +90,7 @@ class PaymentControllerIntegrationTest {
     private fun buildReservation(
         ownerId: UUID = userId,
         totalAmount: BigDecimal = amount,
-        status: String = "PENDING",
+        status: ReservationServiceClient.ReservationStatus = ReservationServiceClient.ReservationStatus.PENDING,
         holdExpiresAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5)
     ) = ReservationServiceClient.ReservationDetailResponse(
         reservationId = reservationId,
@@ -243,7 +243,7 @@ class PaymentControllerIntegrationTest {
         @DisplayName("예매 상태가 PENDING이 아니면 422와 RESERVATION_NOT_PAYABLE 반환")
         fun holdExpiredByStatus() {
             every { reservationServiceClient.getReservation(reservationId) } returns
-                buildReservation(status = "CONFIRMED")
+                buildReservation(status = ReservationServiceClient.ReservationStatus.CONFIRMED)
 
             mockMvc.perform(
                 post("/payments")

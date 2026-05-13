@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS payment_service.payments (
 CREATE UNIQUE INDEX idx_payments_payment_key ON payment_service.payments(payment_key);
 CREATE INDEX idx_payments_reservation    ON payment_service.payments(reservation_id);
 CREATE INDEX idx_payments_user_created   ON payment_service.payments(user_id, created_at DESC);
+CREATE UNIQUE INDEX idx_payments_reservation_pending_success
+    ON payment_service.payments(reservation_id)
+    WHERE status IN ('PENDING', 'SUCCESS');
 
 CREATE TRIGGER trg_payments_updated_at
 BEFORE UPDATE ON payment_service.payments

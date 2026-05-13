@@ -69,7 +69,7 @@ class PaymentServiceTest {
     private fun buildReservation(
         ownerId: UUID = userId,
         totalAmount: BigDecimal = amount,
-        status: String = "PENDING",
+        status: ReservationServiceClient.ReservationStatus = ReservationServiceClient.ReservationStatus.PENDING,
         holdExpiresAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5)
     ) = ReservationServiceClient.ReservationDetailResponse(
         reservationId = reservationId,
@@ -138,7 +138,7 @@ class PaymentServiceTest {
         @Test
         @DisplayName("예매 상태가 PENDING이 아니면 RESERVATION_NOT_PAYABLE 예외가 발생한다")
         fun holdExpiredWhenNotPending() {
-            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(status = "CONFIRMED")
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation(status = ReservationServiceClient.ReservationStatus.CONFIRMED)
 
             val ex = assertThrows<PaymentException> {
                 paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))

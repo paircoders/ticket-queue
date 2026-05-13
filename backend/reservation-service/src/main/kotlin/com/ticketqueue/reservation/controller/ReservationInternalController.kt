@@ -1,6 +1,6 @@
 package com.ticketqueue.reservation.controller
 
-import com.ticketqueue.reservation.entity.ReservationStatus
+import com.ticketqueue.reservation.dto.ReservationDetailResponse
 import com.ticketqueue.reservation.exception.ReservationException
 import com.ticketqueue.reservation.repository.ReservationRepository
 import com.ticketqueue.reservation.repository.ReservationSeatRepository
@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.math.BigDecimal
-import java.time.LocalDateTime
 import java.util.UUID
 
 // 서비스 간 내부 통신 전용 예매 API
@@ -39,13 +37,4 @@ class ReservationInternalController(
         )
     }
 
-    data class ReservationDetailResponse(
-        val reservationId: UUID,
-        val userId: UUID,
-        val scheduleId: UUID,
-        val totalAmount: BigDecimal,
-        val status: ReservationStatus,
-        val holdExpiresAt: LocalDateTime,
-        val seatIds: List<UUID>
-    )
 }

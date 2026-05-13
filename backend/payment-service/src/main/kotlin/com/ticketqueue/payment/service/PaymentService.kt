@@ -15,6 +15,7 @@ import com.ticketqueue.payment.exception.PaymentException
 import com.ticketqueue.payment.repository.PaymentRepository
 import feign.FeignException
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -56,15 +57,19 @@ class PaymentService(
 
         val paymentKey = UUID.randomUUID().toString()
 
-        val payment = paymentRepository.save(
-            Payment(
-                reservationId = request.reservationId,
-                userId = userId,
-                paymentKey = paymentKey,
-                amount = request.amount,
-                paymentMethod = request.paymentMethod
+        val payment = try {
+            paymentRepository.save(
+                Payment(
+                    reservationId = request.reservationId,
+                    userId = userId,
+                    paymentKey = paymentKey,
+                    amount = request.amount,
+                    paymentMethod = request.paymentMethod
+                )
             )
-        )
+        } catch (e: DataIntegrityViolationException) {
+            throw PaymentException(ErrorCode.PAYMENT_ALREADY_EXISTS)
+        }
 
         try {
             portoneClient.preRegisterPayment(
@@ -98,7 +103,7 @@ class PaymentService(
         requestedAmount: BigDecimal
     ) {
         if (reservation.userId != userId) throw PaymentException(ErrorCode.FORBIDDEN)
-        if (reservation.status != ReservationStatus.PENDING.name) throw PaymentException(ErrorCode.RESERVATION_NOT_PAYABLE)
+        if (reservation.status != ReservationStatus.PENDING) throw PaymentException(ErrorCode.RESERVATION_NOT_PAYABLE)
         if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(reservation.holdExpiresAt)) throw PaymentException(ErrorCode.HOLD_EXPIRED)
         if (reservation.totalAmount.compareTo(requestedAmount) != 0) throw PaymentException(ErrorCode.PAYMENT_AMOUNT_MISMATCH)
     }

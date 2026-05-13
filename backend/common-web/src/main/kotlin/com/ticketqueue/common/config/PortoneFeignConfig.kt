@@ -15,4 +15,7 @@ class PortoneFeignConfig {
             log.info("[PortOne] {}", String.format(format, *args).trim())
         }
     }
+
+    @Bean
+    fun feignLoggerLevel(): Logger.Level = Logger.Level.FULL
 }
