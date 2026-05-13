@@ -5,7 +5,11 @@ spring:
     aws:
       secretsmanager:
         enabled: false
-  # Kafka auto-configuration 제외 (테스트에서 Kafka 브로커 불필요)
+    openfeign:
+      client:
+        config:
+          reservation-service:
+            url: http://localhost:8084
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
@@ -14,19 +18,19 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
-        default_schema: reservation_service
-  cloud:
-    openfeign:
-      client:
-        config:
-          event-service:
-            url: http://localhost:8082
+        default_schema: payment_service
+
+external:
+  portone:
+    enabled: true
+    api-secret: "test-api-secret-for-testing"
+    store-id: "test-store-id"
+    channel-key: "test-channel-key"
 
 internal:
   api:
     key: test-internal-api-key
 
-# Outbox 폴러 및 정리 배치 비활성화
 outbox:
   poller:
     enabled: false

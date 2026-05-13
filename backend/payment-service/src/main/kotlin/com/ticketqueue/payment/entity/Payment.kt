@@ -85,6 +85,7 @@ class Payment(
     }
 
     fun refund() {
+        if (status == PaymentStatus.REFUNDED) return
         require(status.canTransitionTo(PaymentStatus.REFUNDED)) {
             "Cannot transition from $status to REFUNDED"
         }

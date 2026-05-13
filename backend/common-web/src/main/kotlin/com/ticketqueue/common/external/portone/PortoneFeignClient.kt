@@ -1,12 +1,17 @@
 package com.ticketqueue.common.external.portone
 
+import com.ticketqueue.common.config.PortoneFeignConfig
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.web.bind.annotation.*
 
 /**
  * PortOne V2 API 연동을 위한 Feign Client
  */
-@FeignClient(name = "portone-v2-client", url = "\${external.portone.api-url:https://api.portone.io}")
+@FeignClient(
+    name = "portone-v2-client",
+    url = "\${external.portone.api-url:https://api.portone.io}",
+    configuration = [PortoneFeignConfig::class]
+)
 interface PortoneFeignClient {
 
     /**

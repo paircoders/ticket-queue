@@ -10,7 +10,7 @@ import java.util.UUID
 
 @FeignClient(
     name = "event-service",
-    url = "\${feign.client.config.event-service.url}",
+    url = "\${spring.cloud.openfeign.client.config.event-service.url}",
     fallbackFactory = EventServiceClientFallbackFactory::class,
     configuration = [InternalFeignConfig::class]
 )

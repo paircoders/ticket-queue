@@ -11,7 +11,6 @@ Payment Service는 PortOne을 통한 결제 처리를 담당함
 - **URL:** `POST /payments`
 - **Headers:**
   - `Authorization: Bearer {accessToken}`
-  - `X-Queue-Token: {queueToken}`
 
 **Request Body**
 ```json
@@ -40,7 +39,6 @@ PortOne SDK 결제 완료 후, 서버에 최종 승인 요청
 - **URL:** `POST /payments/confirm`
 - **Headers:**
   - `Authorization: Bearer {accessToken}`
-  - `X-Queue-Token: {queueToken}`
 
 **Request Body**
 ```json

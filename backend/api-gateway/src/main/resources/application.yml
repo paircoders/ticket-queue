@@ -71,7 +71,7 @@ spring:
               order: -1
 
             - id: user-service
-              uri: ${SERVICE_URI_USER:http://192.168.50.111:8081}
+              uri: ${SERVICE_URI_USER:http://localhost:8081}
               predicates:
                 - Path=/auth/**,/users/**
               filters:
@@ -84,7 +84,7 @@ spring:
                     maxSize: 10KB
 
             - id: event-service
-              uri: ${SERVICE_URI_EVENT:http://192.168.50.111:8082}
+              uri: ${SERVICE_URI_EVENT:http://localhost:8082}
               predicates:
                 - Path=/events/**,/venues/**
               filters:
@@ -94,7 +94,7 @@ spring:
                     fallbackUri: forward:/fallback/event
 
             - id: queue-service                          # 10초 타임아웃
-              uri: ${SERVICE_URI_QUEUE:http://192.168.50.111:8083}
+              uri: ${SERVICE_URI_QUEUE:http://localhost:8083}
               predicates:
                 - Path=/queue/**
               metadata:
@@ -106,7 +106,7 @@ spring:
                     fallbackUri: forward:/fallback/queue
 
             - id: reservation-service
-              uri: ${SERVICE_URI_RESERVATION:http://192.168.50.111:8084}
+              uri: ${SERVICE_URI_RESERVATION:http://localhost:8084}
               predicates:
                 - Path=/reservations/**
               filters:
@@ -116,7 +116,7 @@ spring:
                     fallbackUri: forward:/fallback/reservation
 
             - id: payment-service                        # 60초 타임아웃
-              uri: ${SERVICE_URI_PAYMENT:http://192.168.50.111:8085}
+              uri: ${SERVICE_URI_PAYMENT:http://localhost:8085}
               predicates:
                 - Path=/payments/**
               metadata:
