@@ -6,7 +6,7 @@ spring:
       - "optional:aws-secretsmanager:common/secure-config"
   data:
     redis:
-      host: ticket-valkey
+      host: valkey
       port: 6379
       password: ${valkey_password}
 

@@ -1,11 +1,11 @@
 spring:
   datasource:
-    url: jdbc:postgresql://ticket-postgres:5432/ticket_queue?currentSchema=payment_service,common
+    url: jdbc:postgresql://postgres:5432/ticket_queue?currentSchema=payment_service,common
     username: payment_svc_user
     password: ${db_password}
     driver-class-name: org.postgresql.Driver
   kafka:
-    bootstrap-servers: ticket-kafka:29092
+    bootstrap-servers: kafka:29092
   cloud:
     openfeign:
       client:

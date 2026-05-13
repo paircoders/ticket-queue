@@ -16,17 +16,17 @@ services:
       SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
-      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://ticket-localstack:4566
-      REDIS_HOST: ticket-valkey
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+      REDIS_HOST: valkey
       SERVICE_URI_USER: http://user-service:8081
       SERVICE_URI_EVENT: http://event-service:8082
       SERVICE_URI_QUEUE: http://queue-service:8083
       SERVICE_URI_RESERVATION: http://reservation-service:8084
       SERVICE_URI_PAYMENT: http://payment-service:8085
     depends_on:
-      ticket-valkey:
+      valkey:
         condition: service_healthy
-      ticket-localstack:
+      localstack:
         condition: service_started
     networks:
       - ticket-network
@@ -55,13 +55,13 @@ services:
       SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
-      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://ticket-localstack:4566
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
     depends_on:
-      ticket-postgres:
+      postgres:
         condition: service_healthy
-      ticket-valkey:
+      valkey:
         condition: service_healthy
-      ticket-localstack:
+      localstack:
         condition: service_started
     networks:
       - ticket-network
@@ -90,15 +90,15 @@ services:
       SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
-      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://ticket-localstack:4566
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
     depends_on:
-      ticket-postgres:
+      postgres:
         condition: service_healthy
-      ticket-valkey:
+      valkey:
         condition: service_healthy
-      ticket-kafka:
+      kafka:
         condition: service_started
-      ticket-localstack:
+      localstack:
         condition: service_started
     networks:
       - ticket-network
@@ -127,12 +127,12 @@ services:
       SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
-      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://ticket-localstack:4566
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
       EVENT_SERVICE_URL: http://event-service:8082
     depends_on:
-      ticket-valkey:
+      valkey:
         condition: service_healthy
-      ticket-localstack:
+      localstack:
         condition: service_started
     networks:
       - ticket-network
@@ -161,15 +161,15 @@ services:
       SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
-      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://ticket-localstack:4566
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
     depends_on:
-      ticket-postgres:
+      postgres:
         condition: service_healthy
-      ticket-valkey:
+      valkey:
         condition: service_healthy
-      ticket-kafka:
+      kafka:
         condition: service_started
-      ticket-localstack:
+      localstack:
         condition: service_started
     networks:
       - ticket-network
@@ -198,13 +198,13 @@ services:
       SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
-      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://ticket-localstack:4566
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
     depends_on:
-      ticket-postgres:
+      postgres:
         condition: service_healthy
-      ticket-kafka:
+      kafka:
         condition: service_started
-      ticket-localstack:
+      localstack:
         condition: service_started
     networks:
       - ticket-network
