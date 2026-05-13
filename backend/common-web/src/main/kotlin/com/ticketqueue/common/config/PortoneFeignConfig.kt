@@ -17,5 +17,5 @@ class PortoneFeignConfig {
     }
 
     @Bean
-    fun feignLoggerLevel(): Logger.Level = Logger.Level.FULL
+    fun feignLoggerLevel(): Logger.Level = Logger.Level.BASIC
 }

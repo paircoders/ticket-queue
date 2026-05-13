@@ -12,6 +12,7 @@ import com.ticketqueue.payment.exception.PaymentException
 import com.ticketqueue.payment.repository.PaymentRepository
 import feign.FeignException
 import io.kotest.matchers.shouldBe
+import org.springframework.dao.DataIntegrityViolationException
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
@@ -186,6 +187,20 @@ class PaymentServiceTest {
 
             ex.errorCode shouldBe ErrorCode.PAYMENT_ALREADY_EXISTS
             verify(exactly = 0) { reservationServiceClient.getReservation(any()) }
+        }
+
+        @Test
+        @DisplayName("existsByReservationIdAndStatusIn이 false를 반환했으나 save()에서 DB 유니크 제약 위반 시 PAYMENT_ALREADY_EXISTS 예외가 발생한다")
+        fun duplicatePaymentAtDbLevel() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { paymentRepository.save(any()) } throws DataIntegrityViolationException("unique constraint")
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_ALREADY_EXISTS
+            verify(exactly = 1) { reservationServiceClient.getReservation(reservationId) }
         }
 
         @Test

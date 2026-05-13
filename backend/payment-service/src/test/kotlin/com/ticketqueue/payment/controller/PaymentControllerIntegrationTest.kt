@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import io.kotest.matchers.shouldBe
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -141,10 +142,10 @@ class PaymentControllerIntegrationTest {
             ).andExpect(status().isOk)
 
             val payments = paymentRepository.findAll()
-            assert(payments.size == 1)
-            assert(payments[0].status == PaymentStatus.PENDING)
-            assert(payments[0].userId == userId)
-            assert(payments[0].reservationId == reservationId)
+            payments.size shouldBe 1
+            payments[0].status shouldBe PaymentStatus.PENDING
+            payments[0].userId shouldBe userId
+            payments[0].reservationId shouldBe reservationId
         }
     }
 

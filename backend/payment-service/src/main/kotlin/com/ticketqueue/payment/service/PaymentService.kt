@@ -76,7 +76,7 @@ class PaymentService(
                 paymentId = paymentKey,
                 request = PortonePreRegisterRequest(
                     storeId = storeId,
-                    totalAmount = request.amount.toLong()
+                    totalAmount = request.amount.longValueExact()
                 ),
                 token = portoneTokenService.getAccessToken()
             )
