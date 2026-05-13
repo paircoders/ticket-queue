@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://ticket-postgres:5432/ticket_queue?currentSchema=reservation_service,common
+    username: reservation_svc_user
+    password: ${db_password}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ticket-kafka:29092
+  cloud:
+    openfeign:
+      client:
+        config:
+          event-service:
+            url: http://event-service:8082
