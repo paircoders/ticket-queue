@@ -1,0 +1,22 @@
+logging:
+  file:
+    path: /app/logs
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/ticket_queue?currentSchema=event_service,common
+    username: event_svc_user
+    password: ${db_password}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: kafka:29092
+    consumer:
+      group-id: event-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.ticketqueue.*
+    listener:
+      ack-mode: MANUAL_IMMEDIATE

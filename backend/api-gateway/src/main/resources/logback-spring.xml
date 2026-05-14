@@ -7,7 +7,7 @@
     -->
     <!-- Service Name -->
     <property name="SERVICE_NAME" value="api-gateway"/>
-    <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
+    <springProperty name="LOG_PATH" source="logging.file.path" defaultValue="logs"/>
     <property name="TEXT_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-NO_TRACE}] %-5level %logger{36} - %msg%n"/>
 
     <!-- TEXT Console Appender (개발용) -->
@@ -88,6 +88,14 @@
         <root level="INFO">
             <appender-ref ref="JSON_CONSOLE"/>
             <appender-ref ref="JSON_ROLLING_FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Profile: docker -->
+    <springProfile name="docker">
+        <root level="INFO">
+            <appender-ref ref="TEXT_CONSOLE"/>
+            <appender-ref ref="TEXT_ROLLING_FILE"/>
         </root>
     </springProfile>
 

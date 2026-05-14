@@ -1,0 +1,15 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+    import:
+      - "optional:aws-secretsmanager:common/secure-config"
+  data:
+    redis:
+      host: valkey
+      port: 6379
+      password: ${valkey_password}
+
+encryption:
+  secret-key: ${enc_secret_key}
+  hash-salt: ${enc_hash_salt}

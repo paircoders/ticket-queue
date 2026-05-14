@@ -1,0 +1,25 @@
+logging:
+  file:
+    path: /app/logs
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/ticket_queue?currentSchema=payment_service,common
+    username: payment_svc_user
+    password: ${db_password}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: kafka:29092
+  cloud:
+    openfeign:
+      client:
+        config:
+          reservation-service:
+            url: http://reservation-service:8084
+
+external:
+  portone:
+    enabled: true
+    api-secret: ${portone_api_secret}
+    store-id: ${portone_store_id}
+    channel-key: ${portone_channel_key}

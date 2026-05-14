@@ -1,0 +1,232 @@
+services:
+  api-gateway:
+    image: ghcr.io/paircoders/ticket-queue/api-gateway:latest
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        APP_NAME: api-gateway
+    container_name: ticket-api-gateway
+    ports:
+      - "8080:8080"
+      - "9080:9080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+      REDIS_HOST: valkey
+      SERVICE_URI_USER: http://user-service:8081
+      SERVICE_URI_EVENT: http://event-service:8082
+      SERVICE_URI_QUEUE: http://queue-service:8083
+      SERVICE_URI_RESERVATION: http://reservation-service:8084
+      SERVICE_URI_PAYMENT: http://payment-service:8085
+    volumes:
+      - ../logs/api-gateway:/app/logs/api-gateway
+    depends_on:
+      valkey:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  user-service:
+    image: ghcr.io/paircoders/ticket-queue/user-service:latest
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        APP_NAME: user-service
+    container_name: ticket-user-service
+    ports:
+      - "8081:8081"
+      - "9081:9081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs/user-service:/app/logs/user-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  event-service:
+    image: ghcr.io/paircoders/ticket-queue/event-service:latest
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        APP_NAME: event-service
+    container_name: ticket-event-service
+    ports:
+      - "8082:8082"
+      - "9082:9082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs/event-service:/app/logs/event-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      localstack:
+        condition: service_started
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  queue-service:
+    image: ghcr.io/paircoders/ticket-queue/queue-service:latest
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        APP_NAME: queue-service
+    container_name: ticket-queue-service
+    ports:
+      - "8083:8083"
+      - "9083:9083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+      EVENT_SERVICE_URL: http://event-service:8082
+    volumes:
+      - ../logs/queue-service:/app/logs/queue-service
+    depends_on:
+      valkey:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  reservation-service:
+    image: ghcr.io/paircoders/ticket-queue/reservation-service:latest
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        APP_NAME: reservation-service
+    container_name: ticket-reservation-service
+    ports:
+      - "8084:8084"
+      - "9084:9084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs/reservation-service:/app/logs/reservation-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      localstack:
+        condition: service_started
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  payment-service:
+    image: ghcr.io/paircoders/ticket-queue/payment-service:latest
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        APP_NAME: payment-service
+    container_name: ticket-payment-service
+    ports:
+      - "8085:8085"
+      - "9085:9085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      SPRING_CLOUD_AWS_REGION_STATIC: ap-northeast-2
+      SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
+      SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
+      SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs/payment-service:/app/logs/payment-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      localstack:
+        condition: service_started
+    networks:
+      - ticket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:9085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+networks:
+  ticket-network:

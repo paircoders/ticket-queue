@@ -21,6 +21,12 @@ services:
       - postgres_event_pw
       - postgres_reservation_pw
       - postgres_payment_pw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Valkey (Redis 대체)
   valkey:
@@ -37,6 +43,12 @@ services:
       - ticket-network
     secrets:
       - valkey_pw
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$(cat /run/secrets/valkey_pw)\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Kafka (KRaft Mode - No ZooKeeper)
   kafka:

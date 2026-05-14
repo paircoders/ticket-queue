@@ -1,0 +1,17 @@
+logging:
+  file:
+    path: /app/logs
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/ticket_queue?currentSchema=user_service,common
+    username: user_svc_user
+    password: ${db_password}
+    driver-class-name: org.postgresql.Driver
+
+external:
+  portone:
+    enabled: true
+
+security:
+  trusted-proxy-ips: "127.0.0.1,::1"
