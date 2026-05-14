@@ -5,6 +5,7 @@ on:
     branches: [develop, "feature/**"]
     paths:
       - "backend/**"
+      - "docker/Dockerfile"
       - ".github/workflows/build-and-push.yml"
 
 env:
@@ -69,7 +70,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          file: ./backend/Dockerfile
+          file: ./docker/Dockerfile
           build-args: APP_NAME=${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
           push: true

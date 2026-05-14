@@ -3,7 +3,7 @@ services:
     image: ghcr.io/paircoders/ticket-queue/api-gateway:latest
     build:
       context: ../backend
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile
       args:
         APP_NAME: api-gateway
     container_name: ticket-api-gateway
@@ -44,7 +44,7 @@ services:
     image: ghcr.io/paircoders/ticket-queue/user-service:latest
     build:
       context: ../backend
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile
       args:
         APP_NAME: user-service
     container_name: ticket-user-service
@@ -81,7 +81,7 @@ services:
     image: ghcr.io/paircoders/ticket-queue/event-service:latest
     build:
       context: ../backend
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile
       args:
         APP_NAME: event-service
     container_name: ticket-event-service
@@ -120,7 +120,7 @@ services:
     image: ghcr.io/paircoders/ticket-queue/queue-service:latest
     build:
       context: ../backend
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile
       args:
         APP_NAME: queue-service
     container_name: ticket-queue-service
@@ -156,7 +156,7 @@ services:
     image: ghcr.io/paircoders/ticket-queue/reservation-service:latest
     build:
       context: ../backend
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile
       args:
         APP_NAME: reservation-service
     container_name: ticket-reservation-service
@@ -195,7 +195,7 @@ services:
     image: ghcr.io/paircoders/ticket-queue/payment-service:latest
     build:
       context: ../backend
-      dockerfile: Dockerfile
+      dockerfile: ../docker/Dockerfile
       args:
         APP_NAME: payment-service
     container_name: ticket-payment-service
