@@ -23,6 +23,8 @@ services:
       SERVICE_URI_QUEUE: http://queue-service:8083
       SERVICE_URI_RESERVATION: http://reservation-service:8084
       SERVICE_URI_PAYMENT: http://payment-service:8085
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       valkey:
         condition: service_healthy
@@ -56,6 +58,8 @@ services:
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
       SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,6 +95,8 @@ services:
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
       SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,6 +135,8 @@ services:
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
       SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
       EVENT_SERVICE_URL: http://event-service:8082
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       valkey:
         condition: service_healthy
@@ -162,6 +170,8 @@ services:
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
       SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -199,6 +209,8 @@ services:
       SPRING_CLOUD_AWS_CREDENTIALS_ACCESS_KEY: test
       SPRING_CLOUD_AWS_CREDENTIALS_SECRET_KEY: test
       SPRING_CLOUD_AWS_SECRETSMANAGER_ENDPOINT: http://localstack:4566
+    volumes:
+      - ../logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy

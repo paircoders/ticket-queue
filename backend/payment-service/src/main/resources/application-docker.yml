@@ -1,3 +1,7 @@
+logging:
+  file:
+    path: /app/logs
+
 spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/ticket_queue?currentSchema=payment_service,common

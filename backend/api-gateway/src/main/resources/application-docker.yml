@@ -1,3 +1,7 @@
+logging:
+  file:
+    path: /app/logs
+
 spring:
   cloud:
     gateway:

@@ -3,6 +3,8 @@
     <!-- Service Name -->
     <property name="SERVICE_NAME" value="queue-service"/>
 
+    <springProperty name="LOG_PATH" source="logging.file.path" defaultValue="logs"/>
+
     <!-- Include common logback-base.xml from common module -->
     <include resource="logback-base.xml"/>
 
@@ -21,6 +23,14 @@
         <root level="INFO">
             <appender-ref ref="JSON_CONSOLE"/>
             <appender-ref ref="JSON_ROLLING_FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Profile: docker -->
+    <springProfile name="docker">
+        <root level="INFO">
+            <appender-ref ref="TEXT_CONSOLE"/>
+            <appender-ref ref="TEXT_ROLLING_FILE"/>
         </root>
     </springProfile>
 
