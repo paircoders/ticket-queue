@@ -45,7 +45,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('backend/**/*.gradle.kts') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('backend/**/*.gradle.kts', 'backend/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Build JAR
@@ -73,7 +73,7 @@ jobs:
           file: ./docker/Dockerfile
           build-args: APP_NAME=${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ github.ref_name == 'develop' || github.ref_name == 'main' }}
           tags: |
             ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
             ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }}
