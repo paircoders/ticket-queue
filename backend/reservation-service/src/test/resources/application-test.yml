@@ -5,6 +5,11 @@ spring:
     aws:
       secretsmanager:
         enabled: false
+    openfeign:
+      client:
+        config:
+          event-service:
+            url: http://localhost:8082
   # Kafka auto-configuration 제외 (테스트에서 Kafka 브로커 불필요)
   autoconfigure:
     exclude:
@@ -15,12 +20,6 @@ spring:
     properties:
       hibernate:
         default_schema: reservation_service
-  cloud:
-    openfeign:
-      client:
-        config:
-          event-service:
-            url: http://localhost:8082
 
 internal:
   api:

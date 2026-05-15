@@ -1,6 +1,8 @@
 package com.ticketqueue.event.repository
 
+import com.ticketqueue.event.entity.EventSchedule
 import java.time.LocalDateTime
+import java.util.Optional
 import java.util.UUID
 
 /**
@@ -21,4 +23,6 @@ interface EventScheduleRepositoryCustom {
         afterEventEndAt: LocalDateTime? = null,
         afterId: UUID? = null
     ): List<ScheduleCleanupCursor>
+
+    fun findByIdWithEvent(id: UUID): Optional<EventSchedule>
 }

@@ -1,5 +1,6 @@
 package com.ticketqueue.reservation.controller
 
+import com.ticketqueue.reservation.dto.ReservationDto.CancelResponse
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsResponse
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
@@ -9,6 +10,7 @@ import com.ticketqueue.reservation.service.ReservationService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -78,5 +80,21 @@ class ReservationController(
         @RequestBody @Valid request: ChangeSeatsRequest
     ): ChangeSeatsResponse {
         return reservationService.changeSeats(userId, reservationId, request, queueToken)
+    }
+
+    /**
+     * 예매 취소 (REQ-RSV-006, REQ-RSV-011)
+     *
+     * PENDING/CONFIRMED 상태 예매를 취소한다.
+     * Queue Token 불필요 — 취소는 대기열 토큰 만료 후에도 가능.
+     * CONFIRMED 취소 시 ReservationCancelled 이벤트를 Outbox에 저장하며,
+     * Payment Service가 해당 이벤트를 소비하여 환불을 처리한다.
+     */
+    @DeleteMapping("/{reservationId}")
+    fun cancelReservation(
+        @RequestHeader(HEADER_USER_ID) userId: UUID,
+        @PathVariable reservationId: UUID
+    ): CancelResponse {
+        return reservationService.cancelReservation(userId, reservationId)
     }
 }

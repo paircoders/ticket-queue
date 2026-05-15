@@ -149,6 +149,16 @@ class ScheduleDto {
         val reason: String? = null
     )
 
+    /** 내부 서비스용 회차 핵심 정보 — 취소 검증, 환불 기준일 등 공용 */
+    data class ScheduleInfoResponse(
+        val scheduleId: UUID,
+        val eventId: UUID,
+        val eventStartAt: LocalDateTime,
+        val eventEndAt: LocalDateTime,
+        val saleStartAt: LocalDateTime,
+        val saleEndAt: LocalDateTime
+    )
+
     /** 종료된 회차 ID 목록 응답 (내부 API용 — Queue Service 정리 배치 전용) */
     data class EndedScheduleIdsResponse(val scheduleIds: List<UUID>)
 }

@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
 import java.math.BigDecimal
+import java.time.LocalDateTime
 import java.util.UUID
 
 @FeignClient(
@@ -24,6 +25,18 @@ interface EventServiceClient {
         @PathVariable scheduleId: UUID,
         @RequestParam seatIds: List<UUID>
     ): SeatDetailsResponse
+
+    @GetMapping("/internal/schedules/{scheduleId}/info")
+    fun getScheduleInfo(@PathVariable scheduleId: UUID): ScheduleInfoResponse
+
+    data class ScheduleInfoResponse(
+        val scheduleId: UUID,
+        val eventId: UUID,
+        val eventStartAt: LocalDateTime,
+        val eventEndAt: LocalDateTime,
+        val saleStartAt: LocalDateTime,
+        val saleEndAt: LocalDateTime
+    )
 
     data class SoldSeatsResponse(
         val scheduleId: UUID,

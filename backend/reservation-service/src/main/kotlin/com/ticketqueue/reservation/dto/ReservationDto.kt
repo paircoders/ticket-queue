@@ -32,6 +32,12 @@ class ReservationDto {
         val holdExpiresAt: OffsetDateTime
     )
 
+    data class CancelResponse(
+        val id: UUID,
+        val status: ReservationStatus,
+        val refundAmount: BigDecimal
+    )
+
     data class SeatStatusResponse(
         val scheduleId: UUID,
         val seats: SeatSummary,

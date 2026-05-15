@@ -272,6 +272,19 @@ class ScheduleService(
         return ScheduleDto.SellableResponse(sellable = true)
     }
 
+    fun getScheduleInfo(scheduleId: UUID): ScheduleDto.ScheduleInfoResponse {
+        val schedule = eventScheduleRepository.findByIdWithEvent(scheduleId)
+            .orElseThrow { EventException(ErrorCode.SCHEDULE_NOT_FOUND) }
+        return ScheduleDto.ScheduleInfoResponse(
+            scheduleId = schedule.id!!,
+            eventId = schedule.event.id!!,
+            eventStartAt = schedule.eventStartAt,
+            eventEndAt = schedule.eventEndAt,
+            saleStartAt = schedule.saleStartAt,
+            saleEndAt = schedule.saleEndAt
+        )
+    }
+
     /**
      * 종료/취소 후 24시간 이상 경과한 회차 ID 목록을 모두 반환한다 (내부 API용 — Queue Service 정리 배치 전용)
      *
