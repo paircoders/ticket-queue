@@ -23,7 +23,7 @@ import java.util.UUID
  * - [getSeats]: 회차별 좌석 등급 그룹핑 조회 + Redis Cache-Aside (TTL 5분) - REQ-EVT-006
  * - [getSoldSeatIds]: SOLD 좌석 ID 조회 (캐싱 없음 - 실시간 정확도 우선)
  * - [markSeatsAsSold]: Kafka Consumer용 - 좌석 상태 SOLD 벌크 업데이트
- * - [releaseHoldSeats]: Kafka Consumer용 - DB AVAILABLE 복원 + Redis hold_seats 선점 해제
+ * - [releaseHoldSeats]: Kafka Consumer용 - DB AVAILABLE 복원 (Redis hold_seats SREM은 Reservation Service 담당)
  *
  * Redis 장애 시 try-catch로 무시하고 DB fallback을 수행하여 서비스 가용성을 유지한다.
  * Cache Stampede 방지: Lua 스크립트로 원자적 락 획득 (REQ-EVT-021)

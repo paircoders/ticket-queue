@@ -307,7 +307,7 @@ class ReservationService(
         }
 
         val scheduleInfo = eventServiceClient.getScheduleInfo(reservation.scheduleId)
-        if (LocalDate.now(ZoneOffset.UTC) == scheduleInfo.eventStartAt.toLocalDate()) {
+        if (LocalDate.now(ZoneOffset.UTC) == scheduleInfo.eventStartAt.atOffset(ZoneOffset.UTC).toLocalDate()) {
             throw ReservationException(ErrorCode.CANCELLATION_NOT_ALLOWED)
         }
 

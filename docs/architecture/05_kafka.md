@@ -57,7 +57,7 @@
 | **이벤트 타입** | `ReservationCancelled` |
 | **발생 시점** | 사용자 취소 요청, 결제 실패 보상, 선점 타임아웃 |
 | **Consumer 처리** | 좌석 DB AVAILABLE 복원 (Redis hold_seats SREM은 Reservation Service 담당) |
-| **장애 시 영향** | 좌석이 HOLD 상태로 유지됨 (TTL 만료 시 자동 해제) |
+| **장애 시 영향** | Event Service Consumer 장애 시 DB 좌석 상태가 불일치할 수 있음 (Redis hold_seats SREM은 처리되었으나 DB가 AVAILABLE로 복원되지 않은 상태). Redis hold_seats SREM은 Reservation Service cancelReservation afterCommit에서 독립적으로 처리됨 |
 
 #### 2.3.2 payment.events
 
@@ -104,7 +104,6 @@
     "causationId": "uuid | null",
     "userId": "uuid | null"
   }
-  // 이벤트별 도메인 필드가 root에 추가됨
 }
 ```
 </details>
