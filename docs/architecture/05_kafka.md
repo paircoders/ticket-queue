@@ -17,7 +17,7 @@
 | 결정 사항 | 선택 | 근거 |
 |----------|------|------|
 | **전달 보장 수준** | At-least-once + Consumer 멱등성 | Exactly-once는 성능 저하 및 복잡도 증가. 멱등성 처리로 충분한 신뢰성 확보 |
-| **파티션 키** | `userId` | 동일 사용자의 이벤트 순서 보장 (예: 결제 → 예매 확정 순서) |
+| **파티션 키** | `aggregateId` | 동일 Aggregate(예매/결제)의 이벤트 순서 보장 |
 | **Outbox 패턴** | 필수 적용 (Reservation, Payment) | DB 트랜잭션과 Kafka 발행의 원자성 보장 |
 | **compensation.events 토픽** | 제외 | PaymentFailed가 보상 트리거 역할 수행 (YAGNI 원칙) |
 | **seat.events 토픽** | 제외 | 현재 요구사항에서 Consumer 없음 |
@@ -56,8 +56,8 @@
 | **Consumer** | Event Service |
 | **이벤트 타입** | `ReservationCancelled` |
 | **발생 시점** | 사용자 취소 요청, 결제 실패 보상, 선점 타임아웃 |
-| **Consumer 처리** | 좌석 상태 HOLD → AVAILABLE 복구 (Redis SET 정리) |
-| **장애 시 영향** | 좌석이 HOLD 상태로 유지됨 (TTL 만료 시 자동 해제) |
+| **Consumer 처리** | 좌석 DB AVAILABLE 복원 (Redis hold_seats SREM은 Reservation Service 담당) |
+| **장애 시 영향** | Event Service Consumer 장애 시 DB 좌석 상태가 불일치할 수 있음 (Redis hold_seats SREM은 처리되었으나 DB가 AVAILABLE로 복원되지 않은 상태). Redis hold_seats SREM은 Reservation Service cancelReservation afterCommit에서 독립적으로 처리됨 |
 
 #### 2.3.2 payment.events
 
@@ -83,7 +83,11 @@
 
 ### 3.1 공통 구조
 
-모든 이벤트는 다음 공통 필드를 포함합니다:
+모든 이벤트는 다음 공통 필드를 포함합니다. 이벤트별 도메인 필드는 envelope 필드와 동일한 root 레벨에 추가됩니다 (flat 구조).
+
+> **Outbox 저장 구조:** `outbox_events.payload` JSONB 컬럼에 이벤트 전체 JSON이 저장되며, Outbox Poller가 그대로 Kafka message body로 전달합니다.
+> `aggregate_type`, `aggregate_id`, `event_type` 컬럼은 topic 라우팅 및 쿼리 필터링용이며, payload 내 동일 필드와 중복 저장됩니다 (Consumer self-contained 요건).
+
 <details>
 <summary>공통 필드</summary>
 
@@ -97,10 +101,9 @@
   "timestamp": "2026-01-20T10:00:00",
   "metadata": {
     "correlationId": "uuid",
-    "causationId": "uuid",
-    "userId": "uuid"
-  },
-  "payload": { }
+    "causationId": "uuid | null",
+    "userId": "uuid | null"
+  }
 }
 ```
 </details>
@@ -115,7 +118,7 @@
 | `timestamp` | 이벤트 발생 시각 | 순서 추적, 디버깅 |
 | `metadata.correlationId` | 요청 추적 ID (Gateway에서 발급한 traceId) | 분산 추적 |
 | `metadata.causationId` | 원인 이벤트 ID (최초인 경우 null) | 이벤트 체인 추적 |
-| `metadata.userId` | 사용자 ID | 파티션 키 (순서 보장) |
+| `metadata.userId` | 사용자 ID | 분산 추적용 cross-cutting 필드 (파티션 키는 aggregateId) |
 
 ### 3.2 이벤트별 Payload
 
@@ -136,30 +139,26 @@
     "causationId": null,
     "userId": "user-uuid-789"
   },
-  "payload": {
-    "paymentId": "payment-uuid-123",
-    "paymentKey": "payment-key-abc",
-    "reservationId": "reservation-uuid-321",
-    "amount": 200000.00,
-    "paidAt": "2026-01-20T10:00:00",
-    "portoneTransactionId": "imp_123456",
-    "scheduleId": "schedule-uuid-111",
-    "seatIds": ["seat-uuid-001", "seat-uuid-002"]
-  }
+  "paymentKey": "payment-key-abc",
+  "reservationId": "reservation-uuid-321",
+  "amount": 200000.00,
+  "paidAt": "2026-01-20T10:00:00",
+  "scheduleId": "schedule-uuid-111",
+  "seatIds": ["seat-uuid-001", "seat-uuid-002"]
 }
 ```
 </details>
 
-| Payload 필드 | 타입 | 설명 |
-|--------------|------|------|
-| `paymentId` | UUID | 결제 ID (aggregateId와 동일) |
+| 도메인 필드 | 타입 | 설명 |
+|------------|------|------|
 | `paymentKey` | String | 결제 고유 키 (멱등성 키) |
 | `reservationId` | UUID | 연관 예매 ID |
 | `amount` | BigDecimal | 결제 금액 |
 | `paidAt` | Timestamp | 결제 완료 시각 |
-| `portoneTransactionId` | String | PortOne 거래 ID (API: transactionId) |
 | `scheduleId` | UUID | 회차 ID |
 | `seatIds` | UUID[] | 결제된 좌석 ID 목록 |
+
+> **Note:** `portoneTransactionId` 필드는 Payment Service Outbox 구현 시 추가 예정
 
 #### 3.2.2 PaymentFailed
 <details>
@@ -178,18 +177,14 @@
     "causationId": null,
     "userId": "user-uuid-012"
   },
-  "payload": {
-    "paymentId": "payment-uuid-456",
-    "reservationId": "reservation-uuid-654",
-    "reason": "INSUFFICIENT_BALANCE"
-  }
+  "reservationId": "reservation-uuid-654",
+  "reason": "INSUFFICIENT_BALANCE"
 }
 ```
 </details>
 
-| Payload 필드 | 타입 | 설명 |
-|--------------|------|------|
-| `paymentId` | UUID | 결제 ID (aggregateId와 동일) |
+| 도메인 필드 | 타입 | 설명 |
+|------------|------|------|
 | `reservationId` | UUID | 연관 예매 ID |
 | `reason` | String | 실패 사유 |
 
@@ -210,22 +205,22 @@
     "causationId": "550e8400-e29b-41d4-a716-446655440002",
     "userId": "user-uuid-345"
   },
-  "payload": {
-    "scheduleId": "schedule-uuid-111",
-    "seatIds": ["seat-uuid-001", "seat-uuid-002"],
-    "cancelledAt": "2026-01-20T10:10:00",
-    "reason": "PAYMENT_FAILED"
-  }
+  "scheduleId": "schedule-uuid-111",
+  "seatIds": ["seat-uuid-001", "seat-uuid-002"],
+  "userId": "user-uuid-345",
+  "reason": "PAYMENT_FAILED"
 }
 ```
 </details>
 
-| Payload 필드 | 타입 | 설명 |
-|--------------|------|------|
+| 도메인 필드 | 타입 | 설명 |
+|------------|------|------|
 | `scheduleId` | UUID | 회차 ID |
 | `seatIds` | UUID[] | 취소된 좌석 ID 목록 |
-| `cancelledAt` | Timestamp | 취소 시각 |
+| `userId` | UUID | 예매한 사용자 ID |
 | `reason` | String | 취소 사유 (`USER_REQUEST`, `PAYMENT_FAILED`, `HOLD_TIMEOUT`) |
+
+> **Note:** 취소 시각은 envelope의 `timestamp` 필드를 사용합니다.
 
 
 ---
@@ -247,7 +242,7 @@
 | `reservation-payment-consumer` | Reservation | `payment.events` | PaymentSuccess → 예매 확정 (CONFIRMED) |
 | | | | PaymentFailed → 예매 취소 (CANCELLED) + ReservationCancelled 발행 |
 | `event-payment-consumer` | Event | `payment.events` | PaymentSuccess → 좌석 상태 SOLD (RDB 업데이트) |
-| `event-reservation-consumer` | Event | `reservation.events` | ReservationCancelled → 좌석 선점 해제 (Redis SREM + RDB AVAILABLE) |
+| `event-reservation-consumer` | Event | `reservation.events` | ReservationCancelled → 좌석 DB AVAILABLE 복원 |
 
 ### 4.3 이벤트 플로우 다이어그램
 
@@ -320,8 +315,8 @@ Reservation Service Consumer
 Event Service Consumer
 ├─ reservation.events 구독
 ├─ ReservationCancelled 수신
-└─ 좌석 선점 해제: HOLD → AVAILABLE
-    (Redis: SREM hold_seats:{scheduleId} {seatId})
+└─ 좌석 DB AVAILABLE 복원
+   (Redis hold_seats SREM은 Reservation Service cancelReservation afterCommit에서 수행)
 ```
 
 **설계 장점:**

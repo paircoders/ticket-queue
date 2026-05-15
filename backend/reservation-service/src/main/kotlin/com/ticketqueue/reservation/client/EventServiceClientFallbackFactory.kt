@@ -18,6 +18,9 @@ class EventServiceClientFallbackFactory : FallbackFactory<EventServiceClient> {
             seatIds: List<UUID>
         ): EventServiceClient.SeatDetailsResponse =
             throw mapToReservationException(cause)
+
+        override fun getScheduleInfo(scheduleId: UUID): EventServiceClient.ScheduleInfoResponse =
+            throw mapToReservationException(cause)
     }
 
     private fun mapToReservationException(cause: Throwable): ReservationException = when {

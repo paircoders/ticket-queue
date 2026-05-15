@@ -23,7 +23,7 @@ import java.util.UUID
  * - [getSeats]: 회차별 좌석 등급 그룹핑 조회 + Redis Cache-Aside (TTL 5분) - REQ-EVT-006
  * - [getSoldSeatIds]: SOLD 좌석 ID 조회 (캐싱 없음 - 실시간 정확도 우선)
  * - [markSeatsAsSold]: Kafka Consumer용 - 좌석 상태 SOLD 벌크 업데이트
- * - [releaseHoldSeats]: Kafka Consumer용 - DB AVAILABLE 복원 + Redis hold_seats 선점 해제
+ * - [releaseHoldSeats]: Kafka Consumer용 - DB AVAILABLE 복원 (Redis hold_seats SREM은 Reservation Service 담당)
  *
  * Redis 장애 시 try-catch로 무시하고 DB fallback을 수행하여 서비스 가용성을 유지한다.
  * Cache Stampede 방지: Lua 스크립트로 원자적 락 획득 (REQ-EVT-021)
@@ -181,17 +181,15 @@ class SeatService(
     }
 
     /**
-     * 좌석을 AVAILABLE로 복원하고 Redis hold_seats Set에서 선점 해제된 좌석을 제거한다 (Kafka Consumer - ReservationCancelled 처리)
+     * 좌석을 AVAILABLE로 복원한다 (Kafka Consumer - ReservationCancelled 처리)
      *
-     * DB AVAILABLE 복원이 트랜잭션 내에서 우선 보장되고, Redis는 best-effort로 정리한다.
-     * TTL 10분 자동 만료로 Redis 장애 시에도 안전하다.
-     * 캐시도 무효화하여 다음 조회 시 최신 상태를 반영한다.
+     * DB AVAILABLE 복원이 트랜잭션 내에서 보장되고, 캐시도 무효화하여 다음 조회 시 최신 상태를 반영한다.
+     * Redis hold_seats SREM은 Reservation Service의 cancelReservation afterCommit에서 수행한다.
      */
     @Transactional
     fun releaseHoldSeats(scheduleId: UUID, seatIds: List<UUID>) {
         val updatedCount = seatRepository.updateStatusToAvailable(scheduleId, seatIds)
         log.info("좌석 AVAILABLE 복원: scheduleId=$scheduleId, updated=$updatedCount/${seatIds.size}")
-        removeFromHoldSeatsRedis(scheduleId, seatIds)
         evictSeatsCache(scheduleId)
     }
 
@@ -240,14 +238,4 @@ class SeatService(
         return response.copy(grades = overlaidGrades)
     }
 
-    private fun removeFromHoldSeatsRedis(scheduleId: UUID, seatIds: List<UUID>) {
-        val holdKey = "hold_seats:$scheduleId"
-        try {
-            val members = seatIds.map { it.toString() }.toTypedArray<Any>()
-            redisTemplate.opsForSet().remove(holdKey, *members)
-            log.debug("Removed ${seatIds.size} seats from hold set: key=$holdKey")
-        } catch (e: DataAccessException) {
-            log.warn("Failed to remove seats from hold set: key=$holdKey. TTL will expire automatically.", e)
-        }
-    }
 }

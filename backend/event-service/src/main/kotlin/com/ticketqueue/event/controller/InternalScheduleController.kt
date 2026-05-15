@@ -28,4 +28,10 @@ class InternalScheduleController(
     fun getEndedScheduleIds(): ScheduleDto.EndedScheduleIdsResponse {
         return ScheduleDto.EndedScheduleIdsResponse(scheduleService.getCleanupTargetScheduleIds())
     }
+
+    /** 회차 핵심 정보 조회 — 취소 검증, 환불 기준일 등 내부 서비스 공용 */
+    @GetMapping("/{scheduleId}/info")
+    fun getScheduleInfo(@PathVariable scheduleId: UUID): ScheduleDto.ScheduleInfoResponse {
+        return scheduleService.getScheduleInfo(scheduleId)
+    }
 }

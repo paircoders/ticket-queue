@@ -1,8 +1,14 @@
 package com.ticketqueue.reservation.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.ticketqueue.common.event.EventMetadata
+import java.math.BigDecimal
+import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.outbox.OutboxEvent
+import com.ticketqueue.common.outbox.OutboxEventRepository
 import com.ticketqueue.reservation.client.EventServiceClient
+import com.ticketqueue.reservation.dto.ReservationDto.CancelResponse
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsResponse
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
@@ -23,6 +29,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -37,7 +44,8 @@ class ReservationService(
     private val reservationRepository: ReservationRepository,
     private val reservationSeatRepository: ReservationSeatRepository,
     private val objectMapper: ObjectMapper,
-    private val transactionTemplate: TransactionTemplate
+    private val transactionTemplate: TransactionTemplate,
+    private val outboxEventRepository: OutboxEventRepository
 ) {
 
     private val log = KotlinLogging.logger {}
@@ -274,6 +282,70 @@ class ReservationService(
             sold = soldSet.toList(),
             hold = holdUniq.toList()
         )
+    }
+
+    /**
+     * 예매 취소 서비스 (REQ-RSV-006, REQ-RSV-011)
+     *
+     * ## 취소 프로세스
+     * 1. 예매 조회 — findByIdAndUserId로 소유권 검증
+     * 2. 상태 검증 — CANCELLED 재시도 거부
+     * 3. 공연 당일 취소 불가 — Event Service 회차 정보 조회 후 날짜 비교 (UTC 기준)
+     * 4. DB 트랜잭션: reservation.cancel() + OutboxEvent INSERT (같은 트랜잭션)
+     * 5. afterCommit 콜백: hold_seats SET에서 좌석 SREM
+     *    — PENDING이면 SET에 잔존 가능, CONFIRMED이면 TTL 만료 후라도 SREM은 멱등성 보장
+     *
+     * CONFIRMED 취소 시 Outbox payload에 paymentId를 포함하여 발행.
+     * Payment Service가 별도 이슈에서 해당 이벤트를 소비하여 환불을 처리한다.
+     */
+    fun cancelReservation(userId: UUID, reservationId: UUID): CancelResponse {
+        val reservation = reservationRepository.findByIdAndUserId(reservationId, userId)
+            ?: throw ReservationException(ErrorCode.RESERVATION_NOT_FOUND)
+
+        if (reservation.status == ReservationStatus.CANCELLED) {
+            throw ReservationException(ErrorCode.RESERVATION_ALREADY_CANCELLED)
+        }
+
+        val scheduleInfo = eventServiceClient.getScheduleInfo(reservation.scheduleId)
+        if (LocalDate.now(ZoneOffset.UTC) == scheduleInfo.eventStartAt.atOffset(ZoneOffset.UTC).toLocalDate()) {
+            throw ReservationException(ErrorCode.CANCELLATION_NOT_ALLOWED)
+        }
+
+        val seatIds = reservationSeatRepository.findByReservationId(reservationId).map { it.seatId }
+        val preCancelStatus = reservation.status
+
+        transactionTemplate.executeWithoutResult {
+            reservation.cancel()
+            outboxEventRepository.save(
+                OutboxEvent(
+                    aggregateType = "Reservation",
+                    aggregateId = reservationId,
+                    eventType = "ReservationCancelled",
+                    payload = objectMapper.writeValueAsString(
+                        ReservationCancelledEvent(
+                            aggregateId = reservationId,
+                            scheduleId = reservation.scheduleId,
+                            seatIds = seatIds,
+                            userId = reservation.userId,
+                            reason = "USER_REQUEST",
+                            metadata = EventMetadata(
+                                correlationId = UUID.randomUUID(),
+                                causationId = null,
+                                userId = reservation.userId
+                            )
+                        )
+                    )
+                )
+            )
+            registerAfterCommit {
+                scheduleHoldSeatsReconciliation(reservation.scheduleId, seatIds, emptyList())
+            }
+        }
+
+        val refundAmount = if (preCancelStatus == ReservationStatus.CONFIRMED) reservation.totalAmount else BigDecimal.ZERO
+
+        log.info { "Reservation cancelled: userId=$userId, reservationId=$reservationId, status=${reservation.status}" }
+        return CancelResponse(id = reservationId, status = reservation.status, refundAmount = refundAmount)
     }
 
     private fun validateForChange(reservation: Reservation) {

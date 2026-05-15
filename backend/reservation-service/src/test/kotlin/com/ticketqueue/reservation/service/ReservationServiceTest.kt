@@ -1,8 +1,12 @@
 package com.ticketqueue.reservation.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.outbox.OutboxEvent
+import com.ticketqueue.common.outbox.OutboxEventRepository
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
@@ -13,9 +17,11 @@ import com.ticketqueue.reservation.exception.ReservationException
 import com.ticketqueue.reservation.repository.ReservationRepository
 import com.ticketqueue.reservation.repository.ReservationSeatRepository
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -33,8 +39,10 @@ import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate
+import java.util.function.Consumer
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -53,6 +61,7 @@ class ReservationServiceTest {
     private lateinit var reservationSeatRepository: ReservationSeatRepository
     private lateinit var objectMapper: ObjectMapper
     private lateinit var transactionTemplate: TransactionTemplate
+    private lateinit var outboxEventRepository: OutboxEventRepository
     private lateinit var reservationService: ReservationService
 
     private val userId = UUID.randomUUID()
@@ -74,8 +83,9 @@ class ReservationServiceTest {
         eventServiceClient = mockk()
         reservationRepository = mockk()
         reservationSeatRepository = mockk()
-        objectMapper = jacksonObjectMapper()
+        objectMapper = jacksonObjectMapper().apply { registerModule(JavaTimeModule()) }
         transactionTemplate = mockk()
+        outboxEventRepository = mockk()
 
         every { stringRedisTemplate.opsForValue() } returns valueOps
         every { stringRedisTemplate.opsForSet() } returns setOps
@@ -87,7 +97,8 @@ class ReservationServiceTest {
             reservationRepository,
             reservationSeatRepository,
             objectMapper,
-            transactionTemplate
+            transactionTemplate,
+            outboxEventRepository
         )
     }
 
@@ -280,6 +291,153 @@ class ReservationServiceTest {
             result.seats.available shouldBe 50
             result.hold shouldBe emptyList<UUID>()
         }
+    }
+
+    @Nested
+    @DisplayName("예매 취소")
+    inner class CancelReservation {
+
+        private val reservationId = UUID.randomUUID()
+
+        @Test
+        @DisplayName("payload를 ReservationCancelledEvent로 역직렬화할 수 있고 표준 envelope 필드를 포함한다")
+        fun cancelledPayloadIsDeserializableWithCorrectFields() {
+            val outboxSlot = slot<OutboxEvent>()
+            setUpCancelSuccess(outboxSlot)
+
+            val response = reservationService.cancelReservation(userId, reservationId)
+
+            val event = objectMapper.readValue(outboxSlot.captured.payload, ReservationCancelledEvent::class.java)
+            event.eventType shouldBe "ReservationCancelled"
+            event.aggregateType shouldBe "Reservation"
+            event.aggregateId shouldBe reservationId
+            event.userId shouldBe userId
+            event.scheduleId shouldBe scheduleId
+            event.seatIds shouldBe listOf(seatId1)
+            event.reason shouldBe "USER_REQUEST"
+            event.metadata.userId shouldBe userId
+            event.metadata.correlationId shouldNotBe null
+            event.metadata.causationId shouldBe null
+            outboxSlot.captured.aggregateType shouldBe "Reservation"
+            outboxSlot.captured.eventType shouldBe "ReservationCancelled"
+            response.id shouldBe reservationId
+            response.refundAmount shouldBe BigDecimal.ZERO
+        }
+
+        @Test
+        @DisplayName("payload JSON에 reservationId, paymentId, cancelledAt 필드가 없다")
+        fun cancelledPayloadDoesNotContainRemovedFields() {
+            val outboxSlot = slot<OutboxEvent>()
+            setUpCancelSuccess(outboxSlot)
+
+            reservationService.cancelReservation(userId, reservationId)
+
+            val tree = objectMapper.readTree(outboxSlot.captured.payload)
+            tree.has("reservationId") shouldBe false
+            tree.has("paymentId") shouldBe false
+            tree.has("cancelledAt") shouldBe false
+        }
+
+        @Test
+        @DisplayName("CONFIRMED 예매 취소 시 refundAmount는 totalAmount와 같다")
+        fun confirmedCancellationHasRefundAmount() {
+            val totalAmount = BigDecimal("150000")
+            val outboxSlot = slot<OutboxEvent>()
+            setUpCancelSuccess(outboxSlot, status = ReservationStatus.CONFIRMED, totalAmount = totalAmount)
+
+            val response = reservationService.cancelReservation(userId, reservationId)
+
+            response.id shouldBe reservationId
+            response.refundAmount shouldBe totalAmount
+        }
+
+        @Test
+        @DisplayName("예매를 찾을 수 없으면 RESERVATION_NOT_FOUND 예외를 던진다")
+        fun throwsWhenNotFound() {
+            every { reservationRepository.findByIdAndUserId(reservationId, userId) } returns null
+
+            val ex = assertThrows<ReservationException> {
+                reservationService.cancelReservation(userId, reservationId)
+            }
+            ex.errorCode shouldBe ErrorCode.RESERVATION_NOT_FOUND
+        }
+
+        @Test
+        @DisplayName("이미 취소된 예매는 RESERVATION_ALREADY_CANCELLED 예외를 던진다")
+        fun throwsWhenAlreadyCancelled() {
+            val reservation = mockk<Reservation> {
+                every { status } returns ReservationStatus.CANCELLED
+            }
+            every { reservationRepository.findByIdAndUserId(reservationId, userId) } returns reservation
+
+            val ex = assertThrows<ReservationException> {
+                reservationService.cancelReservation(userId, reservationId)
+            }
+            ex.errorCode shouldBe ErrorCode.RESERVATION_ALREADY_CANCELLED
+        }
+
+        @Test
+        @DisplayName("공연 당일에는 CANCELLATION_NOT_ALLOWED 예외를 던진다")
+        fun throwsWhenCancelledOnEventDay() {
+            val reservation = mockk<Reservation>()
+            every { reservation.status } returns ReservationStatus.PENDING
+            every { reservation.scheduleId } returns scheduleId
+            every { reservationRepository.findByIdAndUserId(reservationId, userId) } returns reservation
+            every { eventServiceClient.getScheduleInfo(scheduleId) } returns eventScheduleToday()
+
+            val ex = assertThrows<ReservationException> {
+                reservationService.cancelReservation(userId, reservationId)
+            }
+            ex.errorCode shouldBe ErrorCode.CANCELLATION_NOT_ALLOWED
+        }
+
+        private fun setUpCancelSuccess(
+            outboxSlot: io.mockk.CapturingSlot<OutboxEvent>,
+            status: ReservationStatus = ReservationStatus.PENDING,
+            totalAmount: BigDecimal = BigDecimal.ZERO
+        ) {
+            val reservation = mockk<Reservation> {
+                every { id } returns reservationId
+                every { userId } returns this@ReservationServiceTest.userId
+                every { scheduleId } returns this@ReservationServiceTest.scheduleId
+                every { this@mockk.status } returns status
+                every { this@mockk.totalAmount } returns totalAmount
+                justRun { cancel() }
+            }
+            every { reservationRepository.findByIdAndUserId(reservationId, userId) } returns reservation
+            every { eventServiceClient.getScheduleInfo(scheduleId) } returns eventScheduleTomorrow()
+            every { reservationSeatRepository.findByReservationId(reservationId) } returns
+                listOf(mockk { every { seatId } returns seatId1 })
+            every { outboxEventRepository.save(capture(outboxSlot)) } answers { firstArg() }
+            every { transactionTemplate.executeWithoutResult(any()) } answers {
+                TransactionSynchronizationManager.initSynchronization()
+                try {
+                    firstArg<Consumer<TransactionStatus>>().accept(mockk(relaxed = true))
+                    TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
+                } finally {
+                    TransactionSynchronizationManager.clearSynchronization()
+                }
+            }
+            every { setOps.remove(any<String>(), *anyVararg()) } returns 1L
+        }
+
+        private fun eventScheduleTomorrow() = EventServiceClient.ScheduleInfoResponse(
+            scheduleId = scheduleId,
+            eventId = eventId,
+            eventStartAt = LocalDateTime.now(ZoneOffset.UTC).plusDays(1),
+            eventEndAt = LocalDateTime.now(ZoneOffset.UTC).plusDays(1).plusHours(3),
+            saleStartAt = LocalDateTime.now(ZoneOffset.UTC).minusDays(7),
+            saleEndAt = LocalDateTime.now(ZoneOffset.UTC).plusDays(1)
+        )
+
+        private fun eventScheduleToday() = EventServiceClient.ScheduleInfoResponse(
+            scheduleId = scheduleId,
+            eventId = eventId,
+            eventStartAt = LocalDateTime.now(ZoneOffset.UTC),
+            eventEndAt = LocalDateTime.now(ZoneOffset.UTC).plusHours(3),
+            saleStartAt = LocalDateTime.now(ZoneOffset.UTC).minusDays(7),
+            saleEndAt = LocalDateTime.now(ZoneOffset.UTC)
+        )
     }
 
     private fun holdRequest() = HoldRequest(scheduleId, listOf(seatId1))

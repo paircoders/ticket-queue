@@ -150,7 +150,7 @@ graph TB
 **Kafka Consumer:**
 - `reservation.events` - 예매 이벤트 수신
   - ReservationConfirmed: 좌석 상태 SOLD 업데이트 (RDB)
-  - ReservationCancelled: Redis hold_seats 정리
+  - ReservationCancelled: 좌석 DB AVAILABLE 복원
 
 **데이터 저장소:**
 - PostgreSQL 스키마: `event_service`

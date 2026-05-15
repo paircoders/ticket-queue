@@ -2,7 +2,7 @@ name: Build & Push Docker Images
 
 on:
   push:
-    branches: [develop, "feature/**"]
+    branches: [develop]
     paths:
       - "backend/**"
       - "docker/Dockerfile"
