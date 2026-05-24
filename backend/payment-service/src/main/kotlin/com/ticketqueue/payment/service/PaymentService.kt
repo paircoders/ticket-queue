@@ -1,11 +1,16 @@
 package com.ticketqueue.payment.service
 
+import com.ticketqueue.common.event.EventMetadata
+import com.ticketqueue.common.event.PaymentFailedEvent
+import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.external.portone.PortoneFeignClient
 import com.ticketqueue.common.external.portone.PortonePreRegisterRequest
 import com.ticketqueue.common.external.portone.PortoneProperties
 import com.ticketqueue.common.external.portone.PortoneTokenService
+import com.ticketqueue.common.outbox.OutboxEventRecorder
 import com.ticketqueue.payment.client.ReservationServiceClient
+import com.ticketqueue.payment.client.ReservationServiceClient.ReservationDetailResponse
 import com.ticketqueue.payment.client.ReservationServiceClient.ReservationStatus
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateResponse
@@ -17,6 +22,7 @@ import feign.FeignException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -28,7 +34,9 @@ class PaymentService(
     private val reservationServiceClient: ReservationServiceClient,
     private val portoneClient: PortoneFeignClient,
     private val portoneTokenService: PortoneTokenService,
-    private val portoneProperties: PortoneProperties
+    private val portoneProperties: PortoneProperties,
+    private val outboxEventRecorder: OutboxEventRecorder,
+    private val transactionTemplate: TransactionTemplate,
 ) {
 
     private val log = KotlinLogging.logger {}
@@ -81,8 +89,15 @@ class PaymentService(
                 token = portoneTokenService.getAccessToken()
             )
         } catch (e: Exception) {
-            payment.markFailed("PortOne pre-register failed: ${e.message}")
-            paymentRepository.save(payment)
+            val reason = "PortOne pre-register failed: ${e.message}"
+            // payment 는 위 첫 save() 가 자체 트랜잭션으로 즉시 커밋되며 detached 상태가 된다.
+            // 아래 save() 는 SimpleJpaRepository 의 merge() 경로로 UPDATE 한 행만 발행하고,
+            // recordPaymentFailed() 의 outbox INSERT 와 같은 트랜잭션에서 원자적으로 커밋된다.
+            transactionTemplate.executeWithoutResult {
+                payment.markFailed(reason)
+                paymentRepository.save(payment)
+                recordPaymentFailed(payment, reason)
+            }
             throw PaymentException(ErrorCode.PORTONE_PRE_REGISTER_FAILED)
         }
 
@@ -98,7 +113,7 @@ class PaymentService(
     }
 
     private fun validateReservation(
-        reservation: ReservationServiceClient.ReservationDetailResponse,
+        reservation: ReservationDetailResponse,
         userId: UUID,
         requestedAmount: BigDecimal
     ) {
@@ -106,5 +121,47 @@ class PaymentService(
         if (reservation.status != ReservationStatus.PENDING) throw PaymentException(ErrorCode.RESERVATION_NOT_PAYABLE)
         if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(reservation.holdExpiresAt)) throw PaymentException(ErrorCode.HOLD_EXPIRED)
         if (reservation.totalAmount.compareTo(requestedAmount) != 0) throw PaymentException(ErrorCode.PAYMENT_AMOUNT_MISMATCH)
+    }
+
+    /**
+     * Transactional Outbox 발행 헬퍼 — PaymentSuccess.
+     *
+     * 호출자는 활성 트랜잭션 내부에서 호출해야 한다 ([OutboxEventRecorder] PROPAGATION_MANDATORY).
+     * payment 는 markSuccess() 가 이미 호출되어 paidAt / portoneTransactionId 가 채워진 상태여야 한다.
+     * 결제 승인 API (#59) 가 confirm 트랜잭션 내부에서 호출하기 위한 재사용 진입점.
+     */
+    private fun recordPaymentSuccess(payment: Payment, reservation: ReservationDetailResponse) {
+        val paidAt = requireNotNull(payment.paidAt) { "payment.paidAt must be set before recording PaymentSuccess" }
+        val transactionId = requireNotNull(payment.portoneTransactionId) { "payment.portoneTransactionId must be set before recording PaymentSuccess" }
+        outboxEventRecorder.record(
+            PaymentSuccessEvent(
+                aggregateId = payment.id!!,
+                reservationId = payment.reservationId,
+                paymentKey = payment.paymentKey,
+                amount = payment.amount,
+                paidAt = paidAt,
+                scheduleId = reservation.scheduleId,
+                seatIds = reservation.seatIds,
+                portoneTransactionId = transactionId,
+                metadata = EventMetadata(userId = payment.userId)
+            )
+        )
+    }
+
+    /**
+     * Transactional Outbox 발행 헬퍼 — PaymentFailed.
+     *
+     * 호출자는 활성 트랜잭션 내부에서 호출해야 한다 ([OutboxEventRecorder] PROPAGATION_MANDATORY).
+     * createPayment 의 PortOne pre-register 실패 분기 / 결제 승인 실패 분기에서 공통 사용.
+     */
+    private fun recordPaymentFailed(payment: Payment, reason: String) {
+        outboxEventRecorder.record(
+            PaymentFailedEvent(
+                aggregateId = payment.id!!,
+                reservationId = payment.reservationId,
+                reason = reason,
+                metadata = EventMetadata(userId = payment.userId)
+            )
+        )
     }
 }

@@ -144,7 +144,8 @@
   "amount": 200000.00,
   "paidAt": "2026-01-20T10:00:00",
   "scheduleId": "schedule-uuid-111",
-  "seatIds": ["seat-uuid-001", "seat-uuid-002"]
+  "seatIds": ["seat-uuid-001", "seat-uuid-002"],
+  "portoneTransactionId": "portone-tx-abc-123"
 }
 ```
 </details>
@@ -157,8 +158,7 @@
 | `paidAt` | Timestamp | 결제 완료 시각 |
 | `scheduleId` | UUID | 회차 ID |
 | `seatIds` | UUID[] | 결제된 좌석 ID 목록 |
-
-> **Note:** `portoneTransactionId` 필드는 Payment Service Outbox 구현 시 추가 예정
+| `portoneTransactionId` | String | PortOne 결제 트랜잭션 ID (PG사 추적용) |
 
 #### 3.2.2 PaymentFailed
 <details>
