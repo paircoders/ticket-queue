@@ -5,8 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
-import com.ticketqueue.common.outbox.OutboxEvent
-import com.ticketqueue.common.outbox.OutboxEventRepository
+import com.ticketqueue.common.outbox.OutboxEventRecorder
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
@@ -61,7 +60,7 @@ class ReservationServiceTest {
     private lateinit var reservationSeatRepository: ReservationSeatRepository
     private lateinit var objectMapper: ObjectMapper
     private lateinit var transactionTemplate: TransactionTemplate
-    private lateinit var outboxEventRepository: OutboxEventRepository
+    private lateinit var outboxEventRecorder: OutboxEventRecorder
     private lateinit var reservationService: ReservationService
 
     private val userId = UUID.randomUUID()
@@ -85,7 +84,7 @@ class ReservationServiceTest {
         reservationSeatRepository = mockk()
         objectMapper = jacksonObjectMapper().apply { registerModule(JavaTimeModule()) }
         transactionTemplate = mockk()
-        outboxEventRepository = mockk()
+        outboxEventRecorder = mockk()
 
         every { stringRedisTemplate.opsForValue() } returns valueOps
         every { stringRedisTemplate.opsForSet() } returns setOps
@@ -98,7 +97,7 @@ class ReservationServiceTest {
             reservationSeatRepository,
             objectMapper,
             transactionTemplate,
-            outboxEventRepository
+            outboxEventRecorder
         )
     }
 
@@ -300,14 +299,14 @@ class ReservationServiceTest {
         private val reservationId = UUID.randomUUID()
 
         @Test
-        @DisplayName("payload를 ReservationCancelledEvent로 역직렬화할 수 있고 표준 envelope 필드를 포함한다")
-        fun cancelledPayloadIsDeserializableWithCorrectFields() {
-            val outboxSlot = slot<OutboxEvent>()
-            setUpCancelSuccess(outboxSlot)
+        @DisplayName("OutboxEventRecorder.record() 호출 시 표준 envelope 필드를 포함한다")
+        fun cancelledEventHasCorrectFields() {
+            val eventSlot = slot<ReservationCancelledEvent>()
+            setUpCancelSuccess(eventSlot)
 
             val response = reservationService.cancelReservation(userId, reservationId)
 
-            val event = objectMapper.readValue(outboxSlot.captured.payload, ReservationCancelledEvent::class.java)
+            val event = eventSlot.captured
             event.eventType shouldBe "ReservationCancelled"
             event.aggregateType shouldBe "Reservation"
             event.aggregateId shouldBe reservationId
@@ -318,21 +317,19 @@ class ReservationServiceTest {
             event.metadata.userId shouldBe userId
             event.metadata.correlationId shouldNotBe null
             event.metadata.causationId shouldBe null
-            outboxSlot.captured.aggregateType shouldBe "Reservation"
-            outboxSlot.captured.eventType shouldBe "ReservationCancelled"
             response.id shouldBe reservationId
             response.refundAmount shouldBe BigDecimal.ZERO
         }
 
         @Test
-        @DisplayName("payload JSON에 reservationId, paymentId, cancelledAt 필드가 없다")
-        fun cancelledPayloadDoesNotContainRemovedFields() {
-            val outboxSlot = slot<OutboxEvent>()
-            setUpCancelSuccess(outboxSlot)
+        @DisplayName("이벤트 JSON에 reservationId, paymentId, cancelledAt 필드가 없다")
+        fun cancelledEventDoesNotContainRemovedFields() {
+            val eventSlot = slot<ReservationCancelledEvent>()
+            setUpCancelSuccess(eventSlot)
 
             reservationService.cancelReservation(userId, reservationId)
 
-            val tree = objectMapper.readTree(outboxSlot.captured.payload)
+            val tree = objectMapper.readTree(objectMapper.writeValueAsString(eventSlot.captured))
             tree.has("reservationId") shouldBe false
             tree.has("paymentId") shouldBe false
             tree.has("cancelledAt") shouldBe false
@@ -342,8 +339,8 @@ class ReservationServiceTest {
         @DisplayName("CONFIRMED 예매 취소 시 refundAmount는 totalAmount와 같다")
         fun confirmedCancellationHasRefundAmount() {
             val totalAmount = BigDecimal("150000")
-            val outboxSlot = slot<OutboxEvent>()
-            setUpCancelSuccess(outboxSlot, status = ReservationStatus.CONFIRMED, totalAmount = totalAmount)
+            val eventSlot = slot<ReservationCancelledEvent>()
+            setUpCancelSuccess(eventSlot, status = ReservationStatus.CONFIRMED, totalAmount = totalAmount)
 
             val response = reservationService.cancelReservation(userId, reservationId)
 
@@ -392,7 +389,7 @@ class ReservationServiceTest {
         }
 
         private fun setUpCancelSuccess(
-            outboxSlot: io.mockk.CapturingSlot<OutboxEvent>,
+            eventSlot: io.mockk.CapturingSlot<ReservationCancelledEvent>,
             status: ReservationStatus = ReservationStatus.PENDING,
             totalAmount: BigDecimal = BigDecimal.ZERO
         ) {
@@ -408,7 +405,7 @@ class ReservationServiceTest {
             every { eventServiceClient.getScheduleInfo(scheduleId) } returns eventScheduleTomorrow()
             every { reservationSeatRepository.findByReservationId(reservationId) } returns
                 listOf(mockk { every { seatId } returns seatId1 })
-            every { outboxEventRepository.save(capture(outboxSlot)) } answers { firstArg() }
+            every { outboxEventRecorder.record(capture(eventSlot)) } returns mockk(relaxed = true)
             every { transactionTemplate.executeWithoutResult(any()) } answers {
                 TransactionSynchronizationManager.initSynchronization()
                 try {
