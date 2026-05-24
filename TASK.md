@@ -50,7 +50,7 @@
 
 | # | Done | Issue | Title | Deps | Claim | Branch | PR |
 |---|------|-------|-------|------|-------|--------|----|
-| 1 | [ ] | [#228](https://github.com/paircoders/ticket-queue/issues/228) | [Common/Reservation] OutboxEventRecorder 헬퍼 도입 및 ReservationService 적용 | — | session-bec7620d | `refactor/228-outbox-event-recorder` |  |
+| 1 | [x] | [#228](https://github.com/paircoders/ticket-queue/issues/228) | [Common/Reservation] OutboxEventRecorder 헬퍼 도입 및 ReservationService 적용 | — | session-bec7620d | `refactor/228-outbox-event-recorder` | [#229](https://github.com/paircoders/ticket-queue/pull/229) |
 
 ---
 
