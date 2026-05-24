@@ -67,6 +67,7 @@ class OutboxEventRepositoryCustomImplTest {
         publishedAt: LocalDateTime? = null,
         aggregateType: String = "TestAggregate"
     ): OutboxEvent = OutboxEvent(
+        id = UUID.randomUUID(),
         aggregateType = aggregateType,
         aggregateId = UUID.randomUUID(),
         eventType = "TestEvent",
@@ -106,10 +107,10 @@ class OutboxEventRepositoryCustomImplTest {
         ).sortedBy { it.toString() }.let {
             outboxEventRepository.findAll().map { e -> e.id }
         }
-        outboxEventRepository.existsById(toDelete.id!!) shouldBe false
-        outboxEventRepository.existsById(notPublished.id!!) shouldBe true
-        outboxEventRepository.existsById(notYet.id!!) shouldBe true
-        outboxEventRepository.existsById(otherType.id!!) shouldBe true
+        outboxEventRepository.existsById(toDelete.id) shouldBe false
+        outboxEventRepository.existsById(notPublished.id) shouldBe true
+        outboxEventRepository.existsById(notYet.id) shouldBe true
+        outboxEventRepository.existsById(otherType.id) shouldBe true
     }
 
     @Test
@@ -131,9 +132,9 @@ class OutboxEventRepositoryCustomImplTest {
         val deleted = outboxEventRepository.deleteAllPublishedEventsBefore(cutoff)
 
         deleted shouldBe 2L
-        outboxEventRepository.existsById(payment.id!!) shouldBe false
-        outboxEventRepository.existsById(reservation.id!!) shouldBe false
-        outboxEventRepository.existsById(notPublished.id!!) shouldBe true
+        outboxEventRepository.existsById(payment.id) shouldBe false
+        outboxEventRepository.existsById(reservation.id) shouldBe false
+        outboxEventRepository.existsById(notPublished.id) shouldBe true
     }
 
     @Test
@@ -149,6 +150,6 @@ class OutboxEventRepositoryCustomImplTest {
         val deleted = outboxEventRepository.deleteAllPublishedEventsBefore(cutoff)
 
         deleted shouldBe 0L
-        outboxEventRepository.existsById(unpublished.id!!) shouldBe true
+        outboxEventRepository.existsById(unpublished.id) shouldBe true
     }
 }

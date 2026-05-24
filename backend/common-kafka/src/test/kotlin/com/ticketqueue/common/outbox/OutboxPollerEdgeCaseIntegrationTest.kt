@@ -88,6 +88,7 @@ class OutboxPollerEdgeCaseIntegrationTest {
 
         for (i in 1..eventCount) {
             val event = OutboxEvent(
+                id = UUID.randomUUID(),
                 aggregateType = "Payment",
                 aggregateId = UUID.randomUUID(),
                 eventType = "PaymentSuccess",
@@ -124,6 +125,7 @@ class OutboxPollerEdgeCaseIntegrationTest {
         repeat(eventCount) { i ->
             outboxEventRepository.save(
                 OutboxEvent(
+                    id = UUID.randomUUID(),
                     aggregateType = "Payment",
                     aggregateId = UUID.randomUUID(),
                     eventType = "PaymentSuccess",
@@ -175,6 +177,7 @@ class OutboxPollerEdgeCaseIntegrationTest {
     private fun insertEventAndRollback() {
         outboxEventRepository.save(
             OutboxEvent(
+                id = UUID.randomUUID(),
                 aggregateType = "Payment",
                 aggregateId = UUID.randomUUID(),
                 eventType = "PaymentSuccess",

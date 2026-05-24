@@ -99,7 +99,7 @@ class OutboxPollerRetryIntegrationTest {
 
         // Then: 성공하면 published=true, retryCount는 변경 안 됨
         await().atMost(3, TimeUnit.SECONDS).untilAsserted {
-            val updated = outboxEventRepository.findById(event.id!!).orElseThrow()
+            val updated = outboxEventRepository.findById(event.id).orElseThrow()
             updated.published shouldBe true
             updated.publishedAt shouldNotBe null
             updated.retryCount shouldBe 2 // 성공 시 retryCount는 증가하지 않음
@@ -125,7 +125,7 @@ class OutboxPollerRetryIntegrationTest {
 
         // Then: retryCount=3, published=true (DLQ 이동 후 마킹)
         await().atMost(5, TimeUnit.SECONDS).untilAsserted {
-            val updated = outboxEventRepository.findById(savedEvent.id!!).orElseThrow()
+            val updated = outboxEventRepository.findById(savedEvent.id).orElseThrow()
             updated.retryCount shouldBe 3
             updated.published shouldBe true
             updated.publishedAt shouldNotBe null
@@ -158,7 +158,7 @@ class OutboxPollerRetryIntegrationTest {
 
         // Then: DLQ 전송 실패해도 published=true로 마킹됨 (현재 구현)
         await().atMost(5, TimeUnit.SECONDS).untilAsserted {
-            val updated = outboxEventRepository.findById(savedEvent.id!!).orElseThrow()
+            val updated = outboxEventRepository.findById(savedEvent.id).orElseThrow()
             updated.published shouldBe true
             updated.retryCount shouldBe 3
         }
@@ -183,7 +183,7 @@ class OutboxPollerRetryIntegrationTest {
         Thread.sleep(2500)
 
         // Then: retryCount=3 유지, published=false 유지 (변화 없음)
-        val unchanged = outboxEventRepository.findById(savedEvent.id!!).orElseThrow()
+        val unchanged = outboxEventRepository.findById(savedEvent.id).orElseThrow()
         unchanged.retryCount shouldBe 3
         unchanged.published shouldBe false
         unchanged.publishedAt shouldBe null
@@ -194,6 +194,7 @@ class OutboxPollerRetryIntegrationTest {
 
     private fun createOutboxEvent(aggregateType: String, eventType: String): OutboxEvent {
         return OutboxEvent(
+            id = UUID.randomUUID(),
             aggregateType = aggregateType,
             aggregateId = UUID.randomUUID(),
             eventType = eventType,

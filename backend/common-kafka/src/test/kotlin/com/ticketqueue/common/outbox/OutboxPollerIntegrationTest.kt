@@ -81,6 +81,7 @@ class OutboxPollerIntegrationTest {
         val aggregateId = UUID.randomUUID()
         val event = outboxEventRepository.save(
             OutboxEvent(
+                id = UUID.randomUUID(),
                 aggregateType = "Payment",
                 aggregateId = aggregateId,
                 eventType = "PaymentSuccess",
@@ -95,7 +96,7 @@ class OutboxPollerIntegrationTest {
             .atMost(Duration.ofSeconds(5))
             .pollInterval(Duration.ofMillis(500))
             .untilAsserted {
-                val savedEvent = outboxEventRepository.findById(event.id!!).get()
+                val savedEvent = outboxEventRepository.findById(event.id).get()
                 savedEvent.published shouldBe true
                 savedEvent.publishedAt shouldNotBe null
             }
@@ -118,6 +119,7 @@ class OutboxPollerIntegrationTest {
         val payload = createPaymentPayload(aggregateId)
         outboxEventRepository.save(
             OutboxEvent(
+                id = UUID.randomUUID(),
                 aggregateType = "Payment",
                 aggregateId = aggregateId,
                 eventType = "PaymentSuccess",
@@ -147,6 +149,7 @@ class OutboxPollerIntegrationTest {
         val payload = createReservationPayload(aggregateId)
         outboxEventRepository.save(
             OutboxEvent(
+                id = UUID.randomUUID(),
                 aggregateType = "Reservation",
                 aggregateId = aggregateId,
                 eventType = "ReservationCancelled",
@@ -176,6 +179,7 @@ class OutboxPollerIntegrationTest {
             Thread.sleep(1) // Ensure different createdAt timestamps
             outboxEventRepository.save(
                 OutboxEvent(
+                    id = UUID.randomUUID(),
                     aggregateType = "Payment",
                     aggregateId = UUID.randomUUID(),
                     eventType = "PaymentSuccess",
@@ -214,7 +218,7 @@ class OutboxPollerIntegrationTest {
 
         // Verify message order (createdAt order should be preserved)
         val messages = kafkaTestConsumer.getMessages("payment.events")
-        val eventIds = events.map { it.id!! }
+        val eventIds = events.map { it.id }
         val receivedEventIndices = messages.mapNotNull { message ->
             // Extract event index from correlation ID
             val correlationId = message.substringAfter("\"correlationId\":\"")
@@ -236,6 +240,7 @@ class OutboxPollerIntegrationTest {
         val aggregateId = UUID.randomUUID()
         val publishedEvent = outboxEventRepository.save(
             OutboxEvent(
+                id = UUID.randomUUID(),
                 aggregateType = "Payment",
                 aggregateId = aggregateId,
                 eventType = "PaymentSuccess",
@@ -256,7 +261,7 @@ class OutboxPollerIntegrationTest {
         messages shouldHaveSize 0
 
         // Event should still be marked as published
-        val event = outboxEventRepository.findById(publishedEvent.id!!).get()
+        val event = outboxEventRepository.findById(publishedEvent.id).get()
         event.published shouldBe true
     }
 

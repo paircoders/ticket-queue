@@ -5,8 +5,7 @@ import com.ticketqueue.common.event.EventMetadata
 import java.math.BigDecimal
 import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
-import com.ticketqueue.common.outbox.OutboxEvent
-import com.ticketqueue.common.outbox.OutboxEventRepository
+import com.ticketqueue.common.outbox.OutboxEventRecorder
 import com.ticketqueue.reservation.client.EventServiceClient
 import com.ticketqueue.reservation.dto.ReservationDto.CancelResponse
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
@@ -45,7 +44,7 @@ class ReservationService(
     private val reservationSeatRepository: ReservationSeatRepository,
     private val objectMapper: ObjectMapper,
     private val transactionTemplate: TransactionTemplate,
-    private val outboxEventRepository: OutboxEventRepository
+    private val outboxEventRecorder: OutboxEventRecorder
 ) {
 
     private val log = KotlinLogging.logger {}
@@ -316,24 +315,17 @@ class ReservationService(
 
         transactionTemplate.executeWithoutResult {
             reservation.cancel()
-            outboxEventRepository.save(
-                OutboxEvent(
-                    aggregateType = "Reservation",
+            outboxEventRecorder.record(
+                ReservationCancelledEvent(
                     aggregateId = reservationId,
-                    eventType = "ReservationCancelled",
-                    payload = objectMapper.writeValueAsString(
-                        ReservationCancelledEvent(
-                            aggregateId = reservationId,
-                            scheduleId = reservation.scheduleId,
-                            seatIds = seatIds,
-                            userId = reservation.userId,
-                            reason = "USER_REQUEST",
-                            metadata = EventMetadata(
-                                correlationId = UUID.randomUUID(),
-                                causationId = null,
-                                userId = reservation.userId
-                            )
-                        )
+                    scheduleId = reservation.scheduleId,
+                    seatIds = seatIds,
+                    userId = reservation.userId,
+                    reason = "USER_REQUEST",
+                    metadata = EventMetadata(
+                        correlationId = UUID.randomUUID(),
+                        causationId = null,
+                        userId = reservation.userId
                     )
                 )
             )
