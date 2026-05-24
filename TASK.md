@@ -60,7 +60,7 @@
 
 | # | Done | Issue | Title | Deps | Claim | Branch | PR |
 |---|------|-------|-------|------|-------|--------|----|
-| 2 | [ ] | [#55](https://github.com/paircoders/ticket-queue/issues/55) | [Reservation] Transactional Outbox 패턴 구현 | #228 |  | `feature/55-reservation-outbox` |  |
+| 2 | [ ] | [#55](https://github.com/paircoders/ticket-queue/issues/55) | [Reservation] Transactional Outbox 패턴 구현 | #228 | session-ralph-228-55 | `feature/228-55-outbox-recorder-infra` |  |
 | 3 | [ ] | [#63](https://github.com/paircoders/ticket-queue/issues/63) | [Payment] Transactional Outbox 패턴 구현 | #228 |  | `feature/63-payment-outbox` |  |
 
 ---
