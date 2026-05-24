@@ -14,9 +14,11 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.mockk.every
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -40,12 +42,12 @@ import java.util.UUID
 /**
  * Reservation Service e2e Outbox + Kafka 통합 테스트.
  *
- * 검증 포커스 (#55 + #228):
+ * 검증 포커스 (#55):
  * 1. cancelReservation() 호출 → outbox_events INSERT (동일 트랜잭션)
- * 2. OutboxPollerService 가 1초 주기로 reservation.events 토픽 발행
+ * 2. OutboxPollerService 가 reservation.events 토픽으로 발행
  * 3. Kafka Header 에 eventType=ReservationCancelled / aggregateType=Reservation 포함
  * 4. outbox_events 의 published=true, published_at 갱신
- * 5. **outbox row.id == payload.eventId** — #228 의 1:1 추적성 핵심 검증
+ * 5. payload JSON 의 eventId 가 Consumer 멱등성 추적 키로 보존됨 (#228 의 의도)
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -131,7 +133,7 @@ class ReservationOutboxPollerIntegrationTest {
         }
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     fun closeConsumer() {
         if (::kafkaConsumer.isInitialized) kafkaConsumer.close()
     }
@@ -208,9 +210,9 @@ class ReservationOutboxPollerIntegrationTest {
         payloadEvent.reason shouldBe "USER_REQUEST"
     }
 
-    private fun pollUntilFound(timeoutSeconds: Long): List<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>> {
+    private fun pollUntilFound(timeoutSeconds: Long): List<ConsumerRecord<String, String>> {
         val deadline = System.currentTimeMillis() + timeoutSeconds * 1000
-        val collected = mutableListOf<org.apache.kafka.clients.consumer.ConsumerRecord<String, String>>()
+        val collected = mutableListOf<ConsumerRecord<String, String>>()
         while (System.currentTimeMillis() < deadline && collected.isEmpty()) {
             val batch = kafkaConsumer.poll(Duration.ofMillis(500))
             batch.forEach { collected.add(it) }
