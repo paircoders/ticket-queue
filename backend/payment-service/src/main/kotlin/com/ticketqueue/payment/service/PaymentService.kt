@@ -1,10 +1,12 @@
 package com.ticketqueue.payment.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.EventMetadata
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.external.portone.PortoneFeignClient
+import com.ticketqueue.common.external.portone.PortonePaymentResponse
 import com.ticketqueue.common.external.portone.PortonePreRegisterRequest
 import com.ticketqueue.common.external.portone.PortoneProperties
 import com.ticketqueue.common.external.portone.PortoneTokenService
@@ -12,6 +14,8 @@ import com.ticketqueue.common.outbox.OutboxEventRecorder
 import com.ticketqueue.payment.client.ReservationServiceClient
 import com.ticketqueue.payment.client.ReservationServiceClient.ReservationDetailResponse
 import com.ticketqueue.payment.client.ReservationServiceClient.ReservationStatus
+import com.ticketqueue.payment.dto.PaymentDto.ConfirmRequest
+import com.ticketqueue.payment.dto.PaymentDto.ConfirmResponse
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateResponse
 import com.ticketqueue.payment.entity.Payment
@@ -37,6 +41,7 @@ class PaymentService(
     private val portoneProperties: PortoneProperties,
     private val outboxEventRecorder: OutboxEventRecorder,
     private val transactionTemplate: TransactionTemplate,
+    private val objectMapper: ObjectMapper,
 ) {
 
     private val log = KotlinLogging.logger {}
@@ -109,6 +114,99 @@ class PaymentService(
             storeId = storeId,
             channelKey = channelKey,
             paymentKey = paymentKey
+        )
+    }
+
+    /**
+     * 결제 승인 서비스 (REQ-PAY-010)
+     *
+     * ## 승인 프로세스
+     * 1. Payment 조회 — 소유권/요청 본문 정합성/상태 머신으로 조기 거절
+     * 2. Reservation 재조회 — hold_expires_at 만료 검증, scheduleId/seatIds 확보
+     * 3. PortOne `getPayment(paymentKey)` 호출 — status/amount/transactionId 위변조 검증
+     * 4. DB 트랜잭션: PESSIMISTIC_WRITE 락 + 상태 재검증 + markSuccess|markFailed + Outbox 발행
+     *
+     * PortOne 응답이 PAID 가 아니거나 amount/transactionId 가 어긋나면 markFailed + PaymentFailedEvent 를 같은
+     * 트랜잭션으로 기록한 뒤 200 OK + status=FAILED 로 응답한다 (스펙 1.2). PortOne 호출 자체가 실패하면
+     * 502 PORTONE_API_ERROR 로 즉시 전파한다. 동시 confirm race 는 락 재검증으로 차단되어 중복 outbox 발행이
+     * 발생하지 않는다.
+     */
+    fun confirmPayment(userId: UUID, request: ConfirmRequest): ConfirmResponse {
+        val payment = paymentRepository.findById(request.paymentId)
+            .orElseThrow { PaymentException(ErrorCode.RESOURCE_NOT_FOUND) }
+
+        if (payment.userId != userId) throw PaymentException(ErrorCode.FORBIDDEN)
+        if (payment.paymentKey != request.paymentKey
+            || payment.reservationId != request.reservationId
+            || payment.amount.compareTo(request.amount) != 0
+        ) {
+            throw PaymentException(ErrorCode.INVALID_INPUT)
+        }
+
+        when (payment.status) {
+            PaymentStatus.SUCCESS -> throw PaymentException(ErrorCode.PAYMENT_ALREADY_EXISTS)
+            PaymentStatus.FAILED, PaymentStatus.REFUNDED -> throw PaymentException(ErrorCode.PAYMENT_FAILED)
+            PaymentStatus.PENDING -> Unit
+        }
+
+        val reservation = try {
+            reservationServiceClient.getReservation(payment.reservationId)
+        } catch (e: FeignException.NotFound) {
+            throw PaymentException(ErrorCode.RESERVATION_NOT_FOUND)
+        } catch (e: FeignException) {
+            throw PaymentException(ErrorCode.INTERNAL_SERVER_ERROR)
+        }
+
+        if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(reservation.holdExpiresAt)) {
+            throw PaymentException(ErrorCode.HOLD_EXPIRED)
+        }
+
+        val portoneResponse: PortonePaymentResponse = try {
+            portoneClient.getPayment(
+                paymentId = payment.paymentKey,
+                storeId = storeId,
+                token = portoneTokenService.getAccessToken()
+            )
+        } catch (e: FeignException) {
+            throw PaymentException(ErrorCode.PORTONE_API_ERROR)
+        }
+
+        val responseJson = objectMapper.writeValueAsString(portoneResponse)
+        val expectedAmount = payment.amount.longValueExact()
+        val failureReason: String? = when {
+            portoneResponse.status != "PAID" -> "PORTONE_STATUS_${portoneResponse.status}"
+            portoneResponse.amount.total != expectedAmount -> "AMOUNT_MISMATCH"
+            portoneResponse.transactionId != request.transactionId -> "TX_ID_MISMATCH"
+            else -> null
+        }
+
+        // 락 재검증은 PortOne HTTP 호출 이후 짧은 트랜잭션 안에서만 보유한다.
+        val finalPayment = transactionTemplate.execute<Payment> {
+            val locked = paymentRepository.findByIdForUpdate(payment.id!!).orElseThrow {
+                PaymentException(ErrorCode.RESOURCE_NOT_FOUND)
+            }
+            when (locked.status) {
+                PaymentStatus.SUCCESS -> throw PaymentException(ErrorCode.PAYMENT_ALREADY_EXISTS)
+                PaymentStatus.FAILED, PaymentStatus.REFUNDED -> throw PaymentException(ErrorCode.PAYMENT_FAILED)
+                PaymentStatus.PENDING -> Unit
+            }
+            if (failureReason == null) {
+                val paidAt = portoneResponse.paidAt?.toLocalDateTime() ?: LocalDateTime.now(ZoneOffset.UTC)
+                locked.markSuccess(portoneResponse.transactionId, responseJson, paidAt)
+                recordPaymentSuccess(locked, reservation)
+            } else {
+                locked.markFailed(failureReason, responseJson)
+                recordPaymentFailed(locked, failureReason)
+            }
+            paymentRepository.save(locked)
+        } ?: throw PaymentException(ErrorCode.INTERNAL_SERVER_ERROR)
+
+        log.info { "Payment confirmed: paymentId=${finalPayment.id}, status=${finalPayment.status}, failureReason=$failureReason" }
+
+        return ConfirmResponse(
+            paymentId = finalPayment.id!!,
+            status = finalPayment.status,
+            paidAt = finalPayment.paidAt
         )
     }
 
