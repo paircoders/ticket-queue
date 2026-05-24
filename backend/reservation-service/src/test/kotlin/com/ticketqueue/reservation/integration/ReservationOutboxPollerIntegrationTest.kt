@@ -123,8 +123,12 @@ class ReservationOutboxPollerIntegrationTest {
         }
         kafkaConsumer = KafkaConsumer(props)
         kafkaConsumer.subscribe(listOf("reservation.events"))
-        // 첫 poll 으로 partition assignment 트리거
-        kafkaConsumer.poll(Duration.ofMillis(100))
+        // partition assignment 완료까지 명시적 대기 — 단일 poll(100ms) 만으로는 CI 환경에서
+        // consumer group rebalance 가 끝나기 전에 메시지가 발행될 수 있어 메시지가 누락된다.
+        val assignmentDeadline = System.currentTimeMillis() + 10_000
+        while (kafkaConsumer.assignment().isEmpty() && System.currentTimeMillis() < assignmentDeadline) {
+            kafkaConsumer.poll(Duration.ofMillis(200))
+        }
     }
 
     @org.junit.jupiter.api.AfterEach

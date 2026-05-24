@@ -68,10 +68,12 @@ class OutboxInfraWiringTest {
         }
     }
 
-    @Autowired(required = false) private var outboxEventRecorder: OutboxEventRecorder? = null
-    @Autowired(required = false) private var outboxEventRepository: OutboxEventRepository? = null
-    @Autowired(required = false) private var outboxPollerService: OutboxPollerService? = null
-    @Autowired(required = false) private var outboxCleanupBatchService: OutboxCleanupBatchService? = null
+    // required=true (기본값) 로 두면 빈이 누락된 경우 ApplicationContext 로드 실패와 함께
+    // 명확한 NoSuchBeanDefinitionException 이 보고된다. null check 보다 진단이 빠르다.
+    @Autowired private lateinit var outboxEventRecorder: OutboxEventRecorder
+    @Autowired private lateinit var outboxEventRepository: OutboxEventRepository
+    @Autowired private lateinit var outboxPollerService: OutboxPollerService
+    @Autowired private lateinit var outboxCleanupBatchService: OutboxCleanupBatchService
 
     @Test
     @DisplayName("OutboxEventRecorder 빈이 ApplicationContext 에 로드된다")
