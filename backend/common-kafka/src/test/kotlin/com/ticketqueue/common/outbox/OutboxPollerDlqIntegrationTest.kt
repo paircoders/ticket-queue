@@ -121,7 +121,7 @@ class OutboxPollerDlqIntegrationTest {
         dlqPayload["eventType"] shouldBe "PaymentSuccess"
 
         // Verify event is marked as published
-        val updatedEvent = outboxEventRepository.findById(event.id!!).get()
+        val updatedEvent = outboxEventRepository.findById(event.id).get()
         updatedEvent.published shouldBe true
         updatedEvent.retryCount shouldBe 3
     }
@@ -168,7 +168,7 @@ class OutboxPollerDlqIntegrationTest {
         dlqPayload["eventType"] shouldBe "ReservationCancelled"
 
         // Verify event is marked as published
-        val updatedEvent = outboxEventRepository.findById(event.id!!).get()
+        val updatedEvent = outboxEventRepository.findById(event.id).get()
         updatedEvent.published shouldBe true
         updatedEvent.retryCount shouldBe 3
     }
@@ -198,7 +198,7 @@ class OutboxPollerDlqIntegrationTest {
         kafkaContainer.stop()
 
         // Manually set retryCount to 2 to trigger DLQ on next poll
-        val updatedEvent = outboxEventRepository.findById(event.id!!).get()
+        val updatedEvent = outboxEventRepository.findById(event.id).get()
         updatedEvent.retryCount = 2
         outboxEventRepository.save(updatedEvent)
 
@@ -232,7 +232,7 @@ class OutboxPollerDlqIntegrationTest {
         payloadData["amount"] shouldBe originalAmount
 
         // Verify event is marked as published
-        val finalEvent = outboxEventRepository.findById(event.id!!).get()
+        val finalEvent = outboxEventRepository.findById(event.id).get()
         finalEvent.published shouldBe true
         finalEvent.publishedAt shouldNotBe null
         finalEvent.retryCount shouldBe 3
