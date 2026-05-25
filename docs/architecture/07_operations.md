@@ -61,7 +61,7 @@
 - **CB 설정**: `waitDurationInOpenState: 60s`, `failureRateThreshold: 50`, `slidingWindowSize: 100`, `minimumNumberOfCalls: 5`, `permittedNumberOfCallsInHalfOpenState: 3` (`payment-service/application.yml`)
 - **결제 영향**:
   - `POST /payments` pre-register 실패 → Payment row 가 `FAILED` 상태 + `PaymentFailedEvent` Outbox 발행, 클라이언트 재시도 권장.
-  - `POST /payments/confirm` 차단 → Payment 는 `PENDING` 유지, hold_expires_at 만료 시 `#54` 배치가 자동 취소.
+  - `POST /payments/confirm` 차단 → Payment 는 `PENDING` 유지, hold_expires_at 만료 시 만료 배치(issue `#54` — 선점 만료 자동 취소)가 자동 정리.
 - **대응**:
   1. PortOne 상태 페이지 확인: <https://status.portone.io/>
   2. HALF_OPEN 전환 확인: `resilience4j_circuitbreaker_state{name="portone-v2-client", state="half_open"} == 1`

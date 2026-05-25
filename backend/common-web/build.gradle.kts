@@ -16,9 +16,10 @@ dependencies {
     // OpenFeign (FeignConfig, PortoneFeignClient에 필요)
     api(libs.spring.cloud.starter.openfeign)
 
-    // Resilience4j CircuitBreaker — PortoneFallbackFactory가 CallNotPermittedException을 도메인 예외로 변환.
-    // PortoneFeignClient 사용 서비스(payment-service, user-service)는 이미 implementation 의존성을 갖고 있어 런타임 충돌 없음.
-    compileOnly(libs.resilience4j.circuitbreaker)
+    // Resilience4j CircuitBreaker — PortoneFallbackFactory(@Component)가 CallNotPermittedException 을 도메인 예외로 변환.
+    // common-web 을 의존하는 모든 서비스는 com.ticketqueue.common 을 component-scan 하므로 런타임 클래스패스에서도 필요.
+    // implementation 으로 선언: consumers 컴파일 노출 없이 runtime 만 보장 (도메인 예외는 BusinessException 으로 추상화됨).
+    implementation(libs.resilience4j.circuitbreaker)
 
     // Spring Security (InternalApiKeyValidator 등에서 사용)
     compileOnly(libs.spring.boot.starter.security)
