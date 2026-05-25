@@ -67,6 +67,8 @@ reservation:
     key-prefix: "reservation:"
     hold-key-prefix: "seat:hold:"    # {hold-key-prefix}{scheduleId}:{seatId}
     hold-seats-prefix: "hold_seats:" # {hold-seats-prefix}{scheduleId}
+  expire:
+    enabled: true  # 선점 만료 자동 취소 배치 (cron="0 * * * * *" UTC, REQ-RSV-007)
 
 # ============================================================
 # Transactional Outbox Pattern

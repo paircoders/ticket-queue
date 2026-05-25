@@ -76,7 +76,7 @@ Outbox 위에서 동작하거나 완전히 독립적인 핵심 백엔드 API. **
 | 5 | [ ] | [#61](https://github.com/paircoders/ticket-queue/issues/61) | [Payment] Timeout 및 Circuit Breaker 설정 | #59 |  | `feature/61-payment-resilience` |  |
 | 6 | [ ] | [#64](https://github.com/paircoders/ticket-queue/issues/64) | [Payment] 결제 조회 API 구현 | #59 |  | `feature/64-payment-query-api` |  |
 | 7 | [ ] | [#52](https://github.com/paircoders/ticket-queue/issues/52) | [Reservation] 예매 내역 조회 API 구현 | — |  | `feature/52-reservation-query-api` |  |
-| 8 | [ ] | [#54](https://github.com/paircoders/ticket-queue/issues/54) | [Reservation] 선점 만료 자동 취소 배치 | #55 |  | `feature/54-reservation-expire-batch` |  |
+| 8 | [ ] | [#54](https://github.com/paircoders/ticket-queue/issues/54) | [Reservation] 선점 만료 자동 취소 배치 | #55 | session-ded1f1c5 | `feature/54-reservation-expire-batch` |  |
 
 ---
 
