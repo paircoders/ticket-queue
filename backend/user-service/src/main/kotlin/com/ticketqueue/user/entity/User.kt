@@ -27,7 +27,7 @@ class User(
     val emailHash: String,
 
     @Column(name = "password_hash", nullable = false)
-    val passwordHash: String,
+    var passwordHash: String,
 
     @Column(nullable = false)
     var name: String,
