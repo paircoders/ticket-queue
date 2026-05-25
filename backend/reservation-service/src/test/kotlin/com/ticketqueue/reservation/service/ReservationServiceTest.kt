@@ -3,6 +3,9 @@ package com.ticketqueue.reservation.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.ticketqueue.common.event.EventMetadata
+import com.ticketqueue.common.event.PaymentFailedEvent
+import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.outbox.OutboxEventRecorder
@@ -517,5 +520,185 @@ class ReservationServiceTest {
         }
         every { reservationRepository.save(any()) } returns savedReservation
         every { reservationSeatRepository.saveAll(any<List<ReservationSeat>>()) } returns emptyList()
+    }
+
+    @Nested
+    @DisplayName("PaymentSuccess 수신 시 예매 확정")
+    inner class ConfirmFromPaymentSuccess {
+
+        private val reservationId = UUID.randomUUID()
+        private val paymentId = UUID.randomUUID()
+        private val seatId = UUID.randomUUID()
+
+        @Test
+        @DisplayName("PENDING 예매가 CONFIRMED 로 전이되고 ticketNumber 가 발급된다")
+        fun confirmsPendingReservation() {
+            val ticketSlot = slot<String>()
+            val reservation = mockk<Reservation>(relaxed = true) {
+                every { id } returns reservationId
+                every { status } returns ReservationStatus.PENDING
+            }
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.of(reservation)
+            stubExecuteWithoutResult()
+
+            reservationService.confirmFromPaymentSuccess(paymentSuccessEvent())
+
+            verify { reservation.confirm(paymentId, capture(ticketSlot)) }
+            assert(ticketSlot.captured.matches(Regex("""^TKT-\d{8}-[A-Z0-9]{8}$"""))) {
+                "ticketNumber must match TKT-yyyyMMdd-XXXXXXXX, got ${ticketSlot.captured}"
+            }
+        }
+
+        @Test
+        @DisplayName("이미 CONFIRMED 상태면 멱등 처리하여 no-op 한다")
+        fun isIdempotentWhenAlreadyConfirmed() {
+            val reservation = mockk<Reservation>(relaxed = true) {
+                every { id } returns reservationId
+                every { status } returns ReservationStatus.CONFIRMED
+            }
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.of(reservation)
+            stubExecuteWithoutResult()
+
+            reservationService.confirmFromPaymentSuccess(paymentSuccessEvent())
+
+            verify(exactly = 0) { reservation.confirm(any(), any()) }
+        }
+
+        @Test
+        @DisplayName("CANCELLED 상태면 RESERVATION_NOT_CHANGEABLE 예외를 던진다")
+        fun rejectsCancelledReservation() {
+            val reservation = mockk<Reservation>(relaxed = true) {
+                every { id } returns reservationId
+                every { status } returns ReservationStatus.CANCELLED
+            }
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.of(reservation)
+            stubExecuteWithoutResult()
+
+            val ex = assertThrows<ReservationException> {
+                reservationService.confirmFromPaymentSuccess(paymentSuccessEvent())
+            }
+            ex.errorCode shouldBe ErrorCode.RESERVATION_NOT_CHANGEABLE
+        }
+
+        @Test
+        @DisplayName("예매를 찾지 못하면 RESERVATION_NOT_FOUND 예외를 던진다")
+        fun throwsWhenReservationMissing() {
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.empty()
+            stubExecuteWithoutResult()
+
+            val ex = assertThrows<ReservationException> {
+                reservationService.confirmFromPaymentSuccess(paymentSuccessEvent())
+            }
+            ex.errorCode shouldBe ErrorCode.RESERVATION_NOT_FOUND
+        }
+
+        private fun paymentSuccessEvent() = PaymentSuccessEvent(
+            aggregateId = paymentId,
+            reservationId = reservationId,
+            paymentKey = "pk_test_123",
+            amount = BigDecimal("300000"),
+            paidAt = LocalDateTime.now(ZoneOffset.UTC),
+            scheduleId = scheduleId,
+            seatIds = listOf(seatId),
+            portoneTransactionId = "portone-tx-1",
+            metadata = EventMetadata(userId = userId)
+        )
+    }
+
+    @Nested
+    @DisplayName("PaymentFailed 수신 시 예매 취소 + ReservationCancelled outbox 발행")
+    inner class CancelFromPaymentFailure {
+
+        private val reservationId = UUID.randomUUID()
+        private val paymentId = UUID.randomUUID()
+        private val paymentEventId = UUID.randomUUID()
+        private val correlationId = UUID.randomUUID()
+        private val seatId = UUID.randomUUID()
+
+        @Test
+        @DisplayName("PENDING 예매를 CANCELLED 로 전이하고 ReservationCancelled outbox 를 PAYMENT_FAILED 사유로 발행한다")
+        fun cancelsPendingReservationAndPublishesEvent() {
+            val outboxSlot = slot<ReservationCancelledEvent>()
+            val reservation = mockk<Reservation>(relaxed = true) {
+                every { id } returns reservationId
+                every { userId } returns this@ReservationServiceTest.userId
+                every { scheduleId } returns this@ReservationServiceTest.scheduleId
+                every { status } returns ReservationStatus.PENDING
+            }
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.of(reservation)
+            every { reservationSeatRepository.findByReservationId(reservationId) } returns
+                listOf(mockk { every { seatId } returns this@CancelFromPaymentFailure.seatId })
+            every { outboxEventRecorder.record(capture(outboxSlot)) } returns mockk(relaxed = true)
+            every { setOps.remove(any<String>(), *anyVararg()) } returns 1L
+            stubExecuteWithoutResultWithAfterCommit()
+
+            reservationService.cancelFromPaymentFailure(paymentFailedEvent())
+
+            verify { reservation.cancel() }
+            outboxSlot.captured.reason shouldBe "PAYMENT_FAILED"
+            outboxSlot.captured.scheduleId shouldBe scheduleId
+            outboxSlot.captured.seatIds shouldBe listOf(seatId)
+            outboxSlot.captured.metadata.causationId shouldBe paymentEventId
+            outboxSlot.captured.metadata.correlationId shouldBe correlationId
+            verify { setOps.remove(any<String>(), *anyVararg()) }
+        }
+
+        @Test
+        @DisplayName("이미 CANCELLED 상태면 멱등 처리하여 outbox 발행을 하지 않는다")
+        fun isIdempotentWhenAlreadyCancelled() {
+            val reservation = mockk<Reservation>(relaxed = true) {
+                every { id } returns reservationId
+                every { status } returns ReservationStatus.CANCELLED
+            }
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.of(reservation)
+            stubExecuteWithoutResultWithAfterCommit()
+
+            reservationService.cancelFromPaymentFailure(paymentFailedEvent())
+
+            verify(exactly = 0) { outboxEventRecorder.record(any()) }
+            verify(exactly = 0) { reservation.cancel() }
+        }
+
+        @Test
+        @DisplayName("CONFIRMED 상태면 RESERVATION_NOT_CHANGEABLE 예외를 던진다")
+        fun rejectsConfirmedReservation() {
+            val reservation = mockk<Reservation>(relaxed = true) {
+                every { id } returns reservationId
+                every { status } returns ReservationStatus.CONFIRMED
+            }
+            every { reservationRepository.findById(reservationId) } returns java.util.Optional.of(reservation)
+            stubExecuteWithoutResultWithAfterCommit()
+
+            val ex = assertThrows<ReservationException> {
+                reservationService.cancelFromPaymentFailure(paymentFailedEvent())
+            }
+            ex.errorCode shouldBe ErrorCode.RESERVATION_NOT_CHANGEABLE
+        }
+
+        private fun paymentFailedEvent() = PaymentFailedEvent(
+            eventId = paymentEventId,
+            aggregateId = paymentId,
+            reservationId = reservationId,
+            reason = "INSUFFICIENT_BALANCE",
+            metadata = EventMetadata(correlationId = correlationId, causationId = null, userId = userId)
+        )
+    }
+
+    private fun stubExecuteWithoutResult() {
+        every { transactionTemplate.executeWithoutResult(any()) } answers {
+            firstArg<Consumer<TransactionStatus>>().accept(mockk(relaxed = true))
+        }
+    }
+
+    private fun stubExecuteWithoutResultWithAfterCommit() {
+        every { transactionTemplate.executeWithoutResult(any()) } answers {
+            TransactionSynchronizationManager.initSynchronization()
+            try {
+                firstArg<Consumer<TransactionStatus>>().accept(mockk(relaxed = true))
+                TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization()
+            }
+        }
     }
 }
