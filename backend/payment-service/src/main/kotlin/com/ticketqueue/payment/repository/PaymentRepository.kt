@@ -3,6 +3,8 @@ package com.ticketqueue.payment.repository
 import com.ticketqueue.payment.entity.Payment
 import com.ticketqueue.payment.entity.PaymentStatus
 import jakarta.persistence.LockModeType
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
@@ -13,6 +15,7 @@ import java.util.UUID
 interface PaymentRepository : JpaRepository<Payment, UUID> {
     fun findByPaymentKey(paymentKey: String): Optional<Payment>
     fun existsByReservationIdAndStatusIn(reservationId: UUID, statuses: List<PaymentStatus>): Boolean
+    fun findByUserId(userId: UUID, pageable: Pageable): Page<Payment>
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.id = :id")

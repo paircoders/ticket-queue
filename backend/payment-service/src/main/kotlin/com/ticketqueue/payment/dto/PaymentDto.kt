@@ -38,4 +38,23 @@ class PaymentDto {
         val status: PaymentStatus,
         val paidAt: LocalDateTime?
     )
+
+    data class ListItem(
+        val paymentId: UUID,
+        val reservationId: UUID,
+        val amount: BigDecimal,
+        val status: PaymentStatus,
+        val method: PaymentMethod,
+        val paidAt: LocalDateTime?,
+    )
+
+    data class DetailResponse(
+        val paymentId: UUID,
+        val reservationId: UUID,
+        val amount: BigDecimal,
+        val status: PaymentStatus,
+        val method: PaymentMethod,
+        val cardName: String?,
+        val cardNumber: String?,
+    )
 }
