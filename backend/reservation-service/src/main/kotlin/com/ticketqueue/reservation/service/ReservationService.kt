@@ -3,6 +3,8 @@ package com.ticketqueue.reservation.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.EventMetadata
 import java.math.BigDecimal
+import com.ticketqueue.common.event.PaymentFailedEvent
+import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.outbox.OutboxEventRecorder
@@ -32,6 +34,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -73,6 +76,7 @@ class ReservationService(
         private const val HOLD_MINUTES = 5L
         private const val HOLD_TTL_SECONDS = 300L
         private const val HOLD_SEATS_SET_TTL_SECONDS = 600L
+        private val TICKET_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
     }
 
     /**
@@ -338,6 +342,100 @@ class ReservationService(
 
         log.info { "Reservation cancelled: userId=$userId, reservationId=$reservationId, status=${reservation.status}" }
         return CancelResponse(id = reservationId, status = reservation.status, refundAmount = refundAmount)
+    }
+
+    /**
+     * 결제 성공 이벤트 수신 시 예매 확정 (REQ-RSV-004, SAGA happy path)
+     *
+     * `PaymentEventConsumer` 가 `IdempotentConsumerTemplate` 으로 멱등성을 보장한 뒤 호출한다.
+     * processed_events 가 1차 가드를 책임지므로 이 메서드는 비즈니스 가드(status == PENDING)만 확인한다.
+     *
+     * - 이미 CONFIRMED 인 경우 no-op (멱등성 보강)
+     * - PENDING 외 상태(CANCELLED) 는 `RESERVATION_NOT_CHANGEABLE` 로 거부 → 즉시 DLQ 이동
+     */
+    fun confirmFromPaymentSuccess(event: PaymentSuccessEvent) {
+        val reservationId = event.reservationId
+        transactionTemplate.executeWithoutResult {
+            val reservation = reservationRepository.findById(reservationId).orElseThrow {
+                ReservationException(ErrorCode.RESERVATION_NOT_FOUND, "PaymentSuccess 처리 대상 예매 없음: $reservationId")
+            }
+
+            if (reservation.status == ReservationStatus.CONFIRMED) {
+                log.info { "Reservation already confirmed (idempotent skip): reservationId=$reservationId" }
+                return@executeWithoutResult
+            }
+            if (reservation.status != ReservationStatus.PENDING) {
+                throw ReservationException(
+                    ErrorCode.RESERVATION_NOT_CHANGEABLE,
+                    "PaymentSuccess 처리 불가 상태: reservationId=$reservationId, status=${reservation.status}"
+                )
+            }
+
+            val ticketNumber = generateTicketNumber()
+            reservation.confirm(paymentId = event.aggregateId, ticketNumber = ticketNumber)
+            log.info {
+                "Reservation confirmed via PaymentSuccess: reservationId=$reservationId, " +
+                    "paymentId=${event.aggregateId}, ticketNumber=$ticketNumber"
+            }
+        }
+    }
+
+    /**
+     * 결제 실패 이벤트 수신 시 예매 취소 + ReservationCancelled outbox 발행 (REQ-RSV-004, SAGA 보상 체인)
+     *
+     * `PaymentFailed` 의 `eventId` 를 `ReservationCancelled.metadata.causationId` 로 전파하여
+     * Payment → Reservation → Event 보상 체인을 이벤트 그래프 상에서 추적 가능하게 한다.
+     * 좌석 hold_seats SET 정리는 `cancelReservation` 과 동일하게 afterCommit 콜백으로 위임한다.
+     */
+    fun cancelFromPaymentFailure(event: PaymentFailedEvent) {
+        val reservationId = event.reservationId
+        transactionTemplate.executeWithoutResult {
+            val reservation = reservationRepository.findById(reservationId).orElseThrow {
+                ReservationException(ErrorCode.RESERVATION_NOT_FOUND, "PaymentFailed 처리 대상 예매 없음: $reservationId")
+            }
+
+            if (reservation.status == ReservationStatus.CANCELLED) {
+                log.info { "Reservation already cancelled (idempotent skip): reservationId=$reservationId" }
+                return@executeWithoutResult
+            }
+            if (reservation.status != ReservationStatus.PENDING) {
+                throw ReservationException(
+                    ErrorCode.RESERVATION_NOT_CHANGEABLE,
+                    "PaymentFailed 처리 불가 상태: reservationId=$reservationId, status=${reservation.status}"
+                )
+            }
+
+            val seatIds = reservationSeatRepository.findByReservationId(reservationId).map { it.seatId }
+            reservation.cancel()
+            outboxEventRecorder.record(
+                ReservationCancelledEvent(
+                    aggregateId = reservationId,
+                    scheduleId = reservation.scheduleId,
+                    seatIds = seatIds,
+                    userId = reservation.userId,
+                    reason = "PAYMENT_FAILED",
+                    metadata = EventMetadata(
+                        correlationId = event.metadata.correlationId,
+                        causationId = event.eventId,
+                        userId = reservation.userId
+                    )
+                )
+            )
+            registerAfterCommit {
+                scheduleHoldSeatsReconciliation(reservation.scheduleId, seatIds, emptyList())
+            }
+
+            log.info {
+                "Reservation cancelled via PaymentFailed: reservationId=$reservationId, " +
+                    "paymentId=${event.aggregateId}, reason=${event.reason}"
+            }
+        }
+    }
+
+    private fun generateTicketNumber(): String {
+        val datePart = LocalDateTime.now(ZoneOffset.UTC).format(TICKET_DATE_FORMAT)
+        val randomPart = UUID.randomUUID().toString().substring(0, 8).uppercase()
+        return "TKT-$datePart-$randomPart"
     }
 
     private fun validateForChange(reservation: Reservation) {
