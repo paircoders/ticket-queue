@@ -6,6 +6,7 @@ import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateResponse
 import com.ticketqueue.payment.service.PaymentService
 import jakarta.validation.Valid
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -15,6 +16,7 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/payments")
+@Validated
 class PaymentController(
     private val paymentService: PaymentService
 ) {
