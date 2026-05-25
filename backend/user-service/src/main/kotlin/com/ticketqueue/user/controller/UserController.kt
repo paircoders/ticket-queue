@@ -6,11 +6,14 @@ import com.ticketqueue.user.exception.UserException
 import com.ticketqueue.user.service.UserService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
@@ -36,6 +39,17 @@ class UserController(
         val userId = parseUserId(principal)
         logger.info { "Profile update: userId=$userId" }
         return userService.updateProfile(userId, request)
+    }
+
+    @PutMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun changeMyPassword(
+        @AuthenticationPrincipal principal: String?,
+        @Valid @RequestBody request: UserDto.ChangePasswordRequest,
+    ) {
+        val userId = parseUserId(principal)
+        logger.info { "Password change request: userId=$userId" }
+        userService.changePassword(userId, request)
     }
 
     private fun parseUserId(principal: String?): UUID {
