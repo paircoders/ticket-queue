@@ -85,8 +85,8 @@ Outbox 위에서 동작하거나 완전히 독립적인 핵심 백엔드 API. **
 
 | # | Done | Issue | Title | Deps | Claim | Branch | PR |
 |---|------|-------|-------|------|-------|--------|----|
-| 9 | [ ] | [#53](https://github.com/paircoders/ticket-queue/issues/53) | [Reservation] Kafka Consumer - 결제 이벤트 처리 | #55, #63, #59 | session-7f37ba3c | `feature/53-reservation-payment-consumer` | [#239](https://github.com/paircoders/ticket-queue/pull/239) |
-| 10 | [ ] | [#62](https://github.com/paircoders/ticket-queue/issues/62) | [Payment] SAGA 패턴 - 보상 트랜잭션 구현 | #59, #53 |  | `feature/62-payment-saga-compensation` |  |
+| 9 | [x] | [#53](https://github.com/paircoders/ticket-queue/issues/53) | [Reservation] Kafka Consumer - 결제 이벤트 처리 | #55, #63, #59 | session-7f37ba3c | `feature/53-reservation-payment-consumer` | [#239](https://github.com/paircoders/ticket-queue/pull/239) |
+| 10 | [ ] | [#62](https://github.com/paircoders/ticket-queue/issues/62) | [Payment] SAGA 패턴 - 보상 트랜잭션 구현 | #59, #53 | session-7f37ba3c | `feature/62-payment-saga-compensation` | [#242](https://github.com/paircoders/ticket-queue/pull/242) |
 
 ---
 

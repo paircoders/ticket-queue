@@ -485,6 +485,9 @@ class PaymentServiceTest {
             captured.captured.scheduleId shouldBe scheduleId
             captured.captured.seatIds shouldBe seatIds
             captured.captured.portoneTransactionId shouldBe transactionId
+            // SAGA root 컨벤션 (#62) — Payment Service 가 발행하는 이벤트는 보상 체인의 시작점
+            captured.captured.metadata.causationId shouldBe null
+            captured.captured.metadata.userId shouldBe userId
             verify(exactly = 1) { outboxEventRecorder.record(any<PaymentSuccessEvent>()) }
         }
 
@@ -568,6 +571,9 @@ class PaymentServiceTest {
             payment.status shouldBe PaymentStatus.FAILED
             payment.failureReason shouldBe "PORTONE_STATUS_FAILED"
             captured.captured.reason shouldBe "PORTONE_STATUS_FAILED"
+            // SAGA root 컨벤션 (#62) — PaymentFailed 가 보상 체인의 시작점이므로 causationId 는 null
+            captured.captured.metadata.causationId shouldBe null
+            captured.captured.metadata.userId shouldBe userId
             verify(exactly = 1) { outboxEventRecorder.record(any<PaymentFailedEvent>()) }
         }
 
