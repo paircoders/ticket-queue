@@ -1,13 +1,20 @@
 package com.ticketqueue.payment.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.PaymentFailedEvent
+import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneCustomer
 import com.ticketqueue.common.external.portone.PortoneFeignClient
+import com.ticketqueue.common.external.portone.PortonePaymentAmount
+import com.ticketqueue.common.external.portone.PortonePaymentResponse
 import com.ticketqueue.common.external.portone.PortoneProperties
+import com.ticketqueue.common.external.portone.PortoneSelectedChannel
 import com.ticketqueue.common.external.portone.PortoneTokenService
 import com.ticketqueue.common.outbox.OutboxEvent
 import com.ticketqueue.common.outbox.OutboxEventRecorder
 import com.ticketqueue.payment.client.ReservationServiceClient
+import com.ticketqueue.payment.dto.PaymentDto.ConfirmRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.entity.Payment
 import com.ticketqueue.payment.entity.PaymentStatus
@@ -27,10 +34,13 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
+import java.util.Optional
 import java.util.UUID
 import java.util.function.Consumer
 
@@ -44,6 +54,7 @@ class PaymentServiceTest {
     private lateinit var portoneProperties: PortoneProperties
     private lateinit var outboxEventRecorder: OutboxEventRecorder
     private lateinit var transactionTemplate: TransactionTemplate
+    private val objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules()
     private lateinit var paymentService: PaymentService
 
     private val userId = UUID.randomUUID()
@@ -53,6 +64,7 @@ class PaymentServiceTest {
     private val storeId = "test-store-id"
     private val channelKey = "test-channel-key"
     private val bearerToken = "Bearer test-token"
+    private val seatIds = listOf(UUID.randomUUID(), UUID.randomUUID())
 
     @BeforeEach
     fun setUp() {
@@ -68,9 +80,22 @@ class PaymentServiceTest {
         every { portoneProperties.channelKey } returns channelKey
         every { portoneTokenService.getAccessToken() } returns bearerToken
         every { paymentRepository.existsByReservationIdAndStatusIn(any(), any()) } returns false
-        // TransactionTemplate stub: 람다를 즉시 실행하여 트랜잭션 통과를 시뮬레이션
+        every { outboxEventRecorder.record(any()) } answers {
+            OutboxEvent(
+                id = UUID.randomUUID(),
+                aggregateType = "Payment",
+                aggregateId = UUID.randomUUID(),
+                eventType = "stub",
+                payload = "{}"
+            )
+        }
+        // TransactionTemplate#executeWithoutResult(Consumer<TransactionStatus>): 람다 즉시 실행
         every { transactionTemplate.executeWithoutResult(any()) } answers {
             firstArg<Consumer<TransactionStatus>>().accept(mockk(relaxed = true))
+        }
+        every { transactionTemplate.execute<Any?>(any()) } answers {
+            val callback = firstArg<TransactionCallback<Any?>>()
+            callback.doInTransaction(mockk(relaxed = true))
         }
 
         paymentService = PaymentService(
@@ -81,6 +106,7 @@ class PaymentServiceTest {
             portoneProperties,
             outboxEventRecorder,
             transactionTemplate,
+            objectMapper,
         )
     }
 
@@ -96,7 +122,63 @@ class PaymentServiceTest {
         totalAmount = totalAmount,
         status = status,
         holdExpiresAt = holdExpiresAt,
-        seatIds = listOf(UUID.randomUUID())
+        seatIds = seatIds
+    )
+
+    private fun buildPayment(
+        id: UUID = UUID.randomUUID(),
+        ownerId: UUID = userId,
+        paymentKey: String = "pk-abc",
+        paymentAmount: BigDecimal = amount,
+        status: PaymentStatus = PaymentStatus.PENDING,
+    ): Payment {
+        val payment = Payment(
+            id = id,
+            reservationId = reservationId,
+            userId = ownerId,
+            paymentKey = paymentKey,
+            amount = paymentAmount,
+        )
+        when (status) {
+            PaymentStatus.PENDING -> Unit
+            PaymentStatus.SUCCESS -> payment.markSuccess("tx-x", "{}", LocalDateTime.now(ZoneOffset.UTC))
+            PaymentStatus.FAILED -> payment.markFailed("preset")
+            PaymentStatus.REFUNDED -> {
+                payment.markSuccess("tx-x", "{}", LocalDateTime.now(ZoneOffset.UTC))
+                payment.refund()
+            }
+        }
+        return payment
+    }
+
+    private fun buildPortoneResponse(
+        status: String = "PAID",
+        totalAmount: Long = amount.longValueExact(),
+        transactionId: String = "tx-1",
+        paidAt: OffsetDateTime? = OffsetDateTime.now(ZoneOffset.UTC),
+    ): PortonePaymentResponse = PortonePaymentResponse(
+        id = "pk-abc",
+        transactionId = transactionId,
+        merchantId = "m",
+        storeId = storeId,
+        status = status,
+        amount = PortonePaymentAmount(
+            total = totalAmount,
+            taxFree = 0,
+            discount = 0,
+            paid = totalAmount,
+            cancelled = 0,
+            cancelledTaxFree = 0,
+        ),
+        currency = "KRW",
+        channel = PortoneSelectedChannel(type = "TEST", pgProvider = "stub", pgMerchantId = "m"),
+        version = "v2",
+        requestedAt = OffsetDateTime.now(ZoneOffset.UTC),
+        updatedAt = OffsetDateTime.now(ZoneOffset.UTC),
+        statusChangedAt = OffsetDateTime.now(ZoneOffset.UTC),
+        orderName = "order",
+        customer = PortoneCustomer(),
+        paidAt = paidAt,
     )
 
     @Nested
@@ -266,7 +348,6 @@ class PaymentServiceTest {
                     paymentMethod = p.paymentMethod
                 )
             }
-            every { outboxEventRecorder.record(any()) } returns mockk<OutboxEvent>(relaxed = true)
             every { portoneClient.preRegisterPayment(any(), any(), any()) } throws
                 RuntimeException("PortOne connection failed")
 
@@ -314,6 +395,268 @@ class PaymentServiceTest {
             event.reservationId shouldBe reservationId
             event.reason shouldBe "PortOne pre-register failed: connection refused"
             event.metadata.userId shouldBe userId
+        }
+    }
+
+    @Nested
+    @DisplayName("confirmPayment")
+    inner class ConfirmPayment {
+
+        private val paymentId = UUID.randomUUID()
+        private val paymentKey = "pk-abc"
+        private val transactionId = "tx-1"
+
+        private fun confirmRequest(
+            reservationId: UUID = this@PaymentServiceTest.reservationId,
+            paymentId: UUID = this.paymentId,
+            paymentKey: String = this.paymentKey,
+            transactionId: String = this.transactionId,
+            amount: BigDecimal = this@PaymentServiceTest.amount,
+        ) = ConfirmRequest(
+            reservationId = reservationId,
+            paymentId = paymentId,
+            paymentKey = paymentKey,
+            transactionId = transactionId,
+            amount = amount,
+        )
+
+        @Test
+        @DisplayName("정상 흐름: PortOne PAID 응답 → markSuccess + PaymentSuccessEvent 발행, ConfirmResponse 반환")
+        fun success() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { paymentRepository.findByIdForUpdate(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(paymentKey, storeId, bearerToken) } returns buildPortoneResponse(transactionId = transactionId)
+            every { paymentRepository.save(any()) } answers { firstArg() }
+            val captured = slot<PaymentSuccessEvent>()
+            every { outboxEventRecorder.record(capture(captured)) } answers {
+                OutboxEvent(id = UUID.randomUUID(), aggregateType = "Payment", aggregateId = paymentId, eventType = "PaymentSuccess", payload = "{}")
+            }
+
+            val response = paymentService.confirmPayment(userId, confirmRequest())
+
+            response.paymentId shouldBe paymentId
+            response.status shouldBe PaymentStatus.SUCCESS
+            response.paidAt shouldBe payment.paidAt
+            payment.status shouldBe PaymentStatus.SUCCESS
+            payment.portoneTransactionId shouldBe transactionId
+            captured.captured.reservationId shouldBe reservationId
+            captured.captured.scheduleId shouldBe scheduleId
+            captured.captured.seatIds shouldBe seatIds
+            captured.captured.portoneTransactionId shouldBe transactionId
+            verify(exactly = 1) { outboxEventRecorder.record(any<PaymentSuccessEvent>()) }
+        }
+
+        @Test
+        @DisplayName("이미 SUCCESS인 결제 재호출 시 PAYMENT_ALREADY_EXISTS 예외 (멱등성)")
+        fun idempotentSuccess() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey, status = PaymentStatus.SUCCESS)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_ALREADY_EXISTS
+            verify(exactly = 0) { portoneClient.getPayment(any(), any(), any()) }
+        }
+
+        @Test
+        @DisplayName("이미 FAILED인 결제 재호출 시 PAYMENT_FAILED 예외")
+        fun alreadyFailed() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey, status = PaymentStatus.FAILED)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_FAILED
+        }
+
+        @Test
+        @DisplayName("이미 REFUNDED인 결제 재호출 시 PAYMENT_FAILED 예외")
+        fun alreadyRefunded() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey, status = PaymentStatus.REFUNDED)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_FAILED
+            verify(exactly = 0) { portoneClient.getPayment(any(), any(), any()) }
+        }
+
+        @Test
+        @DisplayName("락 재조회 시 다른 트랜잭션이 SUCCESS로 선점한 경우 PAYMENT_ALREADY_EXISTS (race 차단)")
+        fun raceWinnerCommittedSuccess() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey, status = PaymentStatus.PENDING)
+            val racedSuccess = buildPayment(id = paymentId, paymentKey = paymentKey, status = PaymentStatus.SUCCESS)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(paymentKey, storeId, bearerToken) } returns buildPortoneResponse()
+            every { paymentRepository.findByIdForUpdate(paymentId) } returns Optional.of(racedSuccess)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.PAYMENT_ALREADY_EXISTS
+            verify(exactly = 0) { outboxEventRecorder.record(any()) }
+        }
+
+        @Test
+        @DisplayName("PortOne status가 PAID가 아니면 markFailed + PaymentFailedEvent 발행, status=FAILED 응답")
+        fun portoneNotPaid() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { paymentRepository.findByIdForUpdate(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(paymentKey, storeId, bearerToken) } returns buildPortoneResponse(status = "FAILED")
+            every { paymentRepository.save(any()) } answers { firstArg() }
+            val captured = slot<PaymentFailedEvent>()
+            every { outboxEventRecorder.record(capture(captured)) } answers {
+                OutboxEvent(id = UUID.randomUUID(), aggregateType = "Payment", aggregateId = paymentId, eventType = "PaymentFailed", payload = "{}")
+            }
+
+            val response = paymentService.confirmPayment(userId, confirmRequest())
+
+            response.status shouldBe PaymentStatus.FAILED
+            response.paidAt shouldBe null
+            payment.status shouldBe PaymentStatus.FAILED
+            payment.failureReason shouldBe "PORTONE_STATUS_FAILED"
+            captured.captured.reason shouldBe "PORTONE_STATUS_FAILED"
+            verify(exactly = 1) { outboxEventRecorder.record(any<PaymentFailedEvent>()) }
+        }
+
+        @Test
+        @DisplayName("PortOne 금액이 DB 금액과 다르면 markFailed + reason=AMOUNT_MISMATCH")
+        fun amountMismatch() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { paymentRepository.findByIdForUpdate(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(paymentKey, storeId, bearerToken) } returns buildPortoneResponse(totalAmount = 100L)
+            every { paymentRepository.save(any()) } answers { firstArg() }
+
+            val response = paymentService.confirmPayment(userId, confirmRequest())
+
+            response.status shouldBe PaymentStatus.FAILED
+            payment.failureReason shouldBe "AMOUNT_MISMATCH"
+        }
+
+        @Test
+        @DisplayName("PortOne transactionId가 요청과 다르면 markFailed + reason=TX_ID_MISMATCH")
+        fun txIdMismatch() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { paymentRepository.findByIdForUpdate(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(paymentKey, storeId, bearerToken) } returns buildPortoneResponse(transactionId = "tx-other")
+            every { paymentRepository.save(any()) } answers { firstArg() }
+
+            val response = paymentService.confirmPayment(userId, confirmRequest())
+
+            response.status shouldBe PaymentStatus.FAILED
+            payment.failureReason shouldBe "TX_ID_MISMATCH"
+        }
+
+        @Test
+        @DisplayName("요청 본문 paymentKey가 DB와 다르면 INVALID_INPUT 예외 (위변조 차단)")
+        fun paymentKeyMismatch() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest(paymentKey = "tampered"))
+            }
+
+            ex.errorCode shouldBe ErrorCode.INVALID_INPUT
+        }
+
+        @Test
+        @DisplayName("요청 본문 reservationId가 DB와 다르면 INVALID_INPUT 예외")
+        fun reservationIdMismatch() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest(reservationId = UUID.randomUUID()))
+            }
+
+            ex.errorCode shouldBe ErrorCode.INVALID_INPUT
+        }
+
+        @Test
+        @DisplayName("요청 본문 amount가 DB와 다르면 INVALID_INPUT 예외")
+        fun requestAmountMismatch() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest(amount = BigDecimal("999")))
+            }
+
+            ex.errorCode shouldBe ErrorCode.INVALID_INPUT
+        }
+
+        @Test
+        @DisplayName("다른 사용자의 결제 → FORBIDDEN")
+        fun forbidden() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey, ownerId = UUID.randomUUID())
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.FORBIDDEN
+        }
+
+        @Test
+        @DisplayName("Payment 부재 → RESOURCE_NOT_FOUND")
+        fun paymentNotFound() {
+            every { paymentRepository.findById(paymentId) } returns Optional.empty()
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.RESOURCE_NOT_FOUND
+        }
+
+        @Test
+        @DisplayName("Reservation holdExpiresAt이 만료되면 HOLD_EXPIRED 예외")
+        fun holdExpired() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns
+                buildReservation(holdExpiresAt = LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1))
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.HOLD_EXPIRED
+            verify(exactly = 0) { portoneClient.getPayment(any(), any(), any()) }
+        }
+
+        @Test
+        @DisplayName("PortOne 호출이 FeignException으로 실패하면 PORTONE_API_ERROR 예외")
+        fun portoneApiError() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(any(), any(), any()) } throws mockk<FeignException.ServiceUnavailable>()
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.PORTONE_API_ERROR
+            verify(exactly = 0) { outboxEventRecorder.record(any()) }
         }
     }
 }

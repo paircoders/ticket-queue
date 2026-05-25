@@ -3,9 +3,15 @@ package com.ticketqueue.payment.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneCustomer
 import com.ticketqueue.common.external.portone.PortoneFeignClient
+import com.ticketqueue.common.external.portone.PortonePaymentAmount
+import com.ticketqueue.common.external.portone.PortonePaymentResponse
+import com.ticketqueue.common.external.portone.PortoneSelectedChannel
 import com.ticketqueue.common.external.portone.PortoneTokenService
+import com.ticketqueue.common.outbox.OutboxEventRepository
 import com.ticketqueue.payment.client.ReservationServiceClient
+import com.ticketqueue.payment.entity.Payment
 import com.ticketqueue.payment.entity.PaymentStatus
 import com.ticketqueue.payment.repository.PaymentRepository
 import io.mockk.every
@@ -31,6 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers
 import io.kotest.matchers.shouldBe
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
 
@@ -71,6 +78,7 @@ class PaymentControllerIntegrationTest {
     @Autowired private lateinit var mockMvc: MockMvc
     @Autowired private lateinit var objectMapper: ObjectMapper
     @Autowired private lateinit var paymentRepository: PaymentRepository
+    @Autowired private lateinit var outboxEventRepository: OutboxEventRepository
 
     @MockkBean private lateinit var reservationServiceClient: ReservationServiceClient
     @MockkBean private lateinit var portoneClient: PortoneFeignClient
@@ -82,6 +90,7 @@ class PaymentControllerIntegrationTest {
 
     @BeforeEach
     fun setUp() {
+        outboxEventRepository.deleteAll()
         paymentRepository.deleteAll()
         every { portoneTokenService.getAccessToken() } returns "Bearer test-token"
         justRun { portoneClient.preRegisterPayment(any(), any(), any()) }
@@ -296,4 +305,201 @@ class PaymentControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.PAYMENT_ALREADY_EXISTS.code))
         }
     }
+
+    @Nested
+    @DisplayName("결제 승인 API (POST /payments/confirm)")
+    inner class ConfirmEndpoint {
+
+        private val paymentKey = UUID.randomUUID().toString()
+        private val transactionId = "tx-int-1"
+
+        private fun savePendingPayment(): Payment = paymentRepository.saveAndFlush(
+            Payment(
+                reservationId = reservationId,
+                userId = userId,
+                paymentKey = paymentKey,
+                amount = amount,
+            )
+        )
+
+        private fun buildPortoneResponse(
+            status: String = "PAID",
+            totalAmount: Long = amount.longValueExact(),
+            txId: String = transactionId,
+        ) = PortonePaymentResponse(
+            id = paymentKey,
+            transactionId = txId,
+            merchantId = "m",
+            storeId = "test-store-id",
+            status = status,
+            amount = PortonePaymentAmount(total = totalAmount, taxFree = 0, discount = 0, paid = totalAmount, cancelled = 0, cancelledTaxFree = 0),
+            currency = "KRW",
+            channel = PortoneSelectedChannel(type = "TEST", pgProvider = "stub", pgMerchantId = "m"),
+            version = "v2",
+            requestedAt = OffsetDateTime.now(ZoneOffset.UTC),
+            updatedAt = OffsetDateTime.now(ZoneOffset.UTC),
+            statusChangedAt = OffsetDateTime.now(ZoneOffset.UTC),
+            orderName = "order",
+            customer = PortoneCustomer(),
+            paidAt = OffsetDateTime.now(ZoneOffset.UTC),
+        )
+
+        private fun confirmBody(
+            payment: Payment,
+            paymentKey: String = this.paymentKey,
+            transactionId: String = this.transactionId,
+            amount: BigDecimal = this@PaymentControllerIntegrationTest.amount,
+            reservationId: UUID = this@PaymentControllerIntegrationTest.reservationId,
+        ) = mapOf(
+            "reservationId" to reservationId,
+            "paymentId" to payment.id,
+            "paymentKey" to paymentKey,
+            "transactionId" to transactionId,
+            "amount" to amount,
+        )
+
+        @Test
+        @DisplayName("정상 승인: 200 + status=SUCCESS, DB SUCCESS 영속, Outbox PaymentSuccess row 생성")
+        fun confirmSuccess() {
+            val payment = savePendingPayment()
+            every { portoneClient.getPayment(paymentKey, "test-store-id", "Bearer test-token") } returns buildPortoneResponse()
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.paymentId").value(payment.id.toString()))
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.paidAt").isNotEmpty)
+
+            val persisted = paymentRepository.findById(payment.id!!).get()
+            persisted.status shouldBe PaymentStatus.SUCCESS
+            persisted.portoneTransactionId shouldBe transactionId
+            assert(persisted.paidAt != null)
+
+            val outboxEvents = outboxEventRepository.findByAggregateTypeAndAggregateId("Payment", payment.id!!)
+            outboxEvents.size shouldBe 1
+            outboxEvents[0].eventType shouldBe "PaymentSuccess"
+            outboxEvents[0].published shouldBe false
+        }
+
+        @Test
+        @DisplayName("멱등성: 이미 SUCCESS 상태에서 재호출 시 409 PAYMENT_ALREADY_EXISTS")
+        fun confirmIdempotent() {
+            val payment = savePendingPayment()
+            every { portoneClient.getPayment(paymentKey, "test-store-id", "Bearer test-token") } returns buildPortoneResponse()
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            ).andExpect(status().isOk)
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            )
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.code").value(ErrorCode.PAYMENT_ALREADY_EXISTS.code))
+        }
+
+        @Test
+        @DisplayName("PortOne FAILED 응답: 200 + status=FAILED + Outbox PaymentFailed row")
+        fun confirmFailedFromPortone() {
+            val payment = savePendingPayment()
+            every { portoneClient.getPayment(paymentKey, "test-store-id", "Bearer test-token") } returns
+                buildPortoneResponse(status = "FAILED")
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.status").value("FAILED"))
+
+            val persisted = paymentRepository.findById(payment.id!!).get()
+            persisted.status shouldBe PaymentStatus.FAILED
+            persisted.failureReason shouldBe "PORTONE_STATUS_FAILED"
+
+            val outboxEvents = outboxEventRepository.findByAggregateTypeAndAggregateId("Payment", payment.id!!)
+            outboxEvents.size shouldBe 1
+            outboxEvents[0].eventType shouldBe "PaymentFailed"
+        }
+
+        @Test
+        @DisplayName("PortOne 금액 위조: 200 + status=FAILED + reason=AMOUNT_MISMATCH")
+        fun confirmAmountTampered() {
+            val payment = savePendingPayment()
+            every { portoneClient.getPayment(paymentKey, "test-store-id", "Bearer test-token") } returns
+                buildPortoneResponse(totalAmount = 100L)
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.status").value("FAILED"))
+
+            val persisted = paymentRepository.findById(payment.id!!).get()
+            persisted.failureReason shouldBe "AMOUNT_MISMATCH"
+        }
+
+        @Test
+        @DisplayName("요청 본문 paymentKey 위조 → 400 INVALID_INPUT")
+        fun confirmRequestTampered() {
+            val payment = savePendingPayment()
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment, paymentKey = "tampered")))
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_INPUT.code))
+        }
+
+        @Test
+        @DisplayName("X-User-Id 헤더 누락 → 401")
+        fun confirmMissingUserId() {
+            val payment = savePendingPayment()
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            ).andExpect(status().isUnauthorized)
+        }
+
+        @Test
+        @DisplayName("amount 음수 → 400 (Bean Validation)")
+        fun confirmNegativeAmount() {
+            val payment = savePendingPayment()
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment, amount = BigDecimal("-1"))))
+            ).andExpect(status().isBadRequest)
+        }
+    }
 }
+

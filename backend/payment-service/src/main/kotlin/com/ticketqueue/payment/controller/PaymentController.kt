@@ -1,5 +1,7 @@
 package com.ticketqueue.payment.controller
 
+import com.ticketqueue.payment.dto.PaymentDto.ConfirmRequest
+import com.ticketqueue.payment.dto.PaymentDto.ConfirmResponse
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateResponse
 import com.ticketqueue.payment.service.PaymentService
@@ -23,5 +25,13 @@ class PaymentController(
         @RequestBody @Valid request: CreateRequest
     ): CreateResponse {
         return paymentService.createPayment(userId, request)
+    }
+
+    @PostMapping("/confirm")
+    fun confirmPayment(
+        @RequestHeader("X-User-Id") userId: UUID,
+        @RequestBody @Valid request: ConfirmRequest
+    ): ConfirmResponse {
+        return paymentService.confirmPayment(userId, request)
     }
 }
