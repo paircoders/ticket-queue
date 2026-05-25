@@ -132,7 +132,7 @@ class PaymentService(
     }
 
     /**
-     * 결제 승인 서비스 (REQ-PAY-010)
+     * 결제 승인 서비스 (REQ-PAY-010 / REQ-PAY-011 / REQ-PAY-012)
      *
      * ## 승인 프로세스
      * 1. Payment 조회 — 소유권/요청 본문 정합성/상태 머신으로 조기 거절
@@ -145,6 +145,26 @@ class PaymentService(
      * 실패하면 502 PORTONE_API_ERROR 로, Resilience4j CircuitBreaker 가 차단한 경우(CallNotPermittedException →
      * FallbackFactory) 503 PORTONE_CIRCUIT_OPEN 으로 즉시 전파한다 — Payment 는 PENDING 으로 남아 클라이언트가
      * 안전하게 재시도할 수 있다. 동시 confirm race 는 락 재검증으로 차단되어 중복 outbox 발행이 발생하지 않는다.
+     *
+     * ## SAGA 보상 체인 진입점 (#62)
+     * 본 메서드가 `payment.events` 토픽으로 발행하는 두 이벤트가 모든 후속 보상/확정 체인의 출발점이다.
+     *
+     * Happy path (PAID):
+     * ```
+     * confirmPayment → markSuccess + recordPaymentSuccess (outbox PaymentSuccess)
+     *  └ reservation-payment-consumer → Reservation.confirm()  (예매 CONFIRMED + ticketNumber)
+     *  └ event-payment-consumer        → SeatService.markSeatsAsSold (좌석 SOLD)
+     * ```
+     *
+     * Compensation path (PAID 아님 또는 amount/tx_id mismatch):
+     * ```
+     * confirmPayment → markFailed + recordPaymentFailed (outbox PaymentFailed)
+     *  └ reservation-payment-consumer → Reservation.cancel() + outbox ReservationCancelled (causationId)
+     *      └ event-reservation-consumer → SeatService.releaseHoldSeats (좌석 AVAILABLE 복원)
+     * ```
+     *
+     * 두 outbox 발행 모두 비즈니스 상태 변경과 동일 트랜잭션 내부에서 일어나므로,
+     * Payment 상태와 메시지 발행이 원자적이며 SAGA 의 atomicity 가 보장된다.
      */
     fun confirmPayment(userId: UUID, request: ConfirmRequest): ConfirmResponse {
         val payment = paymentRepository.findById(request.paymentId)
@@ -296,11 +316,20 @@ class PaymentService(
     }
 
     /**
-     * Transactional Outbox 발행 헬퍼 — PaymentSuccess.
+     * Transactional Outbox 발행 헬퍼 — PaymentSuccess. (REQ-PAY-011, SAGA happy path)
      *
      * 호출자는 활성 트랜잭션 내부에서 호출해야 한다 ([OutboxEventRecorder] PROPAGATION_MANDATORY).
      * payment 는 markSuccess() 가 이미 호출되어 paidAt / portoneTransactionId 가 채워진 상태여야 한다.
      * 결제 승인 API (#59) 가 confirm 트랜잭션 내부에서 호출하기 위한 재사용 진입점.
+     *
+     * ## SAGA 보상 체인에서의 위치
+     * Payment Service 는 SAGA 의 root 이므로 [EventMetadata.causationId] 는 항상 `null` 이다.
+     * downstream consumer (reservation-payment-consumer) 가 본 이벤트의 eventId 를
+     * [com.ticketqueue.common.event.ReservationConfirmedEvent.metadata] 의 causationId 로
+     * 전파하여 체인을 잇는다 (docs/architecture/05_kafka.md §3.1 / §4.3.1).
+     *
+     * `metadata.userId` 는 분산 추적용 cross-cutting 필드로, 파티션 키(aggregateId) 와는 별도로
+     * 항상 payment.userId 를 채워 downstream observability 를 보장한다.
      */
     private fun recordPaymentSuccess(payment: Payment, reservation: ReservationDetailResponse) {
         val paidAt = requireNotNull(payment.paidAt) { "payment.paidAt must be set before recording PaymentSuccess" }
@@ -321,10 +350,24 @@ class PaymentService(
     }
 
     /**
-     * Transactional Outbox 발행 헬퍼 — PaymentFailed.
+     * Transactional Outbox 발행 헬퍼 — PaymentFailed. (REQ-PAY-012, SAGA 보상 체인 root)
      *
      * 호출자는 활성 트랜잭션 내부에서 호출해야 한다 ([OutboxEventRecorder] PROPAGATION_MANDATORY).
      * createPayment 의 PortOne pre-register 실패 분기 / 결제 승인 실패 분기에서 공통 사용.
+     *
+     * ## SAGA 보상 체인에서의 역할
+     * 본 이벤트가 SAGA 의 **보상 트랜잭션 시작점**이다. [EventMetadata.causationId] 는 `null` 이며,
+     * 보상 체인은 다음 순서로 흐른다 (docs/architecture/05_kafka.md §4.3.2 ~ §4.3.3):
+     *
+     * ```
+     * PaymentService     → outbox(PaymentFailed)       — 본 메서드 (causationId = null, SAGA root)
+     * Reservation Consumer → cancelFromPaymentFailure
+     *                       → outbox(ReservationCancelled, causationId = PaymentFailed.eventId)
+     * Event Consumer       → releaseHoldSeats (좌석 DB AVAILABLE 복원)
+     * ```
+     *
+     * `aggregateId = payment.id` 로 파티션 키가 결제 단위로 묶여 SAGA 순서가 보장되며,
+     * `reservationId` 는 downstream consumer 가 reservation 도메인 쿼리에 사용한다.
      */
     private fun recordPaymentFailed(payment: Payment, reason: String) {
         outboxEventRecorder.record(
