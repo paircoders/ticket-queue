@@ -1,16 +1,21 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.UserDto
 import com.ticketqueue.user.entity.User
 import com.ticketqueue.user.entity.UserRole
 import com.ticketqueue.user.entity.UserStatus
 import com.ticketqueue.user.exception.UserException
+import com.ticketqueue.user.repository.RefreshTokenRepository
 import com.ticketqueue.user.repository.UserRepository
 import io.kotest.matchers.shouldBe
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -27,6 +32,10 @@ class UserServiceTest {
     private lateinit var userRepository: UserRepository
     private lateinit var encryptionService: EncryptionService
     private lateinit var passwordEncoder: PasswordEncoder
+    private lateinit var refreshTokenRepository: RefreshTokenRepository
+    private lateinit var jwtTokenProvider: JwtTokenProvider
+    private lateinit var tokenBlacklistService: TokenBlacklistService
+    private lateinit var jwtProperties: JwtProperties
     private lateinit var userService: UserService
 
     private val userId = UUID.randomUUID()
@@ -37,7 +46,19 @@ class UserServiceTest {
         userRepository = mockk()
         encryptionService = mockk()
         passwordEncoder = mockk()
-        userService = UserService(userRepository, encryptionService, passwordEncoder)
+        refreshTokenRepository = mockk()
+        jwtTokenProvider = mockk()
+        tokenBlacklistService = mockk(relaxed = true)
+        jwtProperties = mockk()
+        userService = UserService(
+            userRepository,
+            encryptionService,
+            passwordEncoder,
+            refreshTokenRepository,
+            jwtTokenProvider,
+            tokenBlacklistService,
+            jwtProperties,
+        )
     }
 
     private fun createUser(
@@ -226,6 +247,90 @@ class UserServiceTest {
             exception.errorCode shouldBe ErrorCode.INVALID_CREDENTIALS
             user.passwordHash shouldBe "old-hash"
             verify(exactly = 0) { passwordEncoder.encode(any()) }
+        }
+    }
+
+    @Nested
+    @DisplayName("withdraw")
+    inner class Withdraw {
+
+        private val jti = "test-jti-uuid"
+        private val accessToken = "valid.access.token"
+        private val authHeader = "Bearer $accessToken"
+
+        @Test
+        @DisplayName("정상 탈퇴 - status DELETED, deleted_at 기록, refresh token revoke, 블랙리스트 등록")
+        fun shouldWithdrawSuccessfully() {
+            val user = createUser()
+            every { jwtTokenProvider.parseAccessTokenJti(accessToken) } returns jti
+            every { userRepository.findById(userId) } returns Optional.of(user)
+            every { refreshTokenRepository.revokeAllActiveByUserId(eq(userId), any()) } returns 3L
+            every { jwtProperties.accessTokenExpiry } returns 3_600_000L
+
+            userService.withdraw(userId, authHeader)
+
+            user.status shouldBe UserStatus.DELETED
+            (user.deletedAt != null) shouldBe true
+            verifyOrder {
+                refreshTokenRepository.revokeAllActiveByUserId(eq(userId), any())
+                tokenBlacklistService.addToBlacklist(jti, 3_600_000L)
+            }
+        }
+
+        @Test
+        @DisplayName("Authorization 헤더에 Bearer 접두사 없음 - UNAUTHORIZED")
+        fun shouldThrowWhenInvalidAuthHeader() {
+            val exception = assertThrows<UserException> {
+                userService.withdraw(userId, "InvalidHeader")
+            }
+            exception.errorCode shouldBe ErrorCode.UNAUTHORIZED
+            verify(exactly = 0) { jwtTokenProvider.parseAccessTokenJti(any()) }
+            verify(exactly = 0) { userRepository.findById(any()) }
+            verify(exactly = 0) { refreshTokenRepository.revokeAllActiveByUserId(any(), any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
+        }
+
+        @Test
+        @DisplayName("Access Token 검증 실패 - 예외 전파, DB/Redis 미호출")
+        fun shouldPropagateJwtError() {
+            every { jwtTokenProvider.parseAccessTokenJti(accessToken) } throws
+                UserException(ErrorCode.INVALID_TOKEN)
+
+            val exception = assertThrows<UserException> {
+                userService.withdraw(userId, authHeader)
+            }
+            exception.errorCode shouldBe ErrorCode.INVALID_TOKEN
+            verify(exactly = 0) { userRepository.findById(any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
+        }
+
+        @Test
+        @DisplayName("사용자 없음 - RESOURCE_NOT_FOUND, 블랙리스트 미등록")
+        fun shouldThrowWhenUserNotFound() {
+            every { jwtTokenProvider.parseAccessTokenJti(accessToken) } returns jti
+            every { userRepository.findById(userId) } returns Optional.empty()
+
+            val exception = assertThrows<UserException> {
+                userService.withdraw(userId, authHeader)
+            }
+            exception.errorCode shouldBe ErrorCode.RESOURCE_NOT_FOUND
+            verify(exactly = 0) { refreshTokenRepository.revokeAllActiveByUserId(any(), any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
+        }
+
+        @Test
+        @DisplayName("이미 탈퇴된 사용자 - RESOURCE_NOT_FOUND, 추가 작업 없음")
+        fun shouldThrowWhenAlreadyDeleted() {
+            val user = createUser(status = UserStatus.DELETED)
+            every { jwtTokenProvider.parseAccessTokenJti(accessToken) } returns jti
+            every { userRepository.findById(userId) } returns Optional.of(user)
+
+            val exception = assertThrows<UserException> {
+                userService.withdraw(userId, authHeader)
+            }
+            exception.errorCode shouldBe ErrorCode.RESOURCE_NOT_FOUND
+            verify(exactly = 0) { refreshTokenRepository.revokeAllActiveByUserId(any(), any()) }
+            verify(exactly = 0) { tokenBlacklistService.addToBlacklist(any(), any()) }
         }
     }
 }

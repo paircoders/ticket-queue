@@ -5,9 +5,11 @@ import com.ticketqueue.user.dto.UserDto
 import com.ticketqueue.user.exception.UserException
 import com.ticketqueue.user.service.UserService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PutMapping
@@ -50,6 +52,19 @@ class UserController(
         val userId = parseUserId(principal)
         logger.info { "Password change request: userId=$userId" }
         userService.changePassword(userId, request)
+    }
+
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun withdraw(
+        @AuthenticationPrincipal principal: String?,
+        httpRequest: HttpServletRequest,
+    ) {
+        val userId = parseUserId(principal)
+        val authHeader = httpRequest.getHeader("Authorization")
+            ?: throw UserException(ErrorCode.UNAUTHORIZED)
+        logger.info { "Withdraw request: userId=$userId" }
+        userService.withdraw(userId, authHeader)
     }
 
     private fun parseUserId(principal: String?): UUID {
