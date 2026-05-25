@@ -30,6 +30,14 @@ interface EventRepositoryCustom {
     fun findEventWithVenueAndHall(eventId: UUID): Event?
 
     /**
+     * 공연 ID 목록을 단일 쿼리로 fetch join 조회한다 (내부 배치 API용)
+     *
+     * Reservation Service의 예매 내역 batch 조회 시 N+1 회피용.
+     * deleted_at IS NULL 필터를 적용하며, 미존재 ID는 결과에서 제외된다.
+     */
+    fun findEventsWithVenueAndHall(eventIds: List<UUID>): List<Event>
+
+    /**
      * AVAILABLE 좌석이 하나라도 존재하는 회차 ID Set 반환
      *
      * N+1 방지를 위해 회차 ID 목록을 단일 쿼리로 일괄 조회한다.

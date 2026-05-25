@@ -646,4 +646,56 @@ class ScheduleServiceTest {
             verify { eventService.invalidateEventListCaches() }
         }
     }
+
+    @Nested
+    @DisplayName("getScheduleInfoBatch")
+    inner class GetScheduleInfoBatch {
+
+        @Test
+        @DisplayName("요청한 회차들의 핵심 정보를 단일 fetch join 쿼리로 반환한다")
+        fun success() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+            val ids = listOf(scheduleId)
+
+            every { eventScheduleRepository.findByIdsWithEvent(ids) } returns listOf(schedule)
+
+            val result = scheduleService.getScheduleInfoBatch(ids)
+
+            assertEquals(1, result.schedules.size)
+            assertEquals(scheduleId, result.schedules[0].scheduleId)
+            assertEquals(eventId, result.schedules[0].eventId)
+            assertEquals(schedule.eventStartAt, result.schedules[0].eventStartAt)
+            assertEquals(schedule.saleEndAt, result.schedules[0].saleEndAt)
+        }
+
+        @Test
+        @DisplayName("미존재 ID는 응답에서 제외된다 (요청 size 와 응답 size 불일치 가능)")
+        fun missingIdsExcluded() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val schedule = createSchedule(event)
+            val missingId = UUID.randomUUID()
+            val ids = listOf(scheduleId, missingId)
+
+            every { eventScheduleRepository.findByIdsWithEvent(ids) } returns listOf(schedule)
+
+            val result = scheduleService.getScheduleInfoBatch(ids)
+
+            assertEquals(1, result.schedules.size)
+            assertEquals(scheduleId, result.schedules[0].scheduleId)
+        }
+
+        @Test
+        @DisplayName("빈 목록 입력 시 빈 응답을 반환하고 DB 조회를 생략한다")
+        fun emptyInput() {
+            val result = scheduleService.getScheduleInfoBatch(emptyList())
+
+            assertEquals(0, result.schedules.size)
+            verify(exactly = 0) { eventScheduleRepository.findByIdsWithEvent(any()) }
+        }
+    }
 }

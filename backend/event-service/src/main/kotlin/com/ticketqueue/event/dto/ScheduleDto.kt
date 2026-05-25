@@ -161,4 +161,7 @@ class ScheduleDto {
 
     /** 종료된 회차 ID 목록 응답 (내부 API용 — Queue Service 정리 배치 전용) */
     data class EndedScheduleIdsResponse(val scheduleIds: List<UUID>)
+
+    /** 회차 정보 배치 조회 응답 — 요청 ID 중 미존재 ID는 응답에서 제외된다 */
+    data class ScheduleInfoBatchResponse(val schedules: List<ScheduleInfoResponse>)
 }
