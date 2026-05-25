@@ -1,6 +1,7 @@
 package com.ticketqueue.payment.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.ticketqueue.common.dto.PageResponse
 import com.ticketqueue.common.event.EventMetadata
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
@@ -19,6 +20,8 @@ import com.ticketqueue.payment.dto.PaymentDto.ConfirmRequest
 import com.ticketqueue.payment.dto.PaymentDto.ConfirmResponse
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateResponse
+import com.ticketqueue.payment.dto.PaymentDto.DetailResponse
+import com.ticketqueue.payment.dto.PaymentDto.ListItem
 import com.ticketqueue.payment.entity.Payment
 import com.ticketqueue.payment.entity.PaymentStatus
 import com.ticketqueue.payment.exception.PaymentException
@@ -26,7 +29,10 @@ import com.ticketqueue.payment.repository.PaymentRepository
 import feign.FeignException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -43,6 +49,7 @@ class PaymentService(
     private val outboxEventRecorder: OutboxEventRecorder,
     private val transactionTemplate: TransactionTemplate,
     private val objectMapper: ObjectMapper,
+    private val paymentMaskingMapper: PaymentMaskingMapper,
 ) {
 
     private val log = KotlinLogging.logger {}
@@ -218,6 +225,62 @@ class PaymentService(
             paymentId = finalPayment.id!!,
             status = finalPayment.status,
             paidAt = finalPayment.paidAt
+        )
+    }
+
+    /**
+     * 결제 상세 조회 (REQ-PAY-014, Plan §3 Step 3, AC-1~4 & AC-11).
+     *
+     * 소유권 검증은 read context — UUIDv4 entropy 가 충분히 높아 IDOR 위험이 write 보다 낮으나
+     * confirmPayment 와 동일하게 NOT_FOUND/FORBIDDEN 구분을 유지한다 (Plan §7 Decision 4).
+     * `cardName`/`cardNumber` 는 [PaymentMaskingMapper] 가 PortOne 응답에서 read-time 으로 추출 —
+     * status=PENDING/FAILED 또는 method 가 카드 아닌 경우 자연스럽게 null 이 된다.
+     */
+    @Transactional(readOnly = true)
+    fun getPayment(userId: UUID, paymentId: UUID): DetailResponse {
+        val payment = paymentRepository.findById(paymentId)
+            .orElseThrow { PaymentException(ErrorCode.RESOURCE_NOT_FOUND) }
+        if (payment.userId != userId) throw PaymentException(ErrorCode.FORBIDDEN)
+
+        val cardMeta = paymentMaskingMapper.extract(payment.portoneResponse)
+        return DetailResponse(
+            paymentId = payment.id!!,
+            reservationId = payment.reservationId,
+            amount = payment.amount,
+            status = payment.status,
+            method = payment.paymentMethod,
+            cardName = cardMeta.name,
+            cardNumber = cardMeta.number,
+        )
+    }
+
+    /**
+     * 내 결제 내역 페이징 조회 (REQ-PAY-015, Plan §3 Step 3, AC-5/6/7/9).
+     *
+     * 정렬 기준 `createdAt DESC` 는 Service 내부에서 hard-code — 호출자가 sort 미주입할 가능성을 차단하고,
+     * `idx_payments_user_created (user_id, created_at DESC)` 인덱스 hit 을 보장한다 (Plan §7 Decision 3).
+     * 모든 status (PENDING/SUCCESS/FAILED/REFUNDED) 를 반환 — 필터 옵션은 후속 이슈 (Plan §7 Decision 9).
+     * REFUNDED 결제는 markSuccess 단계의 `paidAt` 을 유지하므로 그대로 노출된다 (Critic N1 정정).
+     */
+    @Transactional(readOnly = true)
+    fun listPayments(userId: UUID, page: Int, size: Int): PageResponse<ListItem> {
+        val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        val resultPage = paymentRepository.findByUserId(userId, pageable)
+        val items = resultPage.content.map { payment ->
+            ListItem(
+                paymentId = payment.id!!,
+                reservationId = payment.reservationId,
+                amount = payment.amount,
+                status = payment.status,
+                method = payment.paymentMethod,
+                paidAt = payment.paidAt,
+            )
+        }
+        return PageResponse(
+            list = items,
+            page = page,
+            size = size,
+            totalElements = resultPage.totalElements,
         )
     }
 

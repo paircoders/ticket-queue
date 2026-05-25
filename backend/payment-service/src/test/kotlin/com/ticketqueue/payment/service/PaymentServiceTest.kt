@@ -56,6 +56,7 @@ class PaymentServiceTest {
     private lateinit var outboxEventRecorder: OutboxEventRecorder
     private lateinit var transactionTemplate: TransactionTemplate
     private val objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules()
+    private lateinit var paymentMaskingMapper: PaymentMaskingMapper
     private lateinit var paymentService: PaymentService
 
     private val userId = UUID.randomUUID()
@@ -76,6 +77,7 @@ class PaymentServiceTest {
         portoneProperties = mockk()
         outboxEventRecorder = mockk()
         transactionTemplate = mockk()
+        paymentMaskingMapper = mockk(relaxed = true)
 
         every { portoneProperties.storeId } returns storeId
         every { portoneProperties.channelKey } returns channelKey
@@ -108,6 +110,7 @@ class PaymentServiceTest {
             outboxEventRecorder,
             transactionTemplate,
             objectMapper,
+            paymentMaskingMapper,
         )
     }
 
