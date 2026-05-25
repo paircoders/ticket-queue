@@ -61,7 +61,8 @@ class PaymentEventConsumerTest {
                 amount = BigDecimal("100000"),
                 paidAt = LocalDateTime.now(),
                 scheduleId = scheduleId,
-                seatIds = seatIds
+                seatIds = seatIds,
+                portoneTransactionId = "portone_tx_123"
             )
             val json = objectMapper.writeValueAsString(event)
 
