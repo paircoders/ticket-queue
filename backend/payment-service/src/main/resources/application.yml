@@ -38,6 +38,8 @@ spring:
     openfeign:
       circuitbreaker:
         enabled: true
+        group:
+          enabled: true
       client:
         config:
           default:

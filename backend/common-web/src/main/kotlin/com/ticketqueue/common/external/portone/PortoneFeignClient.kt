@@ -10,7 +10,8 @@ import org.springframework.web.bind.annotation.*
 @FeignClient(
     name = "portone-v2-client",
     url = "\${external.portone.api-url:https://api.portone.io}",
-    configuration = [PortoneFeignConfig::class]
+    configuration = [PortoneFeignConfig::class],
+    fallbackFactory = PortoneFallbackFactory::class
 )
 interface PortoneFeignClient {
 
