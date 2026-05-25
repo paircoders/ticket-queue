@@ -50,6 +50,31 @@ X-Queue-Token: {Queue_Token}
 - **Description:** API Gateway에서 모든 요청에 대해 고유한 UUID를 발급하며, 응답 헤더 및 에러 응답의 `traceId` 필드와 동일한 값을 가짐
 - **Usage:** 고객 문의 대응 또는 시스템 장애 추적 시 활용
 
+### 2.6 페이징 응답 형식 (Pagination)
+목록 조회 API 는 아래의 페이징 컨벤션을 따른다. 본 컨벤션은 `GET /payments` (#64) 가 reference 구현이며,
+`GET /reservations` (#52) 등 후속 목록 API 도 동일 패턴을 따른다.
+
+**Query Parameters**
+- `page` (Int, default `0`, `>= 0`) — 0 부터 시작하는 페이지 번호
+- `size` (Int, default `20`, `>= 1`, `<= 100`) — 페이지당 항목 수 상한 100
+
+**Response Schema**
+```json
+{
+  "list": [/* page 내 항목 */],
+  "page": 0,
+  "size": 20,
+  "totalElements": 5
+}
+```
+
+**정렬**
+- 기본 정렬은 도메인의 자연스러운 시간순 (예: `created_at DESC`). 도메인별 override 시 응답 명세에 명시한다.
+- 정렬 옵션(`sort=`) 노출은 현재 컨벤션에 포함되지 않으며, 필요 시 별도 도메인 API 에서 추가한다.
+
+**검증**
+- `page < 0` 또는 `size` 가 `[1, 100]` 범위 외 → `400 INVALID_INPUT`.
+
 ## 3. API 요약 (Summary)
 
 ### 3.1 User Service

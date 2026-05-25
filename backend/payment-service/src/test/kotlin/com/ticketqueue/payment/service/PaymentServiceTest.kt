@@ -18,6 +18,7 @@ import com.ticketqueue.payment.client.ReservationServiceClient
 import com.ticketqueue.payment.dto.PaymentDto.ConfirmRequest
 import com.ticketqueue.payment.dto.PaymentDto.CreateRequest
 import com.ticketqueue.payment.entity.Payment
+import com.ticketqueue.payment.entity.PaymentMethod
 import com.ticketqueue.payment.entity.PaymentStatus
 import com.ticketqueue.payment.exception.PaymentException
 import com.ticketqueue.payment.repository.PaymentRepository
@@ -34,6 +35,10 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.TransactionCallback
 import org.springframework.transaction.support.TransactionTemplate
@@ -56,6 +61,7 @@ class PaymentServiceTest {
     private lateinit var outboxEventRecorder: OutboxEventRecorder
     private lateinit var transactionTemplate: TransactionTemplate
     private val objectMapper: ObjectMapper = ObjectMapper().findAndRegisterModules()
+    private lateinit var paymentMaskingMapper: PaymentMaskingMapper
     private lateinit var paymentService: PaymentService
 
     private val userId = UUID.randomUUID()
@@ -76,6 +82,7 @@ class PaymentServiceTest {
         portoneProperties = mockk()
         outboxEventRecorder = mockk()
         transactionTemplate = mockk()
+        paymentMaskingMapper = mockk(relaxed = true)
 
         every { portoneProperties.storeId } returns storeId
         every { portoneProperties.channelKey } returns channelKey
@@ -108,6 +115,7 @@ class PaymentServiceTest {
             outboxEventRecorder,
             transactionTemplate,
             objectMapper,
+            paymentMaskingMapper,
         )
     }
 
@@ -709,6 +717,128 @@ class PaymentServiceTest {
             verify(exactly = 0) { paymentRepository.save(any()) }
             verify(exactly = 0) { outboxEventRecorder.record(any()) }
             payment.status shouldBe PaymentStatus.PENDING
+        }
+    }
+
+    @Nested
+    @DisplayName("getPayment 결제 상세 조회")
+    inner class GetPayment {
+
+        private val paymentId = UUID.randomUUID()
+
+        private fun payment(
+            ownerId: UUID = userId,
+            status: PaymentStatus = PaymentStatus.SUCCESS,
+            portoneResponse: String? = """{"method":{"card":{"publisher":"SHINHAN","number":"1234-****-****-5678"}}}""",
+            paidAt: LocalDateTime? = LocalDateTime.now(ZoneOffset.UTC),
+        ) = Payment(
+            id = paymentId,
+            reservationId = reservationId,
+            userId = ownerId,
+            paymentKey = UUID.randomUUID().toString(),
+            amount = amount,
+            paymentMethod = PaymentMethod.CARD,
+            status = status,
+            portoneResponse = portoneResponse,
+            paidAt = paidAt,
+        )
+
+        @Test
+        fun `정상 케이스 - SUCCESS 결제 + 카드 메타가 응답에 매핑된다`() {
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment())
+            every { paymentMaskingMapper.extract(any()) } returns PaymentMaskingMapper.CardMeta("SHINHAN", "1234-****-****-5678")
+
+            val result = paymentService.getPayment(userId, paymentId)
+
+            result.paymentId shouldBe paymentId
+            result.status shouldBe PaymentStatus.SUCCESS
+            result.method shouldBe PaymentMethod.CARD
+            result.cardName shouldBe "SHINHAN"
+            result.cardNumber shouldBe "1234-****-****-5678"
+        }
+
+        @Test
+        fun `RESOURCE_NOT_FOUND - paymentId 가 존재하지 않으면 예외를 던진다`() {
+            every { paymentRepository.findById(paymentId) } returns Optional.empty()
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.getPayment(userId, paymentId)
+            }
+            ex.errorCode shouldBe ErrorCode.RESOURCE_NOT_FOUND
+        }
+
+        @Test
+        fun `FORBIDDEN - 다른 유저 소유 결제 조회 시 예외를 던진다`() {
+            val otherUserId = UUID.randomUUID()
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment(ownerId = otherUserId))
+
+            val ex = assertThrows<PaymentException> {
+                paymentService.getPayment(userId, paymentId)
+            }
+            ex.errorCode shouldBe ErrorCode.FORBIDDEN
+        }
+
+        @Test
+        fun `portoneResponse 가 null 이면 cardName, cardNumber 모두 null 로 응답한다`() {
+            every { paymentRepository.findById(paymentId) } returns Optional.of(
+                payment(status = PaymentStatus.FAILED, portoneResponse = null, paidAt = null)
+            )
+            every { paymentMaskingMapper.extract(null) } returns PaymentMaskingMapper.CardMeta(null, null)
+
+            val result = paymentService.getPayment(userId, paymentId)
+
+            result.cardName shouldBe null
+            result.cardNumber shouldBe null
+            result.status shouldBe PaymentStatus.FAILED
+        }
+    }
+
+    @Nested
+    @DisplayName("listPayments 페이징 조회")
+    inner class ListPayments {
+
+        private fun samplePayment(idx: Int) = Payment(
+            id = UUID.randomUUID(),
+            reservationId = UUID.randomUUID(),
+            userId = userId,
+            paymentKey = "key-$idx",
+            amount = amount,
+            paymentMethod = PaymentMethod.CARD,
+            status = PaymentStatus.SUCCESS,
+            paidAt = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(idx.toLong()),
+        )
+
+        @Test
+        fun `정상 페이징 - 5건 시드, page=0 size=20 → totalElements=5 + Sort createdAt DESC`() {
+            val payments = (1..5).map { samplePayment(it) }
+            val pageableSlot = slot<Pageable>()
+            every {
+                paymentRepository.findByUserId(userId, capture(pageableSlot))
+            } returns PageImpl(payments, PageRequest.of(0, 20), 5L)
+
+            val result = paymentService.listPayments(userId, page = 0, size = 20)
+
+            result.list.size shouldBe 5
+            result.page shouldBe 0
+            result.size shouldBe 20
+            result.totalElements shouldBe 5L
+
+            val captured = pageableSlot.captured
+            captured.pageNumber shouldBe 0
+            captured.pageSize shouldBe 20
+            captured.sort.getOrderFor("createdAt")?.direction shouldBe Sort.Direction.DESC
+        }
+
+        @Test
+        fun `빈 리스트 - 결제 0건이면 list=empty, totalElements=0`() {
+            every {
+                paymentRepository.findByUserId(userId, any())
+            } returns PageImpl(emptyList<Payment>(), PageRequest.of(0, 20), 0L)
+
+            val result = paymentService.listPayments(userId, page = 0, size = 20)
+
+            result.list shouldBe emptyList()
+            result.totalElements shouldBe 0L
         }
     }
 }
