@@ -53,7 +53,8 @@ enum class ErrorCode(
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "PAYMENT_AMOUNT_MISMATCH", "결제 금액이 일치하지 않습니다."),
     REFUND_FAILED(HttpStatus.BAD_REQUEST, "REFUND_FAILED", "환불에 실패했습니다."),
     PORTONE_PRE_REGISTER_FAILED(HttpStatus.BAD_GATEWAY, "PORTONE_PRE_REGISTER_FAILED", "PortOne 사전 결제 등록에 실패했습니다."),
-    
+    PORTONE_CIRCUIT_OPEN(HttpStatus.SERVICE_UNAVAILABLE, "PORTONE_CIRCUIT_OPEN", "결제 게이트웨이가 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요."),
+
     // PortOne (Identity Verification)
     PORTONE_VERIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "PORTONE_VERIFICATION_NOT_FOUND", "본인인증 기록을 찾을 수 없습니다."),
     PORTONE_VERIFICATION_TIMEOUT(HttpStatus.BAD_REQUEST, "PORTONE_VERIFICATION_TIMEOUT", "본인인증 시간이 초과되었거나 완료되지 않았습니다."),

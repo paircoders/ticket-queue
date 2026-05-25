@@ -3,6 +3,7 @@ package com.ticketqueue.payment.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ninjasquad.springmockk.MockkBean
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneCircuitOpenException
 import com.ticketqueue.common.external.portone.PortoneCustomer
 import com.ticketqueue.common.external.portone.PortoneFeignClient
 import com.ticketqueue.common.external.portone.PortonePaymentAmount
@@ -499,6 +500,27 @@ class PaymentControllerIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(confirmBody(payment, amount = BigDecimal("-1"))))
             ).andExpect(status().isBadRequest)
+        }
+
+        @Test
+        @DisplayName("PortOne CircuitBreaker Open(FallbackFactory) → 503 PORTONE_CIRCUIT_OPEN, Payment PENDING 유지")
+        fun confirmCircuitBreakerOpen() {
+            val payment = savePendingPayment()
+            every { portoneClient.getPayment(paymentKey, "test-store-id", "Bearer test-token") } throws
+                PortoneCircuitOpenException()
+
+            mockMvc.perform(
+                post("/payments/confirm")
+                    .header("X-User-Id", userId)
+                    .header("X-User-Role", "USER")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(confirmBody(payment)))
+            )
+                .andExpect(status().isServiceUnavailable)
+                .andExpect(jsonPath("$.code").value(ErrorCode.PORTONE_CIRCUIT_OPEN.code))
+
+            val persisted = paymentRepository.findById(payment.id!!).get()
+            persisted.status shouldBe PaymentStatus.PENDING
         }
     }
 }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneCircuitOpenException
 import com.ticketqueue.common.external.portone.PortoneCustomer
 import com.ticketqueue.common.external.portone.PortoneFeignClient
 import com.ticketqueue.common.external.portone.PortonePaymentAmount
@@ -396,6 +397,37 @@ class PaymentServiceTest {
             event.reason shouldBe "PortOne pre-register failed: connection refused"
             event.metadata.userId shouldBe userId
         }
+
+        @Test
+        @DisplayName("PortOne CircuitBreaker Open(FallbackFactory) 시 markFailed + Outbox 발행 후 PortoneCircuitOpenException(503) 전파")
+        fun portoneCircuitBreakerOpen() {
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { paymentRepository.save(any()) } answers {
+                val p = firstArg<Payment>()
+                Payment(
+                    id = UUID.randomUUID(),
+                    reservationId = p.reservationId,
+                    userId = p.userId,
+                    paymentKey = p.paymentKey,
+                    amount = p.amount,
+                    paymentMethod = p.paymentMethod
+                )
+            }
+            val eventSlot = slot<PaymentFailedEvent>()
+            every { outboxEventRecorder.record(capture(eventSlot)) } returns mockk<OutboxEvent>(relaxed = true)
+            every { portoneClient.preRegisterPayment(any(), any(), any()) } throws PortoneCircuitOpenException()
+
+            val ex = assertThrows<PortoneCircuitOpenException> {
+                paymentService.createPayment(userId, CreateRequest(reservationId = reservationId, amount = amount))
+            }
+
+            ex.errorCode shouldBe ErrorCode.PORTONE_CIRCUIT_OPEN
+            // PENDING 저장 1회 + 트랜잭션 안에서 FAILED 저장 1회 = 총 2회
+            verify(exactly = 2) { paymentRepository.save(any()) }
+            verify(exactly = 1) { transactionTemplate.executeWithoutResult(any()) }
+            verify(exactly = 1) { outboxEventRecorder.record(any<PaymentFailedEvent>()) }
+            eventSlot.captured.reason shouldBe "PortOne circuit breaker open"
+        }
     }
 
     @Nested
@@ -657,6 +689,26 @@ class PaymentServiceTest {
 
             ex.errorCode shouldBe ErrorCode.PORTONE_API_ERROR
             verify(exactly = 0) { outboxEventRecorder.record(any()) }
+        }
+
+        @Test
+        @DisplayName("PortOne CircuitBreaker Open(FallbackFactory) 시 Payment는 PENDING 유지, PortoneCircuitOpenException(503) 전파")
+        fun portoneCircuitBreakerOpen() {
+            val payment = buildPayment(id = paymentId, paymentKey = paymentKey)
+            every { paymentRepository.findById(paymentId) } returns Optional.of(payment)
+            every { reservationServiceClient.getReservation(reservationId) } returns buildReservation()
+            every { portoneClient.getPayment(any(), any(), any()) } throws PortoneCircuitOpenException()
+
+            val ex = assertThrows<PortoneCircuitOpenException> {
+                paymentService.confirmPayment(userId, confirmRequest())
+            }
+
+            ex.errorCode shouldBe ErrorCode.PORTONE_CIRCUIT_OPEN
+            // CB Open 분기는 트랜잭션 진입 전이므로 락 재조회/Outbox 모두 호출되지 않아야 한다.
+            verify(exactly = 0) { paymentRepository.findByIdForUpdate(any()) }
+            verify(exactly = 0) { paymentRepository.save(any()) }
+            verify(exactly = 0) { outboxEventRecorder.record(any()) }
+            payment.status shouldBe PaymentStatus.PENDING
         }
     }
 }

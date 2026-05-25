@@ -5,6 +5,7 @@ import com.ticketqueue.common.event.EventMetadata
 import com.ticketqueue.common.event.PaymentFailedEvent
 import com.ticketqueue.common.event.PaymentSuccessEvent
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.common.external.portone.PortoneCircuitOpenException
 import com.ticketqueue.common.external.portone.PortoneFeignClient
 import com.ticketqueue.common.external.portone.PortonePaymentResponse
 import com.ticketqueue.common.external.portone.PortonePreRegisterRequest
@@ -94,7 +95,11 @@ class PaymentService(
                 token = portoneTokenService.getAccessToken()
             )
         } catch (e: Exception) {
-            val reason = "PortOne pre-register failed: ${e.message}"
+            val reason = if (e is PortoneCircuitOpenException) {
+                "PortOne circuit breaker open"
+            } else {
+                "PortOne pre-register failed: ${e.message}"
+            }
             // payment 는 위 첫 save() 가 자체 트랜잭션으로 즉시 커밋되며 detached 상태가 된다.
             // 아래 save() 는 SimpleJpaRepository 의 merge() 경로로 UPDATE 한 행만 발행하고,
             // recordPaymentFailed() 의 outbox INSERT 와 같은 트랜잭션에서 원자적으로 커밋된다.
@@ -103,6 +108,8 @@ class PaymentService(
                 paymentRepository.save(payment)
                 recordPaymentFailed(payment, reason)
             }
+            // CB Open 은 도메인 예외(503) 그대로 전파하여 클라이언트가 재시도 의미를 구분할 수 있게 한다.
+            if (e is PortoneCircuitOpenException) throw e
             throw PaymentException(ErrorCode.PORTONE_PRE_REGISTER_FAILED)
         }
 
@@ -127,9 +134,10 @@ class PaymentService(
      * 4. DB 트랜잭션: PESSIMISTIC_WRITE 락 + 상태 재검증 + markSuccess|markFailed + Outbox 발행
      *
      * PortOne 응답이 PAID 가 아니거나 amount/transactionId 가 어긋나면 markFailed + PaymentFailedEvent 를 같은
-     * 트랜잭션으로 기록한 뒤 200 OK + status=FAILED 로 응답한다 (스펙 1.2). PortOne 호출 자체가 실패하면
-     * 502 PORTONE_API_ERROR 로 즉시 전파한다. 동시 confirm race 는 락 재검증으로 차단되어 중복 outbox 발행이
-     * 발생하지 않는다.
+     * 트랜잭션으로 기록한 뒤 200 OK + status=FAILED 로 응답한다 (스펙 1.2). PortOne 호출이 FeignException 으로
+     * 실패하면 502 PORTONE_API_ERROR 로, Resilience4j CircuitBreaker 가 차단한 경우(CallNotPermittedException →
+     * FallbackFactory) 503 PORTONE_CIRCUIT_OPEN 으로 즉시 전파한다 — Payment 는 PENDING 으로 남아 클라이언트가
+     * 안전하게 재시도할 수 있다. 동시 confirm race 는 락 재검증으로 차단되어 중복 outbox 발행이 발생하지 않는다.
      */
     fun confirmPayment(userId: UUID, request: ConfirmRequest): ConfirmResponse {
         val payment = paymentRepository.findById(request.paymentId)
@@ -167,6 +175,9 @@ class PaymentService(
                 storeId = storeId,
                 token = portoneTokenService.getAccessToken()
             )
+        } catch (e: PortoneCircuitOpenException) {
+            // CircuitBreaker Open → 503 그대로 전파. Payment 는 PENDING 유지 → 클라이언트 재시도 가능.
+            throw e
         } catch (e: FeignException) {
             throw PaymentException(ErrorCode.PORTONE_API_ERROR)
         }

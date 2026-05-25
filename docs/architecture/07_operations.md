@@ -55,6 +55,18 @@
   2. HALF_OPEN 전환 확인: `resilience4j_circuitbreaker_state{name="redisBlacklist", state="half_open"} == 1`
   3. CLOSED 복구 확인: `resilience4j_circuitbreaker_state{name="redisBlacklist", state="closed"} == 1`
 
+#### PortOne CircuitBreaker OPEN 알림 (REQ-PAY-009)
+- **쿼리**: `resilience4j_circuitbreaker_state{name="portone-v2-client", state="open"} == 1`
+- **심각도**: CRITICAL — PortOne 결제 게이트웨이 차단으로 신규 결제·확인 모두 503 PORTONE_CIRCUIT_OPEN 응답.
+- **CB 설정**: `waitDurationInOpenState: 60s`, `failureRateThreshold: 50`, `slidingWindowSize: 100`, `minimumNumberOfCalls: 5`, `permittedNumberOfCallsInHalfOpenState: 3` (`payment-service/application.yml`)
+- **결제 영향**:
+  - `POST /payments` pre-register 실패 → Payment row 가 `FAILED` 상태 + `PaymentFailedEvent` Outbox 발행, 클라이언트 재시도 권장.
+  - `POST /payments/confirm` 차단 → Payment 는 `PENDING` 유지, hold_expires_at 만료 시 `#54` 배치가 자동 취소.
+- **대응**:
+  1. PortOne 상태 페이지 확인: <https://status.portone.io/>
+  2. HALF_OPEN 전환 확인: `resilience4j_circuitbreaker_state{name="portone-v2-client", state="half_open"} == 1`
+  3. CLOSED 복구 확인: `resilience4j_circuitbreaker_state{name="portone-v2-client", state="closed"} == 1`
+
 **서비스별 포트 매핑 (Prometheus 스크래핑 대상):**
 
 | 서비스 | 서비스 포트 | Management 포트 | 메트릭 경로 |
