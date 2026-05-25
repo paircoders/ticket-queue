@@ -27,7 +27,7 @@ class User(
     val emailHash: String,
 
     @Column(name = "password_hash", nullable = false)
-    val passwordHash: String,
+    var passwordHash: String,
 
     @Column(nullable = false)
     var name: String,
@@ -53,7 +53,7 @@ class User(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val status: UserStatus = UserStatus.ACTIVE,
+    var status: UserStatus = UserStatus.ACTIVE,
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -1,19 +1,29 @@
 package com.ticketqueue.user.service
 
 import com.ticketqueue.common.exception.ErrorCode
+import com.ticketqueue.user.config.JwtProperties
 import com.ticketqueue.user.dto.UserDto
 import com.ticketqueue.user.entity.UserStatus
 import com.ticketqueue.user.exception.UserException
+import com.ticketqueue.user.repository.RefreshTokenRepository
 import com.ticketqueue.user.repository.UserRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 @Service
 class UserService(
     private val userRepository: UserRepository,
     private val encryptionService: EncryptionService,
+    private val passwordEncoder: PasswordEncoder,
+    private val refreshTokenRepository: RefreshTokenRepository,
+    private val jwtTokenProvider: JwtTokenProvider,
+    private val tokenBlacklistService: TokenBlacklistService,
+    private val jwtProperties: JwtProperties,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -54,5 +64,49 @@ class UserService(
             decryptedName = request.name,
             decryptedPhone = request.phone,
         )
+    }
+
+    @Transactional
+    fun changePassword(userId: UUID, request: UserDto.ChangePasswordRequest) {
+        val user = userRepository.findById(userId)
+            .orElseThrow { UserException(ErrorCode.RESOURCE_NOT_FOUND) }
+
+        if (user.status == UserStatus.DELETED) {
+            throw UserException(ErrorCode.RESOURCE_NOT_FOUND)
+        }
+
+        if (!passwordEncoder.matches(request.currentPassword, user.passwordHash)) {
+            logger.warn { "Password change failed: currentPassword mismatch userId=$userId" }
+            throw UserException(ErrorCode.INVALID_CREDENTIALS)
+        }
+
+        user.passwordHash = passwordEncoder.encode(request.newPassword)
+
+        logger.info { "Password changed: userId=$userId" }
+    }
+
+    @Transactional
+    fun withdraw(userId: UUID, authorizationHeader: String) {
+        if (!authorizationHeader.startsWith("Bearer ")) {
+            throw UserException(ErrorCode.UNAUTHORIZED)
+        }
+        val accessToken = authorizationHeader.removePrefix("Bearer ")
+        val jti = jwtTokenProvider.parseAccessTokenJti(accessToken)
+
+        val user = userRepository.findById(userId)
+            .orElseThrow { UserException(ErrorCode.RESOURCE_NOT_FOUND) }
+
+        if (user.status == UserStatus.DELETED) {
+            throw UserException(ErrorCode.RESOURCE_NOT_FOUND)
+        }
+
+        val now = LocalDateTime.now(ZoneOffset.UTC)
+        user.status = UserStatus.DELETED
+        user.deletedAt = now
+
+        val revokedCount = refreshTokenRepository.revokeAllActiveByUserId(userId, now)
+        tokenBlacklistService.addToBlacklist(jti, jwtProperties.accessTokenExpiry)
+
+        logger.info { "User withdrawn: userId=$userId, refreshTokensRevoked=$revokedCount" }
     }
 }

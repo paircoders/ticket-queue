@@ -10,7 +10,9 @@ import com.ticketqueue.user.config.SecurityConfig
 import com.ticketqueue.user.dto.UserDto
 import com.ticketqueue.user.entity.UserRole
 import com.ticketqueue.user.service.UserService
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -25,8 +27,10 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ContextConfiguration
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDateTime
@@ -207,6 +211,174 @@ class UserControllerTest {
             performPatch(validRequest)
                 .andExpect(status().isNotFound)
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+        }
+    }
+
+    @Nested
+    @DisplayName("PUT /users/me/password")
+    inner class ChangePassword {
+
+        private val validRequest = UserDto.ChangePasswordRequest(
+            currentPassword = "oldPassword!",
+            newPassword = "newSecurePassword123!",
+        )
+
+        private fun performPut(content: Any?, includeAuth: Boolean = true) = mockMvc.perform(
+            put("/users/me/password")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .let { if (includeAuth) it.header("X-User-Id", userId.toString()).header("X-User-Role", "USER") else it }
+                .let { if (content != null) it.content(objectMapper.writeValueAsString(content)) else it }
+        )
+
+        @Test
+        @DisplayName("정상 변경 시 204 NO CONTENT")
+        fun shouldReturn204() {
+            every { userService.changePassword(userId, validRequest) } just Runs
+
+            performPut(validRequest)
+                .andExpect(status().isNoContent)
+        }
+
+        @Test
+        @DisplayName("현재 비밀번호 빈 값 시 400 BAD REQUEST")
+        fun shouldReturn400WhenCurrentBlank() {
+            performPut(validRequest.copy(currentPassword = ""))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("현재 비밀번호")))
+        }
+
+        @Test
+        @DisplayName("새 비밀번호 빈 값 시 400 BAD REQUEST")
+        fun shouldReturn400WhenNewBlank() {
+            performPut(validRequest.copy(newPassword = ""))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("새 비밀번호")))
+        }
+
+        @Test
+        @DisplayName("새 비밀번호 너무 짧음 시 400 BAD REQUEST")
+        fun shouldReturn400WhenNewTooShort() {
+            performPut(validRequest.copy(newPassword = "short"))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+        }
+
+        @Test
+        @DisplayName("인증 헤더 누락 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenNoAuth() {
+            performPut(validRequest, includeAuth = false)
+                .andExpect(status().isUnauthorized)
+        }
+
+        @Test
+        @DisplayName("요청 body 없을 시 400 BAD REQUEST")
+        fun shouldReturn400WhenBodyMissing() {
+            performPut(null)
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+        }
+
+        @Test
+        @DisplayName("현재 비밀번호 불일치 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenCurrentPasswordWrong() {
+            every { userService.changePassword(userId, validRequest) } throws
+                BusinessException(ErrorCode.INVALID_CREDENTIALS)
+
+            performPut(validRequest)
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+        }
+
+        @Test
+        @DisplayName("사용자 미존재 시 404 NOT FOUND")
+        fun shouldReturn404WhenUserMissing() {
+            every { userService.changePassword(userId, validRequest) } throws
+                BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+
+            performPut(validRequest)
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /users/me")
+    inner class Withdraw {
+
+        private val authHeader = "Bearer valid.access.token"
+
+        @Test
+        @DisplayName("정상 탈퇴 시 204 NO CONTENT")
+        fun shouldReturn204() {
+            every { userService.withdraw(userId, authHeader) } just Runs
+
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .header("Authorization", authHeader)
+            ).andExpect(status().isNoContent)
+        }
+
+        @Test
+        @DisplayName("Authorization 헤더 누락 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenAuthHeaderMissing() {
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+            )
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+        }
+
+        @Test
+        @DisplayName("Gateway 인증 헤더 누락 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenGatewayHeadersMissing() {
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("Authorization", authHeader)
+            ).andExpect(status().isUnauthorized)
+        }
+
+        @Test
+        @DisplayName("이미 탈퇴된 사용자 시 404 NOT FOUND")
+        fun shouldReturn404WhenAlreadyDeleted() {
+            every { userService.withdraw(userId, authHeader) } throws
+                BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .header("Authorization", authHeader)
+            )
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+        }
+
+        @Test
+        @DisplayName("Access Token 검증 실패 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenTokenInvalid() {
+            every { userService.withdraw(userId, authHeader) } throws
+                BusinessException(ErrorCode.INVALID_TOKEN)
+
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .header("Authorization", authHeader)
+            )
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
         }
     }
 }
