@@ -53,7 +53,7 @@ class User(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    val status: UserStatus = UserStatus.ACTIVE,
+    var status: UserStatus = UserStatus.ACTIVE,
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

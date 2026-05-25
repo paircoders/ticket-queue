@@ -27,6 +27,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ContextConfiguration
 import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
@@ -300,6 +301,84 @@ class UserControllerTest {
             performPut(validRequest)
                 .andExpect(status().isNotFound)
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /users/me")
+    inner class Withdraw {
+
+        private val authHeader = "Bearer valid.access.token"
+
+        @Test
+        @DisplayName("정상 탈퇴 시 204 NO CONTENT")
+        fun shouldReturn204() {
+            every { userService.withdraw(userId, authHeader) } just Runs
+
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .header("Authorization", authHeader)
+            ).andExpect(status().isNoContent)
+        }
+
+        @Test
+        @DisplayName("Authorization 헤더 누락 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenAuthHeaderMissing() {
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+            )
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+        }
+
+        @Test
+        @DisplayName("Gateway 인증 헤더 누락 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenGatewayHeadersMissing() {
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("Authorization", authHeader)
+            ).andExpect(status().isUnauthorized)
+        }
+
+        @Test
+        @DisplayName("이미 탈퇴된 사용자 시 404 NOT FOUND")
+        fun shouldReturn404WhenAlreadyDeleted() {
+            every { userService.withdraw(userId, authHeader) } throws
+                BusinessException(ErrorCode.RESOURCE_NOT_FOUND)
+
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .header("Authorization", authHeader)
+            )
+                .andExpect(status().isNotFound)
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+        }
+
+        @Test
+        @DisplayName("Access Token 검증 실패 시 401 UNAUTHORIZED")
+        fun shouldReturn401WhenTokenInvalid() {
+            every { userService.withdraw(userId, authHeader) } throws
+                BusinessException(ErrorCode.INVALID_TOKEN)
+
+            mockMvc.perform(
+                delete("/users/me")
+                    .with(csrf())
+                    .header("X-User-Id", userId.toString())
+                    .header("X-User-Role", "USER")
+                    .header("Authorization", authHeader)
+            )
+                .andExpect(status().isUnauthorized)
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
         }
     }
 }

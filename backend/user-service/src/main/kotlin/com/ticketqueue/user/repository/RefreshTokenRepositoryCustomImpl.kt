@@ -21,4 +21,17 @@ class RefreshTokenRepositoryCustomImpl(
             )
             .execute()
     }
+
+    override fun revokeAllActiveByUserId(userId: UUID, now: LocalDateTime): Long {
+        val token = QRefreshToken.refreshToken
+        return queryFactory
+            .update(token)
+            .set(token.revoked, true)
+            .set(token.revokedAt, now)
+            .where(
+                token.user.id.eq(userId),
+                token.revoked.isFalse
+            )
+            .execute()
+    }
 }
