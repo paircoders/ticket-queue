@@ -10,10 +10,12 @@ import com.ticketqueue.event.exception.EventException
 import com.ticketqueue.event.service.ScheduleService
 import io.mockk.every
 import io.mockk.mockk
+import jakarta.validation.Validation
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.aop.framework.ProxyFactory
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -23,6 +25,8 @@ import org.hamcrest.Matchers.not
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.validation.beanvalidation.MethodValidationInterceptor
+import java.time.LocalDateTime
 import java.util.UUID
 
 class InternalScheduleControllerTest {
@@ -38,7 +42,12 @@ class InternalScheduleControllerTest {
     @BeforeEach
     fun setUp() {
         scheduleService = mockk()
-        val controller = InternalScheduleController(scheduleService)
+        val rawController = InternalScheduleController(scheduleService)
+        // @Validated + @Size 가 standalone MockMvc 에서 동작하도록 AOP 프록시 래핑
+        val proxyFactory = ProxyFactory(rawController).apply {
+            addAdvice(MethodValidationInterceptor(Validation.buildDefaultValidatorFactory().validator))
+        }
+        val controller = proxyFactory.proxy as InternalScheduleController
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(GlobalExceptionHandler())
             .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
@@ -150,6 +159,71 @@ class InternalScheduleControllerTest {
                 .andExpect(status().isOk)
                 .andExpect(jsonPath("$.sellable").value(false))
                 .andExpect(jsonPath("$.reason").value("SCHEDULE_NOT_AVAILABLE"))
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /internal/schedules/batch")
+    inner class GetScheduleInfoBatch {
+
+        @Test
+        @DisplayName("200 OK - 회차 핵심 정보 목록을 반환한다")
+        fun success() {
+            val id1 = UUID.randomUUID()
+            val id2 = UUID.randomUUID()
+            val eventIdFixture = UUID.randomUUID()
+            val now = LocalDateTime.of(2026, 6, 1, 19, 0)
+            val response = ScheduleDto.ScheduleInfoBatchResponse(
+                schedules = listOf(
+                    ScheduleDto.ScheduleInfoResponse(id1, eventIdFixture, now, now.plusHours(2), now.minusDays(10), now.minusHours(1)),
+                    ScheduleDto.ScheduleInfoResponse(id2, eventIdFixture, now.plusDays(1), now.plusDays(1).plusHours(2), now.minusDays(10), now.plusDays(1).minusHours(1))
+                )
+            )
+            every { scheduleService.getScheduleInfoBatch(listOf(id1, id2)) } returns response
+
+            mockMvc.perform(get("/internal/schedules/batch").param("scheduleIds", id1.toString(), id2.toString()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.schedules.length()").value(2))
+                .andExpect(jsonPath("$.schedules[0].scheduleId").value(id1.toString()))
+                .andExpect(jsonPath("$.schedules[0].eventId").value(eventIdFixture.toString()))
+                .andExpect(jsonPath("$.schedules[1].scheduleId").value(id2.toString()))
+        }
+
+        @Test
+        @DisplayName("200 OK - 미존재 ID 는 응답에서 제외된다")
+        fun missingIdsExcluded() {
+            val id1 = UUID.randomUUID()
+            val missingId = UUID.randomUUID()
+            val eventIdFixture = UUID.randomUUID()
+            val now = LocalDateTime.of(2026, 6, 1, 19, 0)
+            val response = ScheduleDto.ScheduleInfoBatchResponse(
+                schedules = listOf(
+                    ScheduleDto.ScheduleInfoResponse(id1, eventIdFixture, now, now.plusHours(2), now.minusDays(10), now.minusHours(1))
+                )
+            )
+            every { scheduleService.getScheduleInfoBatch(listOf(id1, missingId)) } returns response
+
+            mockMvc.perform(get("/internal/schedules/batch").param("scheduleIds", id1.toString(), missingId.toString()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.schedules.length()").value(1))
+                .andExpect(jsonPath("$.schedules[0].scheduleId").value(id1.toString()))
+        }
+
+        @Test
+        @DisplayName("400 Bad Request - scheduleIds 파라미터 누락 시 INVALID_INPUT")
+        fun missingParameter() {
+            mockMvc.perform(get("/internal/schedules/batch"))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+        }
+
+        @Test
+        @DisplayName("400 Bad Request - scheduleIds size 가 100을 초과하면 INVALID_INPUT")
+        fun sizeTooLarge() {
+            val ids = (1..101).map { UUID.randomUUID().toString() }.toTypedArray()
+            mockMvc.perform(get("/internal/schedules/batch").param("scheduleIds", *ids))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
         }
     }
 }

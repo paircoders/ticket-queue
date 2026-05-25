@@ -339,6 +339,46 @@ class EventService(
         return EventDto.DeleteResponse(message = "Event deleted successfully")
     }
 
+    /**
+     * 공연 핵심 정보 조회 (내부 API용 — Reservation Service 등 타 서비스가 공연 메타 조립 시 사용)
+     *
+     * - 미존재 시: EVENT_NOT_FOUND (404)
+     * - venue/hall은 fetch join으로 함께 로드되어 N+1 회피
+     */
+    fun getEventInfo(eventId: UUID): EventDto.EventInfoResponse {
+        val event = eventRepository.findEventWithVenueAndHall(eventId)
+            ?: throw EventException(ErrorCode.EVENT_NOT_FOUND)
+        return EventDto.EventInfoResponse(
+            eventId = event.id!!,
+            title = event.title,
+            artist = event.artist,
+            venueName = event.venue.name,
+            hallName = event.hall.name
+        )
+    }
+
+    /**
+     * 공연 핵심 정보 배치 조회 (내부 API용 — Reservation Service 예매 내역 페이지당 N개 공연 일괄 조립)
+     *
+     * - 미존재 ID는 응답에서 제외 (요청 size 와 응답 size 불일치 가능)
+     * - venue/hall fetch join으로 단일 쿼리 N+1 회피
+     */
+    fun getEventInfoBatch(eventIds: List<UUID>): EventDto.EventInfoBatchResponse {
+        if (eventIds.isEmpty()) return EventDto.EventInfoBatchResponse(emptyList())
+        val events = eventRepository.findEventsWithVenueAndHall(eventIds)
+        return EventDto.EventInfoBatchResponse(
+            events.map { event ->
+                EventDto.EventInfoResponse(
+                    eventId = event.id!!,
+                    title = event.title,
+                    artist = event.artist,
+                    venueName = event.venue.name,
+                    hallName = event.hall.name
+                )
+            }
+        )
+    }
+
     // ===== Private Helper Methods =====
 
     private fun findActiveEvent(eventId: UUID): Event {

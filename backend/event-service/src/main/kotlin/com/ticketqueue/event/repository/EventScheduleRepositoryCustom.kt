@@ -25,4 +25,12 @@ interface EventScheduleRepositoryCustom {
     ): List<ScheduleCleanupCursor>
 
     fun findByIdWithEvent(id: UUID): Optional<EventSchedule>
+
+    /**
+     * 회차 ID 목록을 단일 쿼리로 fetch join 조회한다 (내부 배치 API용)
+     *
+     * Reservation Service의 예매 내역 batch 조회 시 N+1 회피용.
+     * 미존재 ID는 결과에서 제외된다.
+     */
+    fun findByIdsWithEvent(ids: List<UUID>): List<EventSchedule>
 }

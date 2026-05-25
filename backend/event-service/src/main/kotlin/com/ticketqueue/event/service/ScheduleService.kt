@@ -286,6 +286,29 @@ class ScheduleService(
     }
 
     /**
+     * 회차 핵심 정보 배치 조회 (내부 API용 — Reservation Service 예매 내역 페이지 일괄 조립)
+     *
+     * - 미존재 ID는 응답에서 제외 (요청 size 와 응답 size 불일치 가능)
+     * - event fetch join으로 단일 쿼리 N+1 회피
+     */
+    fun getScheduleInfoBatch(scheduleIds: List<UUID>): ScheduleDto.ScheduleInfoBatchResponse {
+        if (scheduleIds.isEmpty()) return ScheduleDto.ScheduleInfoBatchResponse(emptyList())
+        val schedules = eventScheduleRepository.findByIdsWithEvent(scheduleIds)
+        return ScheduleDto.ScheduleInfoBatchResponse(
+            schedules.map { schedule ->
+                ScheduleDto.ScheduleInfoResponse(
+                    scheduleId = schedule.id!!,
+                    eventId = schedule.event.id!!,
+                    eventStartAt = schedule.eventStartAt,
+                    eventEndAt = schedule.eventEndAt,
+                    saleStartAt = schedule.saleStartAt,
+                    saleEndAt = schedule.saleEndAt
+                )
+            }
+        )
+    }
+
+    /**
      * 종료/취소 후 24시간 이상 경과한 회차 ID 목록을 모두 반환한다 (내부 API용 — Queue Service 정리 배치 전용)
      *
      * 커서 기반 페이지네이션으로 1000건씩 반복 조회하여 1000건 초과 데이터도 누락 없이 처리한다.

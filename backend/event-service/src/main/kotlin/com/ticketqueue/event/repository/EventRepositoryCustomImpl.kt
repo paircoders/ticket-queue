@@ -96,6 +96,21 @@ class EventRepositoryCustomImpl(
             .fetchOne()
     }
 
+    override fun findEventsWithVenueAndHall(eventIds: List<UUID>): List<Event> {
+        if (eventIds.isEmpty()) return emptyList()
+        val event = QEvent.event
+
+        return queryFactory
+            .selectFrom(event)
+            .leftJoin(event.venue).fetchJoin()
+            .leftJoin(event.hall).fetchJoin()
+            .where(
+                event.id.`in`(eventIds),
+                event.deletedAt.isNull
+            )
+            .fetch()
+    }
+
     override fun findScheduleIdsWithAvailableSeats(scheduleIds: List<UUID>): Set<UUID> {
         if (scheduleIds.isEmpty()) return emptySet()
         val seat = QSeat.seat

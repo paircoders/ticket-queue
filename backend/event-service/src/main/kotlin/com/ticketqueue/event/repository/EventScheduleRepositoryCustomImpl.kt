@@ -58,4 +58,15 @@ class EventScheduleRepositoryCustomImpl(
                 .fetchOne()
         )
     }
+
+    override fun findByIdsWithEvent(ids: List<UUID>): List<EventSchedule> {
+        if (ids.isEmpty()) return emptyList()
+        val schedule = QEventSchedule.eventSchedule
+        val event = QEvent.event
+        return queryFactory
+            .selectFrom(schedule)
+            .join(schedule.event, event).fetchJoin()
+            .where(schedule.id.`in`(ids))
+            .fetch()
+    }
 }

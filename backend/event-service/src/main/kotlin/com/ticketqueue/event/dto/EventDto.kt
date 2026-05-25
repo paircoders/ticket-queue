@@ -189,4 +189,20 @@ class EventDto {
     data class DeleteResponse(
         val message: String
     )
+
+    /**
+     * 내부 서비스용 공연 핵심 정보 — 예매 내역 조회 등 공용
+     *
+     * Reservation Service가 좌석 → 회차 → 공연 메타 조립 시 사용한다.
+     */
+    data class EventInfoResponse(
+        val eventId: UUID,
+        val title: String,
+        val artist: String,
+        val venueName: String,
+        val hallName: String
+    )
+
+    /** 공연 정보 배치 조회 응답 — 요청 ID 중 미존재 ID는 응답에서 제외된다 */
+    data class EventInfoBatchResponse(val events: List<EventInfoResponse>)
 }

@@ -1051,4 +1051,85 @@ class EventServiceTest {
             verify { redisTemplate.execute(any<RedisCallback<Any?>>()) }  // list cache SCAN
         }
     }
+
+    @Nested
+    @DisplayName("getEventInfo")
+    inner class GetEventInfo {
+
+        @Test
+        @DisplayName("공연 핵심 정보(EventInfoResponse)를 반환한다")
+        fun success() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+
+            every { eventRepository.findEventWithVenueAndHall(eventId) } returns event
+
+            val result = eventService.getEventInfo(eventId)
+
+            assertEquals(eventId, result.eventId)
+            assertEquals("BTS World Tour", result.title)
+            assertEquals("BTS", result.artist)
+            assertEquals("올림픽공원", result.venueName)
+            assertEquals("KSPO DOME", result.hallName)
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 공연 조회 시 EVENT_NOT_FOUND 예외가 발생한다")
+        fun notFound() {
+            every { eventRepository.findEventWithVenueAndHall(eventId) } returns null
+
+            val ex = assertThrows<EventException> { eventService.getEventInfo(eventId) }
+            assertEquals(ErrorCode.EVENT_NOT_FOUND, ex.errorCode)
+        }
+    }
+
+    @Nested
+    @DisplayName("getEventInfoBatch")
+    inner class GetEventInfoBatch {
+
+        @Test
+        @DisplayName("요청한 공연들의 핵심 정보 목록을 반환한다")
+        fun success() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val ids = listOf(eventId)
+
+            every { eventRepository.findEventsWithVenueAndHall(ids) } returns listOf(event)
+
+            val result = eventService.getEventInfoBatch(ids)
+
+            assertEquals(1, result.events.size)
+            assertEquals(eventId, result.events[0].eventId)
+            assertEquals("BTS", result.events[0].artist)
+            assertEquals("올림픽공원", result.events[0].venueName)
+        }
+
+        @Test
+        @DisplayName("미존재 ID는 응답에서 제외된다 (요청 size 와 응답 size 불일치 가능)")
+        fun missingIdsExcluded() {
+            val venue = createVenue()
+            val hall = createHall(venue)
+            val event = createEvent(venue, hall)
+            val missingId = UUID.randomUUID()
+            val ids = listOf(eventId, missingId)
+
+            every { eventRepository.findEventsWithVenueAndHall(ids) } returns listOf(event)
+
+            val result = eventService.getEventInfoBatch(ids)
+
+            assertEquals(1, result.events.size)
+            assertEquals(eventId, result.events[0].eventId)
+        }
+
+        @Test
+        @DisplayName("빈 목록 입력 시 빈 응답을 반환하고 DB 조회를 생략한다")
+        fun emptyInput() {
+            val result = eventService.getEventInfoBatch(emptyList())
+
+            assertEquals(0, result.events.size)
+            verify(exactly = 0) { eventRepository.findEventsWithVenueAndHall(any()) }
+        }
+    }
 }
