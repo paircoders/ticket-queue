@@ -4,7 +4,7 @@
 >
 > **Source of truth**: GitHub Issues (open 상태). 본 파일은 작업 순서와 점유 현황의 ledger이며, 이슈의 상세 작업 항목은 각 GitHub 이슈 본문을 참조한다.
 >
-> **Last sync**: 2026-05-24 / 17 open issues
+> **Last sync**: 2026-05-25 / GitHub PR 머지 상태 기준 재정합
 
 ---
 
@@ -61,7 +61,7 @@
 | # | Done | Issue | Title | Deps | Claim | Branch | PR |
 |---|------|-------|-------|------|-------|--------|----|
 | 2 | [x] | [#55](https://github.com/paircoders/ticket-queue/issues/55) | [Reservation] Transactional Outbox 패턴 구현 | #228 | session-ralph-228-55 | `feature/228-55-outbox-recorder-infra` | [#230](https://github.com/paircoders/ticket-queue/pull/230) |
-| 3 | [x] | [#63](https://github.com/paircoders/ticket-queue/issues/63) | [Payment] Transactional Outbox 패턴 구현 | #228 |  | `feature/63-payment-outbox` |  |
+| 3 | [x] | [#63](https://github.com/paircoders/ticket-queue/issues/63) | [Payment] Transactional Outbox 패턴 구현 | #228 |  | `feature/63-payment-outbox` | [#233](https://github.com/paircoders/ticket-queue/pull/233) |
 
 ---
 
@@ -72,9 +72,9 @@ Outbox 위에서 동작하거나 완전히 독립적인 핵심 백엔드 API. **
 | # | Done | Issue | Title | Deps | Claim | Branch | PR |
 |---|------|-------|-------|------|-------|--------|----|
 | 4 | [x] | [#59](https://github.com/paircoders/ticket-queue/issues/59) | [Payment] 결제 승인 API 구현 | #63 | session-aa382e34 | `feature/59-payment-confirm-api` | [#234](https://github.com/paircoders/ticket-queue/pull/234) |
-| 5 | [ ] | [#61](https://github.com/paircoders/ticket-queue/issues/61) | [Payment] Timeout 및 Circuit Breaker 설정 | #59 |  | `feature/61-payment-resilience` |  |
-| 6 | [ ] | [#64](https://github.com/paircoders/ticket-queue/issues/64) | [Payment] 결제 조회 API 구현 | #59 | session-b14fa667 | `feature/64-payment-query-api` | [#238](https://github.com/paircoders/ticket-queue/pull/238) |
-| 7 | [ ] | [#52](https://github.com/paircoders/ticket-queue/issues/52) | [Reservation] 예매 내역 조회 API 구현 | — | session-40d186c1 | `feature/52-reservation-query-api` |  |
+| 5 | [x] | [#61](https://github.com/paircoders/ticket-queue/issues/61) | [Payment] Timeout 및 Circuit Breaker 설정 | #59 |  | `feature/61-payment-resilience` | [#236](https://github.com/paircoders/ticket-queue/pull/236) |
+| 6 | [x] | [#64](https://github.com/paircoders/ticket-queue/issues/64) | [Payment] 결제 조회 API 구현 | #59 | session-b14fa667 | `feature/64-payment-query-api` | [#238](https://github.com/paircoders/ticket-queue/pull/238) |
+| 7 | [x] | [#52](https://github.com/paircoders/ticket-queue/issues/52) | [Reservation] 예매 내역 조회 API 구현 | — | session-40d186c1 | `feature/52-reservation-query-api` | [#237](https://github.com/paircoders/ticket-queue/pull/237) |
 | 8 | [x] | [#54](https://github.com/paircoders/ticket-queue/issues/54) | [Reservation] 선점 만료 자동 취소 배치 | #55 | session-ded1f1c5 | `feature/54-reservation-expire-batch` | [#235](https://github.com/paircoders/ticket-queue/pull/235) |
 
 ---
@@ -117,9 +117,9 @@ Outbox 위에서 동작하거나 완전히 독립적인 핵심 백엔드 API. **
 
 ## 진행 현황 요약
 
-- **총 17 이슈** · 완료 0 · 진행 중 0 · 미시작 17
-- 다음 시작 가능 (의존성 없거나 충족): `#228`, `#52`, `#27`, `#28`, `#29`
-- mock 기반 soft 선행 가능: `#119`(soft: #59), `#121`(soft: #27, #52)
-- hard 의존성으로 즉시 시작 불가: `#120`(needs #119), `#122`(needs #119, #120, #121)
+- **총 17 이슈** · 완료 8 (`#228`, `#55`, `#63`, `#59`, `#61`, `#54`, `#52`, `#64`) · 진행 중 0 · 미시작 9
+- 다음 시작 가능 (의존성 충족): `#53`(deps #55/#63/#59 모두 ✓ — Tier 3 unlock), `#27`, `#28`, `#29`
+- mock 기반 soft 선행 가능: `#119`(soft: #59 ✓ — 실 API 가능), `#121`(soft: #27 만 남음, #52 ✓)
+- hard 의존성으로 즉시 시작 불가: `#62`(needs #53), `#120`(needs #119), `#122`(needs #119, #120, #121)
 
 > 위 요약은 수동 갱신 권장. 정확한 카운트는 표의 체크박스를 직접 확인하세요.
