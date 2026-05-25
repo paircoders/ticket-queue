@@ -30,13 +30,13 @@ class User(
     val passwordHash: String,
 
     @Column(nullable = false)
-    val name: String,
+    var name: String,
 
     @Column(nullable = false)
-    val phone: String,
+    var phone: String,
 
     @Column(name = "phone_hash", nullable = false)
-    val phoneHash: String,
+    var phoneHash: String,
 
     @Column(length = 512)
     val ci: String? = null,
