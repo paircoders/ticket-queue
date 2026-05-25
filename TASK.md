@@ -110,7 +110,7 @@ Outbox 위에서 동작하거나 완전히 독립적인 핵심 백엔드 API. **
 |---|------|-------|-------|------|-------|--------|----|
 | 14 | [ ] | [#121](https://github.com/paircoders/ticket-queue/issues/121) | [Frontend] 마이페이지 (프로필, 예매 내역) | (#27), (#52) |  | `feature/121-frontend-mypage` |  |
 | 15 | [ ] | [#119](https://github.com/paircoders/ticket-queue/issues/119) | [Frontend] 결제 페이지 (PortOne SDK, 3단계 결제 플로우) | (#59) |  | `feature/119-frontend-payment` |  |
-| 16 | [ ] | [#120](https://github.com/paircoders/ticket-queue/issues/120) | [Frontend] 결제 완료/실패 페이지 | #119 | session-0e341b7a | `feature/120-frontend-payment-result` |  |
+| 16 | [ ] | [#120](https://github.com/paircoders/ticket-queue/issues/120) | [Frontend] 결제 완료/실패 페이지 | #119 | session-0e341b7a | `feature/120-frontend-payment-result` | [#246](https://github.com/paircoders/ticket-queue/pull/246) |
 | 17 | [ ] | [#122](https://github.com/paircoders/ticket-queue/issues/122) | [Frontend] 성능 최적화, SEO 마무리, 번들 분석 | #119, #120, #121 |  | `feature/122-frontend-perf-seo` |  |
 
 ---
