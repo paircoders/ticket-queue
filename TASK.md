@@ -115,6 +115,17 @@ Outbox 위에서 동작하거나 완전히 독립적인 핵심 백엔드 API. **
 
 ---
 
+## Bug Fixes — Test Infrastructure
+
+| # | Done | Issue | Title | Deps | Claim | Branch | PR |
+|---|------|-------|-------|------|-------|--------|----|
+| B1 | [ ] | [#231](https://github.com/paircoders/ticket-queue/issues/231) | [Common/Test] OutboxPollerIntegrationTest race fix (single-thread polling) | — | session-ralph-231 | `fix/231-outbox-poller-integration-test-flaky` |  |
+| B2 | [ ] | [#248](https://github.com/paircoders/ticket-queue/issues/248) | [Common/Test] common-kafka 통합 테스트 환경 — @ServiceConnection + KafkaContainer 불안정 | — |  | `fix/248-common-kafka-test-env` |  |
+
+> #231 fix 는 race condition layer (CME 0 건, single-thread polling 도입) 만 해결. 6/6 green acceptance 는 #248 환경 fix 후 검증 가능.
+
+---
+
 ## 진행 현황 요약
 
 - **총 17 이슈** · 완료 8 (`#228`, `#55`, `#63`, `#59`, `#61`, `#54`, `#52`, `#64`) · 진행 중 0 · 미시작 9
