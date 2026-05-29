@@ -1,7 +1,7 @@
 ## 11. 요구사항 커버리지 감사 & 보강
 
-> **목적**: `docs/REQUIREMENTS.md`의 110개 요구사항(REQ-xxx-xxx)을 통합테스트 문서(00~10)의 테스트 케이스(TC)와 매핑하여, "필수" 요구사항의 통합테스트 커버리지를 정량 감사하고 미커버 영역에 대한 보강 TC를 정의한다.
-> **감사 대상 문서**: `00_environment_setup.md` ~ `10_frontend_e2e.md` (총 TC 약 223건, 10_frontend_e2e.md 신규 TC-FE-023~026 4건 추가 반영)
+> **목적**: `docs/REQUIREMENTS.md`의 135개 요구사항(REQ-xxx-xxx)을 통합테스트 문서(00~10)의 테스트 케이스(TC)와 매핑하여, "필수" 요구사항의 통합테스트 커버리지를 정량 감사하고 미커버 영역에 대한 보강 TC를 정의한다.
+> **감사 대상 문서**: `00_environment_setup.md` ~ `10_frontend_e2e.md` (총 TC 239건; 11장 보강 GAP TC 6건 포함 시 전체 245건)
 > **매핑 원칙**:
 > - 각 TC의 `관련 REQ` 필드에 명시된 REQ를 "직접 커버"로 집계한다.
 > - `관련 REQ: 해당 없음`이지만 TC 제목/검증 내용이 특정 REQ 기능을 실증하는 경우 "기능 커버(암묵)"로 표기하되, 카테고리 커버리지 %에는 직접 커버만 반영한다(보수적 집계).
@@ -11,18 +11,18 @@
 
 ### 11.1 카테고리별 커버리지 요약
 
-| 카테고리 | 전체 REQ 수 | 필수 수 | 커버된 필수 수 | 커버리지 % | 비고 |
+| 카테고리 | 전체 REQ 수 | 필수 수 | 커버된 필수 수(직접) | 커버리지 % | 비고 |
 |---|---|---|---|---|---|
-| AUTH (회원/인증) | 20 | 11 | 10 | 90.9% | REQ-AUTH-001/003/004/005/006/008/009/010/011/014/017 중 010 제외 모두 커버. REQ-AUTH-010(블랙리스트)는 TC-USER-011/022에서 실증되나 관련 REQ 라벨은 008/AUTH-011로 표기됨 → 라벨 보정 필요 |
-| EVT (공연 관리) | 24 | 14 | 11 | 78.6% | REQ-EVT-007(상태관리), REQ-EVT-009(등급관리), REQ-EVT-018(좌석 초기화 자동생성)은 별도 직접 TC 미존재(EVT-001에 부분 포함). REQ-EVT-016(Kafka Consumer)은 TC-FLOW-004로 커버 |
-| QUEUE (대기열) | 11 | 9 | 9 | 100% | 필수 9건(001~006,008,009,010,011) 전부 커버. 선택(007)도 커버 |
-| RSV (예매) | 12 | 10 | 10 | 100% | 필수 10건 전부 커버(001~008,011,012). 선택(REQ-RSV-006은 필수) — RSV-006/009/010 중 006만 필수이며 커버됨 |
-| PAY (결제) | 15 | 11 | 10 | 90.9% | REQ-PAY-001(결제수단 CARD), REQ-PAY-003(상태머신), REQ-PAY-008(타임아웃 10초) 중 PAY-008 직접 TC 미존재. PAY-001/003은 PAY-001/002에 암묵 포함 |
-| GW (게이트웨이) | 18 | 9 | 8 | 88.9% | 필수 9건(001~004,007,009,015,016,017) 중 REQ-GW-001(동적 라우팅), REQ-GW-007(글로벌 타임아웃 30초→504) 직접 TC 미존재. 라우팅은 다수 TC에서 암묵 실증 |
-| INT (내부통신 보안) | 10 | 7 | 5 | 71.4% | REQ-INT-003(Secrets 저장), REQ-INT-004(헤더 전송), REQ-INT-006(인증 실패 로깅), REQ-INT-007(VPC 네트워크) 중 003/006/007 미커버. 004는 SEC-016/INT-001로 암묵 |
-| FE (프론트엔드) | 25 | 21 | 20 | 95.2% | 라벨 보정 완료(전 TC에 REQ-FE 라벨 부여, "해당 없음" 0건), 신규 TC-FE-023~026 추가. REQ-FE-001~024(로컬 검증 가능 필수) 전부 직접 커버, REQ-FE-025(Vercel 배포)만 로컬 범위 제외 |
+| AUTH (회원/인증) | 20 | 11 | 11 | 100% | 필수 11건(001/003/004/005/006/008/009/010/011/014/017) 전부 직접 커버 |
+| EVT (공연 관리) | 24 | 14 | 10 | 71.4% | REQ-EVT-007/009/010/018은 TC-EVT-001 등에 암묵 포함(라벨 보정 대상). REQ-EVT-016은 TC-FLOW-004로 커버 |
+| QUEUE (대기열) | 11 | 10 | 9 | 90.0% | 필수 10건(001~006,008,009,010,011). REQ-QUEUE-009(SLO)는 동시성(TC-QUEUE-020)만 검증하고 P95/가용성은 성능테스트 범위라 "부분". 선택 007도 커버 |
+| RSV (예매) | 12 | 10 | 10 | 100% | 필수 10건(001~008,011,012) 전부 커버. REQ-RSV-009/010은 선택 |
+| PAY (결제) | 15 | 12 | 9 | 75.0% | REQ-PAY-001/003은 PAY-001/002에 암묵, REQ-PAY-008(타임아웃 10초) 미커버 → TC-GAP-002 보강 |
+| GW (게이트웨이) | 18 | 9 | 7 | 77.8% | REQ-GW-001(동적 라우팅)은 암묵 실증, REQ-GW-007(글로벌 타임아웃 30초→504) 미커버 → TC-GAP-001 보강 |
+| INT (내부통신 보안) | 10 | 8 | 4 | 50.0% | REQ-INT-003/004는 암묵, REQ-INT-006(인증 실패 로깅) → TC-GAP-003, REQ-INT-007(VPC) → TC-GAP-004(조건부) 보강 |
+| FE (프론트엔드) | 25 | 25 | 24 | 96.0% | 전 TC에 REQ-FE 라벨 부여 완료("해당 없음" 0건). REQ-FE-001~024 전부 직접 커버, REQ-FE-025(Vercel 배포)만 로컬 범위 제외 |
 
-> **종합**: 전체 110 REQ 중 필수(`필수`) 요구사항은 **82건**. FE 라벨 보정 완료 반영 후, 통합테스트 `관련 REQ` 라벨 기준 직접 커버된 필수 REQ는 **73건**(FE 라벨 보정으로 +20건: 53 → 73), 라벨 기준 커버리지 약 **89.0%**. FE 라벨 보정 완료로 FE 카테고리는 REQ-FE-025(Vercel 배포)를 제외한 필수 전부가 커버되었으며, 잔여 갭은 INT/EVT/PAY/GW 일부 비기능 요구사항(TC-GAP-001~005)에 집중된다.
+> **종합**: 전체 **135개** REQ 중 `필수`는 **99건**. 통합테스트 `관련 REQ` 라벨 기준 **직접 커버**된 필수 REQ는 **84건**(약 **84.8%**). 여기에 (a) "암묵" 라벨 9건 보정(TC-GAP-FE-LABEL 등), (b) 11.3 보강 TC(TC-GAP-001/002/003/005 → GW-007·PAY-008·INT-006·EVT-009/018), (c) REQ-QUEUE-009 SLO 측정 보완을 반영하면 **로컬 검증 가능한 필수 97건 전부**가 커버된다. 잔여 2건(REQ-INT-007 VPC, REQ-FE-025 Vercel)은 인프라/배포 영역으로 TC-GAP-004/009 조건부 증빙 또는 IaC 리뷰로 대체한다.
 
 ---
 
@@ -96,7 +96,7 @@
 | REQ-QUEUE-006 | 대기열 용량 제한(50,000) | 필수 | TC-QUEUE-004 | 커버 |
 | REQ-QUEUE-007 | 대기열 모니터링 API | 선택 | TC-QUEUE-016, TC-QUEUE-017 | 커버 |
 | REQ-QUEUE-008 | Rate Limiting(15회/분) | 필수 | TC-QUEUE-006, TC-QUEUE-007 | 커버 |
-| REQ-QUEUE-009 | 대기열 성능 목표(SLO) | 필수 | TC-QUEUE-020 | 커버 |
+| REQ-QUEUE-009 | 대기열 성능 목표(SLO) | 필수 | TC-QUEUE-020(동시성 정합성) | 부분(P95/가용성 측정은 성능테스트 범위) |
 | REQ-QUEUE-010 | Queue Token 헤더 전달/검증 | 필수 | TC-GW-012, TC-GW-013 | 커버 |
 | REQ-QUEUE-011 | 다중 대기열 제한(1회차) | 필수 | TC-QUEUE-002,003, TC-FLOW-012 | 커버 |
 
@@ -222,9 +222,12 @@
 - **관련 REQ**: REQ-GW-007
 - **분류**: 예외, 경계값
 - **우선순위**: P0(필수/핵심)
-- **사전조건**: api-gateway 기동 중, 응답을 35초 지연시키는 stub 다운스트림(또는 `nc`로 무응답 포트) 준비, 글로벌 `response-timeout: 30s` 설정 확인
+- **사전조건**: api-gateway 기동 중, 글로벌 `response-timeout: 30s` 설정 확인. **user-service(8081)를 먼저 중지**(`docker stop ticket-user-service` 또는 bootRun 미기동)한 뒤 8081 포트를 35초 지연 stub에 내준다(실행 단계 1의 옵션 참조)
 - **실행 단계**:
-  1. 30초를 초과(예: 35초) 지연 응답하는 stub 서버를 user-service 라우트 대상 포트(8081)에 바인딩
+  1. user-service(8081) 중지 후, 8081 포트에 35초 지연 stub을 바인딩한다(다음 중 택1):
+     - **Option 1 — WireMock**: `docker run --rm -p 8081:8080 wiremock/wiremock` 기동 후 매핑 `{"request":{"urlPattern":".*"},"response":{"status":200,"fixedDelayMilliseconds":35000}}` 등록
+     - **Option 2 — Python**: 요청 핸들러에서 `time.sleep(35)` 후 200을 반환하는 `http.server` 스크립트를 8081에 기동
+     - **Option 3 — 무응답(`nc -l 8081`)**: '지연 후 응답'이 아닌 '무응답'이므로 게이트웨이 30초 컷오프 발동만 검증된다(35초 정상 응답 시나리오와 구분)
   2. 보호 엔드포인트 호출 후 응답 시간 측정:
      ```bash
      curl -s -o /dev/null -w "%{http_code} %{time_total}\n" \
@@ -241,19 +244,20 @@
 - **관련 REQ**: REQ-PAY-008
 - **분류**: 예외, 경계값
 - **우선순위**: P0(필수/핵심)
-- **사전조건**: payment-service 기동 중, PortOne 호출을 12초 지연시키는 mock 엔드포인트로 `portone.base-url` 임시 변경, 결제 confirm 대상 PENDING 결제 1건 준비
+- **사전조건**: payment-service 기동 중. PortOne 호출을 12초 지연시키는 mock 서버(WireMock `fixedDelayMilliseconds: 12000` 등)를 띄우고, payment-service의 설정 키 `external.portone.base-url` 을 mock 주소로 오버라이드한다(예: `SPRING_APPLICATION_JSON='{"external":{"portone":{"base-url":"http://localhost:9999"}}}'` 환경변수로 재기동, 또는 integrationTest `@DynamicPropertySource`). 결제 confirm 대상 PENDING 결제 1건 준비
 - **실행 단계**:
   1. PortOne mock을 12초 지연 응답으로 설정
-  2. 결제 승인(confirm) 요청:
+  2. 결제 승인(confirm) 요청 — confirm은 JWT 기반 외부 엔드포인트(`POST /payments/confirm`)이며 paymentId는 요청 본문에 담는다:
      ```bash
      curl -s -o /dev/null -w "%{http_code} %{time_total}\n" \
-       -X POST http://localhost:8086/payments/<paymentId>/confirm \
-       -H "X-Service-Api-Key: $INTERNAL_API_KEY" \
-       -H "Content-Type: application/json" -d '{"paymentKey":"<key>","amount":<amt>}'
+       -X POST http://localhost:8085/payments/confirm \
+       -H "Authorization: Bearer <유효_JWT>" \
+       -H "Content-Type: application/json" \
+       -d '{"paymentId":"<paymentId>","paymentKey":"<key>","amount":<amt>}'
      ```
   3. payment_service.payments 상태 확인:
      ```bash
-     docker exec ticket-postgres psql -U payment_svc_user -d ticketdb \
+     docker exec ticket-postgres psql -U payment_svc_user -d ticket_queue \
        -c "SELECT status FROM payment_service.payments WHERE id='<paymentId>';"
      ```
 - **기대 결과**: 약 10초 후 타임아웃(`time_total ≈ 10s`), HTTP 503/504, 결제 상태 `PENDING` 유지(SUCCESS 미전이), Resilience4j timeout 메트릭 증가
@@ -319,7 +323,7 @@
      ```
   2. DB에서 등급별 좌석 수와 가격 확인:
      ```bash
-     docker exec ticket-postgres psql -U event_svc_user -d ticketdb \
+     docker exec ticket-postgres psql -U event_svc_user -d ticket_queue \
        -c "SELECT grade, COUNT(*), price FROM event_service.seats WHERE schedule_id='<scheduleId>' GROUP BY grade, price ORDER BY grade;"
      ```
 - **기대 결과**: 응답에 VIP/S/A/B 4개 등급 그룹이 각각 가격과 함께 반환, 좌석 자동 초기화로 생성된 총 좌석 수 = seatTemplate capacity 합과 일치
@@ -384,7 +388,7 @@
 본 프로젝트는 아래 **세 조건을 모두 충족**할 때 "프로젝트 완성"으로 간주한다.
 
 1. **모든 P0 항목 통과**: 통합테스트 문서 00~11 전체의 우선순위 `P0(필수/핵심)` TC가 전부 `- [x]`(통과) 상태여야 한다. P1/P2 미실행 항목이 남아 있어도 P0가 하나라도 미통과면 완성으로 보지 않는다.
-2. **필수 REQ 100% 커버**: REQUIREMENTS.md의 `필수` 분류 요구사항 82건이 전부 1개 이상의 통과한 TC로 커버되어야 한다(11.2 매핑표의 모든 `필수` 행 상태가 `커버` — "암묵"은 TC-GAP-FE-LABEL로 라벨 보정 완료, "미커버"는 11.3 보강 TC 통과로 해소). 단, 로컬 통합테스트로 검증 불가한 인프라 항목(REQ-INT-007, REQ-FE-025)은 별도 인프라 점검(TC-GAP-004/009) 또는 IaC 리뷰로 대체 증빙한다.
-3. **모든 체크박스 [x]**: 11.3에서 정의한 잔존 보강 TC(TC-GAP-001 ~ TC-GAP-005, TC-GAP-009, 및 이미 완료된 TC-GAP-FE-LABEL)를 포함하여, 완성 판정 시점에 잔존하는 모든 통합테스트 체크박스가 `- [x]` 여야 한다(조건부/인프라 항목은 NA 또는 대체 증빙 명기 후 [x]). 단, TC-GAP-006/007/008은 10_frontend_e2e.md의 TC-FE-026/023/024·025로 직접 커버되어 중복 제거됐다.
+2. **필수 REQ 100% 커버**: REQUIREMENTS.md의 `필수` 분류 요구사항 99건이 전부 1개 이상의 통과한 TC로 커버되어야 한다(11.2 매핑표의 모든 `필수` 행 상태가 `커버` — "암묵"은 TC-GAP-FE-LABEL로 라벨 보정 완료, "미커버"는 11.3 보강 TC 통과로 해소). 단, 로컬 통합테스트로 검증 불가한 인프라 항목(REQ-INT-007, REQ-FE-025)은 별도 인프라 점검(TC-GAP-004/009) 또는 IaC 리뷰로 대체 증빙한다.
+3. **모든 체크박스 [x]**: 11.3에서 정의한 잔존 보강 TC(TC-GAP-001 ~ TC-GAP-005, TC-GAP-009, 및 이미 완료된 TC-GAP-FE-LABEL)를 포함하여, 완성 판정 시점에 잔존하는 모든 통합테스트 체크박스가 `- [x]` 여야 한다. 단, 로컬에서 검증 불가한 조건부/인프라 항목은 `- [x] (NA: 사유 + 대체 증빙)` 형식으로 표기하고 증빙(IaC/Security Group rule 파일 경로 또는 PR 링크 등)을 반드시 기재한다. (REQ-FE-003/013/014/018/019/020/021은 11.3 추적표대로 10_frontend_e2e.md의 TC-FE-023~026에서 직접 커버되므로 별도 GAP TC를 두지 않는다.)
 
 > 위 3개 조건 중 하나라도 미충족이면 프로젝트는 "진행 중"으로 분류하며, 미통과 P0 및 미커버 필수 REQ 목록을 회귀 백로그로 관리한다.

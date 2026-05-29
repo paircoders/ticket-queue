@@ -2,7 +2,7 @@
 
 > **영역 범위**: Next.js 16 App Router 기반 프론트엔드 전 화면 — 홈/공연목록/공연상세(SSR), 인증 플로우, 대기열 폴링, 좌석선점, PortOne 결제 3단계, 마이페이지, 미들웨어 인증가드까지 브라우저 시나리오 검증
 > **사전 준비**: Docker 인프라 실행(`cd docker && docker-compose up -d`), 백엔드 전 서비스 기동(api-gateway:8080, user-service:8081, event-service:8082, queue-service:8083, reservation-service:8084, payment-service:8085), 프론트엔드 개발 서버 기동(`cd frontend && pnpm dev`, http://localhost:3000), `.env.local` 환경 변수 설정(JWT_SECRET, QUEUE_TOKEN_SECRET, NEXT_PUBLIC_API_BASE_URL=http://localhost:8080, NEXT_PUBLIC_RECAPTCHA_SITE_KEY), DB 시드 데이터(테스트 유저 `e2e-test@example.com`, 테스트 공연/일정/좌석) 준비, reCAPTCHA mock 라우트 설정(`page.route('**/recaptcha/api.js**', ...)`)
-> **주 실행 수단**: Claude in Chrome MCP(navigate, read_page, computer, get_page_text, read_console_messages, read_network_requests, gif_creator)로 세션이 직접 화면 조작/검증
+> **주 실행 수단**: 본 시나리오는 **Playwright를 테스트 러너로 사용**한다(네트워크 모킹 `page.route()`, localStorage·캐시 제어용 `page.evaluate()`/`page.reload()`가 필요한 TC 때문). Playwright로 관찰이 어려운 시각적 확인·수동 탐색에는 Claude in Chrome MCP(navigate, read_page, computer, read_console_messages, read_network_requests, gif_creator)를 보조로 사용한다. 주의: `read_page()`는 원시 HTML/DOM 속성을, `get_page_text()`는 가시 텍스트만 반환하므로 meta·canonical 등 속성 검증에는 `read_page()` 또는 Playwright locator를 사용한다.
 > **총 항목 수**: 26
 
 ---
@@ -53,7 +53,7 @@
 - **사전조건**: DB에 테스트 공연(eventId, venueName, artist, description, 좌석등급 VIP/S) 시드 완료
 - **실행 단계**:
   1. `navigate('http://localhost:3000/events/{테스트_eventId}')`
-  2. `get_page_text()` 로 `<title>`, `<meta property="og:title">`, `<link rel="canonical">` 값 확인
+  2. `read_page()`(원시 HTML/DOM)로 `<title>` 텍스트, `<meta property="og:title">` 의 content 속성, `<link rel="canonical">` 의 href 속성 확인 (가시 텍스트만 반환하는 `get_page_text()`로는 head의 meta/link 속성을 추출할 수 없음)
   3. `read_page()` 로 `<script type="application/ld+json">` 블록 추출 후 JSON 파싱
   4. JSON-LD의 `@type === 'Event'`, `name`, `performer.name`, `location.name` 검증
   5. "좌석 정보" 섹션에서 VIP/S 등급 이름과 가격(150,000원/120,000원) 텍스트 확인

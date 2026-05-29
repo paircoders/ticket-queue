@@ -199,7 +199,7 @@
 
 ---
 
-### TC-QUEUE-011 — 대기열 이탈(WAITING 상태): Redis 키 3종 일괄 삭제
+### TC-QUEUE-011 — 대기열 이탈(WAITING 상태): Redis 키 2종 일괄 삭제
 
 - [ ] 미실행
 - **관련 REQ**: REQ-QUEUE-003

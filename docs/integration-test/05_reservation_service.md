@@ -21,7 +21,7 @@
      ```
   2. 좌석 선점 요청
      ```bash
-     curl -X POST http://localhost:8082/reservations/hold \
+     curl -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" \
        -H "X-Queue-Token: qr_test01" \
        -H "Content-Type: application/json" \
@@ -59,7 +59,7 @@
      ```bash
      for i in $(seq 1 10); do
        curl -s -o /tmp/rsv_c${i}.json -w "%{http_code}" \
-         -X POST http://localhost:8082/reservations/hold \
+         -X POST http://localhost:8084/reservations/hold \
          -H "X-User-Id: user-c0${i}" \
          -H "X-Queue-Token: qr_c0${i}" \
          -H "Content-Type: application/json" \
@@ -95,11 +95,11 @@
      ```
   2. 동일 userId로 두 요청을 동시 발사 (각각 다른 좌석 지정)
      ```bash
-     curl -s -X POST http://localhost:8082/reservations/hold \
+     curl -s -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" -H "X-Queue-Token: qr_toctou" \
        -H "Content-Type: application/json" \
        -d '{"scheduleId":"<scheduleId>","seatIds":["<seatId-P>"]}' &
-     curl -s -X POST http://localhost:8082/reservations/hold \
+     curl -s -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" -H "X-Queue-Token: qr_toctou" \
        -H "Content-Type: application/json" \
        -d '{"scheduleId":"<scheduleId>","seatIds":["<seatId-Q>"]}' &
@@ -126,7 +126,7 @@
      ```
   2. 만료된 토큰으로 선점 요청
      ```bash
-     curl -X POST http://localhost:8082/reservations/hold \
+     curl -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" \
        -H "X-Queue-Token: expired_token" \
        -H "Content-Type: application/json" \
@@ -151,7 +151,7 @@
      ```
   2. scheduleId-A 대상으로 요청
      ```bash
-     curl -X POST http://localhost:8082/reservations/hold \
+     curl -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" \
        -H "X-Queue-Token: qr_wrong_sched" \
        -H "Content-Type: application/json" \
@@ -176,7 +176,7 @@
      ```
   2. 5개 좌석으로 선점 요청
      ```bash
-     curl -X POST http://localhost:8082/reservations/hold \
+     curl -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" \
        -H "X-Queue-Token: qr_max5" \
        -H "Content-Type: application/json" \
@@ -199,7 +199,7 @@
   2. 동일 userId로 2석 추가 선점 요청
      ```bash
      redis-cli SET queue:token:qr_extra2 '{"userId":"<userId-1>","scheduleId":"<scheduleId>"}' EX 600
-     curl -X POST http://localhost:8082/reservations/hold \
+     curl -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-1>" \
        -H "X-Queue-Token: qr_extra2" \
        -H "Content-Type: application/json" \
@@ -232,7 +232,7 @@
   2. userId-2로 동일 좌석 선점 시도
      ```bash
      redis-cli SET queue:token:qr_dup '{"userId":"<userId-2>","scheduleId":"<scheduleId>"}' EX 600
-     curl -X POST http://localhost:8082/reservations/hold \
+     curl -X POST http://localhost:8084/reservations/hold \
        -H "X-User-Id: <userId-2>" \
        -H "X-Queue-Token: qr_dup" \
        -H "Content-Type: application/json" \
@@ -257,7 +257,7 @@
      ```
   2. 예매 취소 요청
      ```bash
-     curl -X DELETE http://localhost:8082/reservations/<reservationId-1> \
+     curl -X DELETE http://localhost:8084/reservations/<reservationId-1> \
        -H "X-User-Id: <userId-1>"
      ```
   3. outbox_events INSERT 확인
@@ -288,7 +288,7 @@
   1. CANCELLED 상태 예매 생성(또는 TC-RSV-009 결과 활용)
   2. 동일 예매 재취소 시도
      ```bash
-     curl -X DELETE http://localhost:8082/reservations/<cancelledReservationId> \
+     curl -X DELETE http://localhost:8084/reservations/<cancelledReservationId> \
        -H "X-User-Id: <userId-1>"
      ```
   3. outbox_events 미삽입 확인
@@ -525,11 +525,11 @@
 - **실행 단계**:
   1. Api Key 없이 내부 API 호출
      ```bash
-     curl -v http://localhost:8082/internal/reservations/<reservationId-Z>
+     curl -v http://localhost:8084/internal/reservations/<reservationId-Z>
      ```
   2. 올바른 Api Key로 호출
      ```bash
-     curl -v http://localhost:8082/internal/reservations/<reservationId-Z> \
+     curl -v http://localhost:8084/internal/reservations/<reservationId-Z> \
        -H "X-Service-Api-Key: local-dev-internal-api-key"
      ```
 - **기대 결과**: Api Key 없는 요청 → HTTP 401, `code=INTERNAL_API_UNAUTHORIZED`; Api Key 포함 요청 → HTTP 200 및 예매 상세 반환
@@ -547,12 +547,12 @@
 - **실행 단계**:
   1. reservation_svc_user 계정으로 event_service 스키마 접근 시도
      ```bash
-     psql -h localhost -p 5432 -U reservation_svc_user -d ticketqueue \
+     psql -h localhost -p 5432 -U reservation_svc_user -d ticket_queue \
        -c "SELECT * FROM event_service.seats LIMIT 1;"
      ```
   2. 동일 계정으로 reservation_service 스키마 접근 (정상 확인)
      ```bash
-     psql -h localhost -p 5432 -U reservation_svc_user -d ticketqueue \
+     psql -h localhost -p 5432 -U reservation_svc_user -d ticket_queue \
        -c "SELECT id, status FROM reservation_service.reservations LIMIT 1;"
      ```
 - **기대 결과**: event_service 스키마 쿼리 → `ERROR: permission denied for schema event_service`; reservation_service 쿼리 → 정상 결과 반환
@@ -574,7 +574,7 @@
      ```
   2. 선점 해제 요청
      ```bash
-     curl -X DELETE http://localhost:8082/reservations/<reservationId-D> \
+     curl -X DELETE http://localhost:8084/reservations/<reservationId-D> \
        -H "X-User-Id: <userId-1>"
      ```
   3. Redis SET에서 좌석 제거 확인
@@ -602,7 +602,7 @@
   1. 오늘 날짜 회차에 대한 예매 존재 확인
   2. 취소 요청
      ```bash
-     curl -X DELETE http://localhost:8082/reservations/<reservationId-today> \
+     curl -X DELETE http://localhost:8084/reservations/<reservationId-today> \
        -H "X-User-Id: <userId-1>"
      ```
 - **기대 결과**: HTTP 422, `code=CANCELLATION_NOT_ALLOWED`; 예매 상태 변경 없음, outbox_events 미삽입
@@ -627,7 +627,7 @@
   2. 좌석 선점 요청 (TC-RSV-001 방식)
   3. 좌석 상태 조회 요청
      ```bash
-     curl http://localhost:8082/reservations/seats/<scheduleId> \
+     curl http://localhost:8084/reservations/seats/<scheduleId> \
        -H "X-User-Id: <userId-1>" -H "X-Queue-Token: qr_test01"
      ```
   4. KEYS 명령 미발생 확인

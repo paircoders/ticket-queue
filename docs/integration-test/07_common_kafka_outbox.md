@@ -373,7 +373,7 @@
 - **우선순위**: P1(중요)
 - **사전조건**: `common.processed_events` 테이블 존재, `ProcessedEventService.cleanupOldEvents(retentionDays=7)`
 - **실행 단계**:
-  1. `processed_at = now() - 8 days` 레코드 5건 INSERT (`event_id` UUID 5개, `consumer_service='reservation'`)
+  1. `processed_at = now() - 8 days` 레코드 5건 INSERT (`event_id` UUID 5개, `consumer_service='reservation-service'`)
   2. `processed_at = now() - 6 days` 레코드 3건 INSERT (보존 기간 이내)
   3. `processed_at = now() - 7 days - 1 second` 레코드 1건 INSERT (경계값: 7일 정확히 초과)
   4. `processedEventService.cleanupOldEvents(retentionDays = 7)` 호출

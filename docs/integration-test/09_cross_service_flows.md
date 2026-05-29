@@ -65,9 +65,9 @@
      curl -s "http://localhost:8080/reservations/$RESERVATION_ID" \
        -H "Authorization: Bearer $ACCESS_TOKEN"
      # DB 직접 확인
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status, ticket_number FROM reservation_service.reservations WHERE id='$RESERVATION_ID';"
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM event_service.seats WHERE id='<SEAT_ID>';"
      ```
 - **기대 결과**:
@@ -104,10 +104,10 @@
   4. 3초 대기 후 보상 체인 전파 확인
      ```bash
      # Reservation 상태 확인
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM reservation_service.reservations WHERE id='$RESERVATION_ID';"
      # Seat 상태 확인
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM event_service.seats WHERE id='<SEAT_ID>';"
      # Redis hold_seats SET에서 좌석 제거 확인
      redis-cli SISMEMBER "hold_seats:<SCHEDULE_ID>" "<SEAT_ID>"
@@ -116,7 +116,7 @@
      ```
   5. Outbox 이벤트 체인 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT event_type, published, aggregate_type FROM common.outbox_events ORDER BY created_at DESC LIMIT 5;"
      ```
 - **기대 결과**:
@@ -157,7 +157,7 @@
   3. 응답 집계: 201 성공 카운트, 4xx 실패 카운트 확인
   4. DB 및 Redis 최종 상태 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT COUNT(*) FROM reservation_service.reservations WHERE schedule_id='<SCHEDULE_ID>' AND status='PENDING';"
      redis-cli SMEMBERS "hold_seats:<SCHEDULE_ID>"
      ```
@@ -202,9 +202,9 @@
      ```
   3. 3초 대기 후 DB 상태 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM reservation_service.reservations WHERE id='$RESERVATION_ID';"
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT COUNT(*) FROM common.processed_events WHERE event_id='$EVENT_ID';"
      ```
 - **기대 결과**:
@@ -241,7 +241,7 @@
      ```
   4. 예매 상태 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM reservation_service.reservations WHERE id='$RESERVATION_ID';"
      ```
 - **기대 결과**:
@@ -267,7 +267,7 @@
   1. 좌석 선점 완료 및 결제 정보 생성 (TC-FLOW-001 1~5단계)
   2. hold_expires_at을 과거로 직접 업데이트하여 만료 시뮬레이션
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "UPDATE reservation_service.reservations SET hold_expires_at = NOW() - INTERVAL '1 minute' WHERE id='$RESERVATION_ID';"
      ```
   3. 결제 승인 확인 요청
@@ -279,7 +279,7 @@
      ```
   4. 좌석 상태 및 예매 상태 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status, hold_expires_at FROM reservation_service.reservations WHERE id='$RESERVATION_ID';"
      ```
 - **기대 결과**:
@@ -396,7 +396,7 @@
      ```
   4. DB에 outbox_events 레코드 존재, published=false 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT id, event_type, published, retry_count FROM common.outbox_events WHERE published=false ORDER BY created_at DESC LIMIT 5;"
      ```
   5. Kafka 브로커 재개
@@ -405,9 +405,9 @@
      ```
   6. 2~3초 대기 후 (Poller 1초 주기) 이벤트 발행 및 전파 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT published, published_at FROM common.outbox_events WHERE aggregate_type='Payment' ORDER BY created_at DESC LIMIT 3;"
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM reservation_service.reservations WHERE id='$RESERVATION_ID';"
      ```
 - **기대 결과**:
@@ -422,7 +422,7 @@
 
 ---
 
-### TC-FLOW-010 — DLQ 즉시 이동: ValidationException 계열 예외 발생 시 재시도 없이 dlq.payment 이동
+### TC-FLOW-010 — DLQ 즉시 이동: non-retryable 예외(JsonProcessingException 등) 발생 시 재시도 없이 dlq.payment 이동
 
 - [ ] 미실행
 - **관련 REQ**: REQ-EVT-020, REQ-RSV-004
@@ -474,7 +474,7 @@
   1. reservation_service.reservations 테이블을 잠근 상태(다른 세션에서 LOCK)에서 PaymentSuccess 이벤트 발행
      ```bash
      # 터미널 1: 테이블 락 획득 (PessimisticLockingFailureException 유발)
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "BEGIN; LOCK TABLE reservation_service.reservations IN ACCESS EXCLUSIVE MODE;"
      ```
   2. 그 상태에서 유효한 PaymentSuccess 이벤트 발행 (기존 PENDING 예매 존재하는 reservationId 사용)
@@ -488,7 +488,7 @@
   4. 15초 대기 후 DLQ 이동 확인
      ```bash
      # 터미널 1: 락 해제
-     psql -h localhost -p 5432 -U postgres -d ticketqueue -c "ROLLBACK;"
+     psql -h localhost -p 5432 -U ticket -d ticket_queue -c "ROLLBACK;"
      # DLQ 확인
      timeout 5 kafka-console-consumer.sh --bootstrap-server localhost:9092 \
        --topic dlq.payment --from-beginning --max-messages 3
@@ -575,11 +575,11 @@
        -d '{"scheduleId":"<SCHEDULE_ID>","seatIds":["s5","s6","s7"]}'
      ```
 - **기대 결과**:
-  - 단계 1: HTTP 409, errorCode = `MAX_SEATS_EXCEEDED`
+  - 단계 1: HTTP 400, errorCode = `MAX_SEATS_EXCEEDED`
   - 단계 2: HTTP 201 Created
-  - 단계 3: HTTP 409, errorCode = `MAX_SEATS_EXCEEDED` (기존 2매 + 신규 3매 = 5매로 초과)
+  - 단계 3: HTTP 400, errorCode = `MAX_SEATS_EXCEEDED` (기존 2매 + 신규 3매 = 5매로 초과)
 - **검증 포인트**:
-  - 5매 요청: HTTP 409, `MAX_SEATS_EXCEEDED`
+  - 5매 요청: HTTP 400, `MAX_SEATS_EXCEEDED`
   - 4매 요청: HTTP 201 성공
   - 누적 초과: 기존 보유 매수 합산 로직 동작 확인
 
@@ -596,7 +596,7 @@
   1. 좌석 선점 수행하여 Redis hold_seats SET에 seatId 추가
   2. event-service DB에서 해당 seat의 status 확인 (AVAILABLE이어야 함)
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT id, status FROM event_service.seats WHERE id IN (<SEAT_IDS>) AND event_schedule_id='<SCHEDULE_ID>';"
      ```
   3. Redis hold_seats 상태 확인
@@ -613,7 +613,7 @@
      ```bash
      # 결제 완료 후 (TC-FLOW-001 전체 수행)
      redis-cli SISMEMBER "hold_seats:<SCHEDULE_ID>" "<SEAT_ID>"
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT status FROM event_service.seats WHERE id='<SEAT_ID>';"
      ```
 - **기대 결과**:
@@ -687,13 +687,13 @@
   1. 결제 실패 보상 트랜잭션 시나리오 수행 (TC-FLOW-002)
   2. outbox_events에서 PaymentFailed 이벤트의 eventId 조회
      ```bash
-     PF_EVENT_ID=$(psql -h localhost -p 5432 -U postgres -d ticketqueue -t \
+     PF_EVENT_ID=$(psql -h localhost -p 5432 -U ticket -d ticket_queue -t \
        -c "SELECT id FROM common.outbox_events WHERE event_type='PaymentFailed' ORDER BY created_at DESC LIMIT 1;" \
        | tr -d ' ')
      ```
   3. ReservationCancelled outbox 이벤트의 payload에서 causationId 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT payload->>'metadata' FROM common.outbox_events WHERE event_type='ReservationCancelled' ORDER BY created_at DESC LIMIT 1;"
      ```
   4. causationId가 PaymentFailed.eventId와 일치하는지 비교
@@ -777,7 +777,7 @@
      ```
   3. 결과 확인: 성공 1건, 나머지 실패 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT r.id, rs.seat_id FROM reservation_service.reservations r JOIN reservation_service.reservation_seats rs ON r.id = rs.reservation_id WHERE r.id='$RESERVATION_ID';"
      redis-cli SMEMBERS "hold_seats:<SCHEDULE_ID>"
      ```
@@ -859,7 +859,7 @@
      ```
   3. Outbox 이벤트 payload의 correlationId 확인
      ```bash
-     psql -h localhost -p 5432 -U postgres -d ticketqueue \
+     psql -h localhost -p 5432 -U ticket -d ticket_queue \
        -c "SELECT event_type, payload->'metadata'->>'correlationId' as correlation_id FROM common.outbox_events ORDER BY created_at DESC LIMIT 5;"
      ```
 - **기대 결과**:

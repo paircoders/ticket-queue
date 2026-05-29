@@ -305,7 +305,7 @@
      kafka-console-producer.sh --topic payment.events --bootstrap-server localhost:9092
      ```
   2. Reservation Service Consumer 로그에서 두 번째 수신 처리 확인
-  3. DB 확인: `SELECT COUNT(*) FROM common.processed_events WHERE event_id='<eventId>' AND consumer_service='reservation';`
+  3. DB 확인: `SELECT COUNT(*) FROM common.processed_events WHERE event_id='<eventId>' AND consumer_service='reservation-service';`
 - **기대 결과**: `processed_events` row 1건. Reservation status=CANCELLED (한 번만 전이). 두 번째 수신은 `DataIntegrityViolationException` 으로 중복 감지 후 스킵.
 - **검증 포인트**: `IdempotentConsumerTemplate.process()` 내 `tryRecord()` 중복 INSERT 시도 → `DataIntegrityViolationException` → `isNew=false` → ack 후 반환. DB Reservation 상태 변경 1회.
 
@@ -448,16 +448,16 @@
 - **실행 단계**:
   1. `X-Service-Api-Key` 헤더 없이 `/internal/reservations/{id}` 직접 호출:
      ```bash
-     curl -s -X GET http://localhost:8083/internal/reservations/<reservationId>
+     curl -s -X GET http://localhost:8084/internal/reservations/<reservationId>
      ```
   2. 잘못된 키로 호출:
      ```bash
-     curl -s -X GET http://localhost:8083/internal/reservations/<reservationId> \
+     curl -s -X GET http://localhost:8084/internal/reservations/<reservationId> \
        -H "X-Service-Api-Key: wrong-key"
      ```
   3. 올바른 키로 호출:
      ```bash
-     curl -s -X GET http://localhost:8083/internal/reservations/<reservationId> \
+     curl -s -X GET http://localhost:8084/internal/reservations/<reservationId> \
        -H "X-Service-Api-Key: local-dev-internal-api-key"
      ```
 - **기대 결과**: 누락/오류 키 → HTTP 401, `{"code":"INTERNAL_API_UNAUTHORIZED"}`. 올바른 키 → HTTP 200.
@@ -533,7 +533,7 @@
 
 ---
 
-### TC-PAY-026 — DLQ 분류: ValidationException/JsonProcessingException 즉시 DLQ, TimeoutException 재시도
+### TC-PAY-026 — DLQ 분류: IllegalArgumentException/JsonProcessingException 즉시 DLQ, TimeoutException 재시도
 
 - [ ] 미실행
 - **관련 REQ**: REQ-PAY-013

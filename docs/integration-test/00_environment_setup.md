@@ -53,7 +53,7 @@
 
 ---
 
-### TC-ENV-003 — PostgreSQL 스키마 분리 생성 확인 (6개 스키마)
+### TC-ENV-003 — PostgreSQL 스키마 분리 생성 확인 (5개 스키마)
 
 - [ ] 미실행
 - **관련 REQ**: 해당 없음
@@ -62,23 +62,23 @@
 - **사전조건**: TC-ENV-001 통과, ticket-postgres 컨테이너 healthy 상태
 - **실행 단계**:
   1. ```bash
-     docker exec -it ticket-postgres psql -U ticket_admin -d ticketdb -c "\dn"
+     docker exec -it ticket-postgres psql -U ticket -d ticket_queue -c "\dn"
      ```
   2. 각 스키마별 소유자 확인:
      ```bash
-     docker exec -it ticket-postgres psql -U ticket_admin -d ticketdb -c \
-       "SELECT schema_name, schema_owner FROM information_schema.schemata WHERE schema_name IN ('user_service','event_service','reservation_service','payment_service','common','queue_service') ORDER BY schema_name;"
+     docker exec -it ticket-postgres psql -U ticket -d ticket_queue -c \
+       "SELECT schema_name, schema_owner FROM information_schema.schemata WHERE schema_name IN ('user_service','event_service','reservation_service','payment_service','common') ORDER BY schema_name;"
      ```
   3. common 테이블 존재 확인:
      ```bash
-     docker exec -it ticket-postgres psql -U ticket_admin -d ticketdb -c \
+     docker exec -it ticket-postgres psql -U ticket -d ticket_queue -c \
        "SELECT tablename FROM pg_tables WHERE schemaname='common' ORDER BY tablename;"
      ```
 - **기대 결과**:
-  - 스키마 목록: `user_service`, `event_service`, `reservation_service`, `payment_service`, `common` 모두 존재
-  - 각 스키마 소유자: `user_svc_user`, `event_svc_user`, `reservation_svc_user`, `payment_svc_user` (common은 ticket_admin)
+  - 스키마 목록: `user_service`, `event_service`, `reservation_service`, `payment_service`, `common` 5개 모두 존재 (queue-service는 Redis 전용이므로 PostgreSQL 스키마/DB 사용자 없음)
+  - 각 스키마 소유자: `user_svc_user`, `event_svc_user`, `reservation_svc_user`, `payment_svc_user` (common은 슈퍼유저 `ticket` 소유)
   - common 테이블: `outbox_events`, `processed_events` 2개 확인
-- **검증 포인트**: 스키마 5개 이상, `outbox_events`/`processed_events` 테이블 존재, PRIMARY KEY `(event_id, consumer_service)` on processed_events
+- **검증 포인트**: 스키마 정확히 5개(queue_service 없음), `outbox_events`/`processed_events` 테이블 존재, PRIMARY KEY `(event_id, consumer_service)` on processed_events
 
 ---
 
@@ -93,19 +93,19 @@
   1. user_svc_user로 event_service 스키마 접근 시도:
      ```bash
      docker exec -it ticket-postgres psql \
-       "postgresql://user_svc_user:$(cat docker/secrets/postgres_user_pw.txt)@localhost/ticketdb" \
+       "postgresql://user_svc_user:$(cat docker/secrets/postgres_user_pw.txt)@localhost/ticket_queue" \
        -c "SELECT * FROM event_service.events LIMIT 1;"
      ```
   2. reservation_svc_user로 payment_service 스키마 접근 시도:
      ```bash
      docker exec -it ticket-postgres psql \
-       "postgresql://reservation_svc_user:$(cat docker/secrets/postgres_reservation_pw.txt)@localhost/ticketdb" \
+       "postgresql://reservation_svc_user:$(cat docker/secrets/postgres_reservation_pw.txt)@localhost/ticket_queue" \
        -c "SELECT * FROM payment_service.payments LIMIT 1;"
      ```
   3. payment_svc_user로 user_service 스키마 접근 시도:
      ```bash
      docker exec -it ticket-postgres psql \
-       "postgresql://payment_svc_user:$(cat docker/secrets/postgres_payment_pw.txt)@localhost/ticketdb" \
+       "postgresql://payment_svc_user:$(cat docker/secrets/postgres_payment_pw.txt)@localhost/ticket_queue" \
        -c "SELECT * FROM user_service.users LIMIT 1;"
      ```
 - **기대 결과**: 각 쿼리 모두 `ERROR: permission denied for schema <target_schema>` 또는 `relation does not exist` 오류 반환
@@ -457,7 +457,7 @@
 - **실행 단계**:
   1. 데이터 삽입 및 row 수 기록:
      ```bash
-     docker exec -it ticket-postgres psql -U ticket_admin -d ticketdb -c \
+     docker exec -it ticket-postgres psql -U ticket -d ticket_queue -c \
        "INSERT INTO common.outbox_events(aggregate_type, aggregate_id, event_type, payload)
         VALUES ('Test','00000000-0000-0000-0000-000000000001','TestEvent','{\"test\":true}');
         SELECT COUNT(*) FROM common.outbox_events;"
@@ -469,7 +469,7 @@
   3. healthy 대기 후 row 수 재확인:
      ```bash
      sleep 30
-     docker exec -it ticket-postgres psql -U ticket_admin -d ticketdb -c \
+     docker exec -it ticket-postgres psql -U ticket -d ticket_queue -c \
        "SELECT COUNT(*) FROM common.outbox_events;"
      ```
 - **기대 결과**: 재시작 전후 row 수 동일, 삽입한 `aggregate_type='Test'` row 유지

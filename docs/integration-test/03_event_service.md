@@ -1,7 +1,7 @@
 ## 03. Event Service (공연/좌석/캐싱/Consumer)
 
 > **영역 범위**: Event Service의 공연·공연장·좌석 CRUD, Redis Cache-Aside(Stampede 방지 포함), Kafka Consumer(PaymentSuccess/ReservationCancelled) 멱등성 및 DLQ 처리, 내부 API 보안, 스키마 격리
-> **사전 준비**: `cd docker && docker-compose up -d` 로 PostgreSQL(5432), Valkey(6379), Kafka(9092) 기동 확인. `event-service` 로컬 프로필(`INTERNAL_API_KEY=local-dev-internal-api-key`)로 기동. 관리자 JWT(`ADMIN_TOKEN`)·일반 사용자 JWT(`USER_TOKEN`) 사전 발급. `redis-cli` 및 `psql -U event_svc_user -d ticketqueue` 접속 가능 확인. `kafka-console-producer.sh` 사용 가능 확인.
+> **사전 준비**: `cd docker && docker-compose up -d` 로 PostgreSQL(5432), Valkey(6379), Kafka(9092) 기동 확인. `event-service` 로컬 프로필(`INTERNAL_API_KEY=local-dev-internal-api-key`)로 기동. 관리자 JWT(`ADMIN_TOKEN`)·일반 사용자 JWT(`USER_TOKEN`) 사전 발급. `redis-cli` 및 `psql -U event_svc_user -d ticket_queue` 접속 가능 확인. `kafka-console-producer.sh` 사용 가능 확인.
 > **주 실행 수단**: curl REST + gradle test/integrationTest, Redis CLI / psql / Kafka CLI 검증
 > **총 항목 수**: 24
 
@@ -17,7 +17,7 @@
 - **실행 단계**:
   1. `POST /events` 호출 (관리자 토큰, 회차 2개 포함)
      ```bash
-     curl -s -X POST http://localhost:8081/events \
+     curl -s -X POST http://localhost:8082/events \
        -H "Authorization: Bearer $ADMIN_TOKEN" \
        -H "Content-Type: application/json" \
        -d '{
@@ -43,7 +43,7 @@
      ```
 - **기대 결과**:
   - HTTP 201 Created, 응답 `status = "PREPARING"`.
-  - DB: 회차 2개 × (rows 3 × seatsPerRow 5) = 30개 좌석이 각 회차에 생성됨.
+  - DB: 회차당 (rows 3 × seatsPerRow 5) = 15개 좌석, 총 2개 회차 = 30개 좌석 생성됨.
   - 등급별 count: VIP=5, S=5, A=5 (각 회차 기준). 가격 VIP=150000, S=120000, A=99000.
   - 모든 좌석 `status = 'AVAILABLE'`.
 - **검증 포인트**: DB `event_service.seats` row 수, grade·price 값, status 초기값.
@@ -60,7 +60,7 @@
 - **실행 단계**:
   1. `POST /events` 호출 시 `priceByGrade = {"VIP":150000,"S":120000}` (A, B 누락).
      ```bash
-     curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8081/events \
+     curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8082/events \
        -H "Authorization: Bearer $ADMIN_TOKEN" \
        -H "Content-Type: application/json" \
        -d '{"title":"...", ..., "priceByGrade":{"VIP":150000,"S":120000}, "schedules":[...]}'
@@ -89,7 +89,7 @@
 - **실행 단계**:
   1. `DELETE /events/{eventId}` 호출.
      ```bash
-     curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:8081/events/<eventId> \
+     curl -s -o /dev/null -w "%{http_code}" -X DELETE http://localhost:8082/events/<eventId> \
        -H "Authorization: Bearer $ADMIN_TOKEN"
      ```
   2. DB `deleted_at` 컬럼 값 확인.
@@ -111,7 +111,7 @@
 - **실행 단계**:
   1. `DELETE /events/{eventId}` 호출.
      ```bash
-     curl -s -w "\n%{http_code}" -X DELETE http://localhost:8081/events/<eventId> \
+     curl -s -w "\n%{http_code}" -X DELETE http://localhost:8082/events/<eventId> \
        -H "Authorization: Bearer $ADMIN_TOKEN"
      ```
   2. DB `deleted_at` 값 확인.
@@ -140,7 +140,7 @@
 - **실행 단계**:
   1. `PATCH /events/{eventId}` 호출 시 `artist` 필드 포함.
      ```bash
-     curl -s -o /dev/null -w "%{http_code}" -X PATCH http://localhost:8081/events/<eventId> \
+     curl -s -o /dev/null -w "%{http_code}" -X PATCH http://localhost:8082/events/<eventId> \
        -H "Authorization: Bearer $ADMIN_TOKEN" \
        -H "Content-Type: application/json" \
        -d '{"artist":"수정된 아티스트"}'
@@ -161,7 +161,7 @@
 - **실행 단계**:
   1. 상태 필터 + 키워드 검색 + 페이지 2 조회:
      ```bash
-     curl -s "http://localhost:8081/events?status=OPEN&keyword=케이팝&page=1&size=1"
+     curl -s "http://localhost:8082/events?status=OPEN&keyword=케이팝&page=1&size=1"
      ```
   2. 응답 `list` 배열의 공연들이 모두 `status=OPEN`이고 title/artist에 "케이팝" 포함 여부 확인.
   3. `totalElements`, `page`, `size` 필드값 확인.
@@ -230,14 +230,14 @@
 - **사전조건**: 공연(`eventId`) 상세 캐시 및 목록 캐시(`cache:event:list:*`) 다수 적재 상태.
   ```bash
   # 목록 캐시 사전 적재
-  curl -s "http://localhost:8081/events?page=0&size=20" > /dev/null
-  curl -s "http://localhost:8081/events?status=OPEN&page=0&size=10" > /dev/null
+  curl -s "http://localhost:8082/events?page=0&size=20" > /dev/null
+  curl -s "http://localhost:8082/events?status=OPEN&page=0&size=10" > /dev/null
   redis-cli KEYS "cache:event:list:*"
   ```
 - **실행 단계**:
   1. `PATCH /events/{eventId}` 호출 (`title` 변경).
      ```bash
-     curl -s -X PATCH http://localhost:8081/events/<eventId> \
+     curl -s -X PATCH http://localhost:8082/events/<eventId> \
        -H "Authorization: Bearer $ADMIN_TOKEN" \
        -H "Content-Type: application/json" \
        -d '{"title":"수정된 공연 제목"}'
@@ -271,7 +271,7 @@
   2. 50개 동시 요청 발송:
      ```bash
      for i in $(seq 1 50); do
-       curl -s http://localhost:8081/events/<eventId> > /dev/null &
+       curl -s http://localhost:8082/events/<eventId> > /dev/null &
      done
      wait
      ```
@@ -281,7 +281,7 @@
      ```
   4. 애플리케이션 로그에서 "Redis cache write" 로그 발생 횟수 확인.
   5. 모든 50개 응답이 HTTP 200인지 확인.
-- **기대 결과**: 50개 요청 모두 HTTP 200. 캐시 저장 로그 1~2회(락 획득 성공한 요청만). DB 쿼리 횟수가 50회보다 현저히 적음(락 미획득 요청은 DB 조회 후 캐시 미저장). `cache:event:{eventId}` 키 적재됨.
+- **기대 결과**: 50개 요청 모두 HTTP 200. 캐시 저장(write) 로그가 1~2회로 제한됨(Lua 락 획득에 성공한 요청만 캐시에 적재). 락 미획득 요청은 DB를 조회하되 캐시에 쓰지 않으므로, Stampede 락의 효과는 "동시 캐시 write 중복 방지"이며 DB 조회 횟수 감소가 아님(따라서 DB 쿼리 수는 캐시 미스 요청 수에 비례할 수 있음). `cache:event:{eventId}` 키 적재됨.
 - **검증 포인트**: 모든 응답 HTTP 200, 캐시 write 로그 1~2회, Redis 키 존재.
 
 ---
@@ -301,7 +301,7 @@
   1. 좌석 캐시 삭제 후 조회:
      ```bash
      redis-cli DEL cache:seats:<scheduleId>
-     curl -s http://localhost:8081/events/schedules/<scheduleId>/seats
+     curl -s http://localhost:8082/events/schedules/<scheduleId>/seats
      ```
   2. 응답에서 해당 `seatId`의 `status` 확인.
   3. DB에서 해당 seat `status` 확인:
@@ -324,19 +324,19 @@
   1. `X-Service-Api-Key` 헤더 없이 내부 API 호출:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" \
-       http://localhost:8081/internal/seats/status/<scheduleId>
+       http://localhost:8082/internal/seats/status/<scheduleId>
      ```
   2. 잘못된 키로 호출:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" \
        -H "X-Service-Api-Key: invalid-key" \
-       http://localhost:8081/internal/seats/status/<scheduleId>
+       http://localhost:8082/internal/seats/status/<scheduleId>
      ```
   3. 올바른 키로 호출:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" \
        -H "X-Service-Api-Key: local-dev-internal-api-key" \
-       http://localhost:8081/internal/seats/status/<scheduleId>
+       http://localhost:8082/internal/seats/status/<scheduleId>
      ```
 - **기대 결과**: 1번·2번 → 401 또는 403. 3번 → 200.
 - **검증 포인트**: 키 없음/잘못된 키 → 4xx, 올바른 키 → 200.
@@ -363,7 +363,7 @@
   1. 내부 API 호출:
      ```bash
      curl -s -H "X-Service-Api-Key: local-dev-internal-api-key" \
-       http://localhost:8081/internal/schedules/ended
+       http://localhost:8082/internal/schedules/ended
      ```
   2. 응답 `scheduleIds` 배열에 A·B 포함, C·D 미포함 확인.
 - **기대 결과**: `scheduleIds`에 A·B ID만 포함. C·D 미포함.
@@ -552,17 +552,17 @@
 - **실행 단계**:
   1. `event_svc_user`로 접속하여 타 서비스 스키마 쿼리 시도:
      ```bash
-     psql -U event_svc_user -d ticketqueue -c \
+     psql -U event_svc_user -d ticket_queue -c \
        "SELECT * FROM reservation_service.reservations LIMIT 1;"
      ```
   2. `payment_service` 스키마 쿼리 시도:
      ```bash
-     psql -U event_svc_user -d ticketqueue -c \
+     psql -U event_svc_user -d ticket_queue -c \
        "SELECT * FROM payment_service.payments LIMIT 1;"
      ```
   3. 자신의 스키마 쿼리 정상 작동 확인:
      ```bash
-     psql -U event_svc_user -d ticketqueue -c \
+     psql -U event_svc_user -d ticket_queue -c \
        "SELECT count(*) FROM event_service.events;"
      ```
 - **기대 결과**: 1번·2번 → `ERROR: permission denied for schema reservation_service / payment_service`. 3번 → count 정상 반환.
@@ -581,7 +581,7 @@
   1. `POST /venues/{venueId}/halls` 호출 시 `capacity=0`:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" \
-       -X POST http://localhost:8081/venues/<venueId>/halls \
+       -X POST http://localhost:8082/venues/<venueId>/halls \
        -H "Authorization: Bearer $ADMIN_TOKEN" \
        -H "Content-Type: application/json" \
        -d '{"name":"테스트홀","capacity":0,"seatTemplate":{"rows":["A"],"seatsPerRow":1,"gradeMapping":{"A":"VIP"}}}'
@@ -604,7 +604,7 @@
   1. `DELETE /venues/{venueId}/halls/{hallId}` 호출:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" \
-       -X DELETE http://localhost:8081/venues/<venueId>/halls/<hallId> \
+       -X DELETE http://localhost:8082/venues/<venueId>/halls/<hallId> \
        -H "Authorization: Bearer $ADMIN_TOKEN"
      ```
   2. DB에서 Hall row 잔존 확인:
@@ -631,7 +631,7 @@
   2. 즉시 좌석 조회 API 호출:
      ```bash
      curl -s -o /dev/null -w "%{http_code}" \
-       http://localhost:8081/events/schedules/<scheduleId>/seats
+       http://localhost:8082/events/schedules/<scheduleId>/seats
      ```
   3. 애플리케이션 로그에서 `"Redis cache read failed"` 또는 `"Redis cache write failed"` 경고 로그 확인.
   4. 응답 데이터가 DB 기반 정상 좌석 목록인지 확인.
