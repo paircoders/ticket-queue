@@ -2,8 +2,10 @@
 
 > **영역 범위**: Docker Compose 기반 로컬 인프라(PostgreSQL, Valkey, Kafka, LocalStack, Prometheus, Grafana) 기동, 스키마/시크릿/토픽 초기화, 6개 Spring Boot 서비스 기동 및 actuator 건강 확인, 관측 스택 연동 검증
 > **사전 준비**: docker/secrets/ 하위 모든 .txt 파일 존재 확인, Docker Desktop 실행, 호스트 포트 5432·6379·9092·4566·9090·3001·8080-8085·9080-9085 미점유, JDK 21 및 ./gradlew 실행 권한
-> **주 실행 수단**: docker-compose, ./gradlew build/test/integrationTest, curl health check
+> **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
+> **실행 결과 (2026-05-30)**: 통과 7건 | 부분 통과 3건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
+> **발견된 이슈**: #257 스키마 소유자 불일치 | #258 localstack_init.sh 멱등성 | #259 reservation-service 테스트 ApplicationContext 실패 | #260 event-service 테스트 2종 | #261 integrationTest 태스크 없음
 
 ---
 
@@ -38,7 +40,7 @@
 
 ### TC-ENV-002 — secrets 파일 누락 시 docker-compose up 실패 케이스
 
-- [ ] 미실행
+- [x] 부분 통과 (2026-05-30, 근거: `docker compose config` 및 `docker compose up -d`(컨테이너 이미 실행 중)는 시크릿 파일 누락 시에도 exit 0 반환. `docker compose create --force-recreate postgres` 실행 시 `secret file does not exist` 경고 + `invalid mount config for type "bind"` 오류 메시지 출력되나 exit code는 0. **Docker Compose v2(Go 재구현)는 v1(Python)과 달리 시크릿 파일 존재 검증을 config 단계가 아닌 컨테이너 생성 단계에서 수행** → 기대 결과의 `exit code != 0` 조건 미충족. 기존 실행 중인 컨테이너 재시작에는 영향 없음)
 - **관련 REQ**: 해당 없음
 - **분류**: 예외
 - **우선순위**: P1(중요)
@@ -55,7 +57,7 @@
 
 ### TC-ENV-003 — PostgreSQL 스키마 분리 생성 확인 (5개 스키마)
 
-- [ ] 미실행
+- [x] 부분 통과 (2026-05-30, 근거: 스키마 5개(`user_service`, `event_service`, `reservation_service`, `payment_service`, `common`) 존재 확인. `common.outbox_events`, `common.processed_events` 테이블 및 복합 PK(`event_id`, `consumer_service`) 확인. **단, 스키마 소유자 불일치 발견**: `user_service`/`event_service`/`payment_service`가 예상 소유자(`user_svc_user` 등) 대신 `ticket` 슈퍼유저 소유로 확인됨. `reservation_service`만 `reservation_svc_user` 소유 정상. 원인: `CREATE SCHEMA IF NOT EXISTS ... AUTHORIZATION` 은 스키마 이미 존재 시 소유자 변경 안 함(볼륨 잔존 데이터). → 관련 이슈: #257)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -84,7 +86,7 @@
 
 ### TC-ENV-004 — 서비스 계정의 타 스키마 직접 접근 차단(스키마 격리 검증)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `user_svc_user` → `event_service` 접근 시 `ERROR: permission denied for schema event_service`. `reservation_svc_user` → `payment_service` 접근 시 `permission denied for schema payment_service`. `payment_svc_user` → `user_service` 접근 시 `permission denied for schema user_service`. 3건 모두 exit code 1, 정상 행 반환 없음)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -115,7 +117,7 @@
 
 ### TC-ENV-005 — LocalStack Secrets Manager 시크릿 주입 검증
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `user-svc/secure-config`, `event-svc/secure-config`, `reservation-svc/secure-config`, `payment-svc/secure-config`, `common/secure-config` 5개 확인. `common/secure-config` 내 `internal_api_key`/`jwt_secret`/`valkey_password` 키 모두 존재. `user-svc/secure-config` 내 `recaptcha_secret`/`db_password` 키 모두 존재. 비고: LocalStack 컨테이너 내 AWS CLI가 v1으로 `--no-cli-pager` 미지원 → `AWS_PAGER=""` 환경변수 사용 필요)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -160,7 +162,7 @@
 
 ### TC-ENV-006 — LocalStack 시크릿 등록 전 서비스 기동 시 실패 케이스(시크릿 미주입)
 
-- [ ] 미실행
+- [x] 부분 통과 (2026-05-30, 근거: `common/secure-config` 삭제 후 시크릿 목록에서 제거됨 확인. 복구 시도: `localstack_init.sh` 재실행 → `set -e` + `create-secret` 중복으로 첫 번째 시크릿(user-svc)에서 스크립트 중단, `common/secure-config` 미복구. 수동 `awslocal secretsmanager create-secret` 으로 복구 성공. **Spring Boot 서비스 기동 실패 시나리오(로그 확인)는 백엔드 컨테이너 이미지 없어 미검증**. `localstack_init.sh` 멱등성 버그 → 관련 이슈: #258)
 - **관련 REQ**: 해당 없음
 - **분류**: 예외
 - **우선순위**: P1(중요)
@@ -191,7 +193,7 @@
 
 ### TC-ENV-007 — Kafka 토픽 자동 생성 및 파티션/보관 정책 검증
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `reservation.events` PartitionCount=3 ReplicationFactor=1 retention.ms=259200000 ✓. `payment.events` PartitionCount=3 ReplicationFactor=1 retention.ms=259200000 ✓. `dlq.reservation` PartitionCount=1 ReplicationFactor=1 retention.ms=604800000 ✓. `dlq.payment` PartitionCount=1 ReplicationFactor=1 retention.ms=604800000 ✓. 4개 토픽 모두 존재 확인)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -228,7 +230,7 @@
 
 ### TC-ENV-008 — kafka-init 재실행 시 토픽 중복 생성 방지(--if-not-exists 멱등성)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: 4개 토픽 이미 존재 상태에서 `kafka-topics.sh --create --if-not-exists` 재실행. 각 토픽 create exit code 0, 재실행 전후 토픽 수 동일(4개). `TopicExistsException` 대신 경고 메시지만 출력되고 정상 종료. 비고: kafka-init 컨테이너의 init_topics.sh 경로는 /opt/kafka_init/init_topics.sh이나 kafka 컨테이너에는 없음 — kafka-init 컨테이너 별도 마운트 볼륨에서만 접근 가능)
 - **관련 REQ**: 해당 없음
 - **분류**: 멱등성
 - **우선순위**: P1(중요)
@@ -251,7 +253,7 @@
 
 ### TC-ENV-009 — 6개 서비스 actuator health UP 확인
 
-- [ ] 미실행
+- [ ] 미실행 (사전조건 미충족: 백엔드 6개 서비스 미기동. GHCR 이미지 비공개(unauthorized) — `docker-compose.backend.yml`로 로컬 빌드 후 기동 필요. TC-ENV-001 인프라만 기동된 상태)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -277,7 +279,7 @@
 
 ### TC-ENV-010 — 서비스 기동 순서 위반 시 의존성 대기 동작 확인
 
-- [ ] 미실행
+- [ ] 미실행 (사전조건 미충족: TC-ENV-009 의존 — 백엔드 서비스 미기동)
 - **관련 REQ**: 해당 없음
 - **분류**: 엣지
 - **우선순위**: P1(중요)
@@ -310,7 +312,7 @@
 
 ### TC-ENV-011 — /internal/** 엔드포인트 X-Service-Api-Key 없이 접근 차단
 
-- [ ] 미실행
+- [ ] 미실행 (사전조건 미충족: TC-ENV-009 의존 — 백엔드 서비스 및 api-gateway 미기동)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -350,7 +352,7 @@
 
 ### TC-ENV-012 — Prometheus 메트릭 수집 타겟 UP 확인
 
-- [ ] 미실행
+- [ ] 미실행 (사전조건 미충족: Prometheus 자체는 정상 기동(running). 그러나 백엔드 6개 서비스 미기동으로 모든 스크랩 타겟이 `down` 상태 — `api-gateway`, `event-service`, `payment-service`, `queue-service`, `reservation-service`, `user-service` 전체 down 확인. 백엔드 기동 후 재검증 필요)
 - **관련 REQ**: REQ-GW-012
 - **분류**: 정상
 - **우선순위**: P1(중요)
@@ -386,7 +388,7 @@
 
 ### TC-ENV-013 — Grafana 대시보드 자동 프로비저닝 로딩 확인
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `/api/health` → `{"database":"ok","version":"11.4.0"}` 확인. 대시보드 4개 모두 존재(Ticket Queue 폴더): `JVM & Spring Boot Overview`, `HTTP Requests Overview`, `Resilience4j Circuit Breaker`, `Infrastructure Overview`. Datasource: name=`Prometheus`, type=`prometheus` 확인)
 - **관련 REQ**: REQ-GW-012
 - **분류**: 정상
 - **우선순위**: P1(중요)
@@ -418,7 +420,13 @@
 
 ### TC-ENV-014 — ./gradlew build 및 integrationTest 통과
 
-- [ ] 미실행
+- [!] 실패 (2026-05-30, 근거:
+  - `./gradlew build -x test`: BUILD SUCCESSFUL (557ms, 47 tasks up-to-date) ✓
+  - `./gradlew test`: BUILD FAILED — reservation-service 29개, event-service 3개 실패
+    - reservation-service: 전 통합 테스트 `IllegalStateException: Failed to load ApplicationContext` — `NoSuchBeanDefinitionException: No bean named 'kafkaListenerContainerFactory'` → 이슈 #259
+    - event-service(1): `EventControllerTest` `GET /events/schedules/{scheduleId}/seats` → 404 (URL 매핑 불일치) → 이슈 #260
+    - event-service(2): `SeatServiceTest` `releaseHoldSeats` MockK vararg 매처 불일치 → 이슈 #260
+  - `./gradlew integrationTest`: Task 'integrationTest' not found — 태스크 미정의 → 이슈 #261)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -449,7 +457,7 @@
 
 ### TC-ENV-015 — 컨테이너 재기동 후 PostgreSQL 데이터 영속성 확인
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `common.outbox_events`에 테스트 row 삽입(`aggregate_type='EnvTest'`) 후 `docker compose restart postgres` 실행. healthy 복구 후 재확인 시 row 수 동일(1건), `aggregate_type='EnvTest'` row 유지 확인. `postgres_data` named volume 영속성 보장)
 - **관련 REQ**: 해당 없음
 - **분류**: 엣지
 - **우선순위**: P1(중요)
@@ -479,7 +487,7 @@
 
 ### TC-ENV-016 — Valkey KEYS 명령 사용 금지 및 O(1) 대체 자료구조 적용 확인
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `grep -rn "\.keys(\|redisTemplate.*keys\|\"KEYS \""` 프로덕션 코드 검색 결과 0건. `event-service/CacheHelper.kt:16` 는 주석 내 구 방식 언급으로 실제 호출 코드 아님. `hold_seats:{scheduleId}` 키 자료구조: queue-service 미기동으로 실 키 없으나 코드베이스 설계 상 Redis SET(SISMEMBER O(1)) 사용 확인. SCAN 커서 방식 사용 확인)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
