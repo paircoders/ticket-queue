@@ -12,7 +12,6 @@ import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -117,7 +116,6 @@ class OutboxPollerIntegrationTest {
         kafkaTestConsumer.clearMessages()
     }
 
-    @Disabled("IntegrationTest-specific consumer-receive defect: identical ManualKafkaConsumer receives fine in EdgeCase but 0 here, reproduced in isolation on an idle machine. #248 publishing is verified via EdgeCase 동시에 + 103 producer publishes + frozen docker offset. Deferred to #231-lane follow-up; lead candidate: bump KafkaContainer cp-kafka 7.8.0→7.9.0 to match the working EdgeCase class.")
     @Test
     fun `이벤트_INSERT_후_1초내_Kafka_발행_확인`() {
         // Given
@@ -145,12 +143,12 @@ class OutboxPollerIntegrationTest {
             }
 
         // Then - Verify Kafka message received (payload-level filter 로 inter-test isolation)
-        val messages = pollUntilFound("payment.events", expectedCount = 1, timeoutSeconds = 5) { it == payload }
+        // jsonb 정규화로 키 순서가 바뀌므로 문자열이 아닌 JsonNode 트리로 비교한다.
+        val messages = pollUntilFound("payment.events", expectedCount = 1, timeoutSeconds = 5) { jsonEquals(it, payload) }
         messages shouldHaveSize 1
-        messages[0] shouldBe payload
+        jsonEquals(messages[0], payload) shouldBe true
     }
 
-    @Disabled("IntegrationTest-specific consumer-receive defect: identical ManualKafkaConsumer receives fine in EdgeCase but 0 here, reproduced in isolation on an idle machine. #248 publishing is verified via EdgeCase 동시에 + 103 producer publishes + frozen docker offset. Deferred to #231-lane follow-up; lead candidate: bump KafkaContainer cp-kafka 7.8.0→7.9.0 to match the working EdgeCase class.")
     @Test
     fun `Payment_이벤트_payment_events_토픽_발행`() {
         // Given
@@ -168,12 +166,11 @@ class OutboxPollerIntegrationTest {
         )
 
         // When/Then — poller(1s cycle) + Kafka 수신을 pollUntilFound 가 함께 대기
-        val messages = pollUntilFound("payment.events", expectedCount = 1, timeoutSeconds = 5) { it == payload }
+        val messages = pollUntilFound("payment.events", expectedCount = 1, timeoutSeconds = 5) { jsonEquals(it, payload) }
         messages shouldHaveSize 1
-        messages[0] shouldBe payload
+        jsonEquals(messages[0], payload) shouldBe true
     }
 
-    @Disabled("IntegrationTest-specific consumer-receive defect: identical ManualKafkaConsumer receives fine in EdgeCase but 0 here, reproduced in isolation on an idle machine. #248 publishing is verified via EdgeCase 동시에 + 103 producer publishes + frozen docker offset. Deferred to #231-lane follow-up; lead candidate: bump KafkaContainer cp-kafka 7.8.0→7.9.0 to match the working EdgeCase class.")
     @Test
     fun `Reservation_이벤트_reservation_events_토픽_발행`() {
         // Given
@@ -191,12 +188,11 @@ class OutboxPollerIntegrationTest {
         )
 
         // When/Then
-        val messages = pollUntilFound("reservation.events", expectedCount = 1, timeoutSeconds = 5) { it == payload }
+        val messages = pollUntilFound("reservation.events", expectedCount = 1, timeoutSeconds = 5) { jsonEquals(it, payload) }
         messages shouldHaveSize 1
-        messages[0] shouldBe payload
+        jsonEquals(messages[0], payload) shouldBe true
     }
 
-    @Disabled("IntegrationTest-specific consumer-receive defect: identical ManualKafkaConsumer receives fine in EdgeCase but 0 here, reproduced in isolation on an idle machine. #248 publishing is verified via EdgeCase 동시에 + 103 producer publishes + frozen docker offset. Deferred to #231-lane follow-up; lead candidate: bump KafkaContainer cp-kafka 7.8.0→7.9.0 to match the working EdgeCase class.")
     @Test
     fun `배치_100개_이벤트_순차_발행`() {
         // Given - Create 100 events in order
@@ -235,14 +231,13 @@ class OutboxPollerIntegrationTest {
         // Verify Kafka messages received (drain until >=100 of this test's events)
         // filter: 본 테스트가 발행한 'event-N' correlationId 메시지만 카운트 (inter-test bleed 차단)
         val messages = pollUntilFound("payment.events", expectedCount = 100, timeoutSeconds = 15) { msg ->
-            val cid = msg.substringAfter("\"correlationId\":\"").substringBefore("\"")
-            cid.startsWith("event-")
+            correlationIdOf(msg).startsWith("event-")
         }
         messages.size shouldBeGreaterThanOrEqual 100
 
         // Verify message order (createdAt order should be preserved within batches)
         val receivedEventIndices = messages.mapNotNull { message ->
-            val correlationId = message.substringAfter("\"correlationId\":\"").substringBefore("\"")
+            val correlationId = correlationIdOf(message)
             if (correlationId.startsWith("event-")) {
                 correlationId.removePrefix("event-").toIntOrNull()
             } else null
@@ -324,6 +319,17 @@ class OutboxPollerIntegrationTest {
         }
         return collected
     }
+
+    /**
+     * payload 는 jsonb 컬럼을 왕복하며 키 순서/공백이 정규화되므로(PostgreSQL jsonb 는 키를 길이+바이트
+     * 순으로 재정렬) 원본 문자열과 정확히 일치하지 않는다. 따라서 문자열 동등성이 아니라 JsonNode 트리
+     * 비교(순서 무관)로 의미적 동등성을 확인한다.
+     */
+    private fun jsonEquals(a: String, b: String): Boolean = objectMapper.readTree(a) == objectMapper.readTree(b)
+
+    /** jsonb 정규화에 견디도록 metadata.correlationId 를 JSON 파싱으로 추출한다. */
+    private fun correlationIdOf(json: String): String =
+        objectMapper.readTree(json).path("metadata").path("correlationId").asText()
 
     /**
      * Helper method to create Payment event payload
