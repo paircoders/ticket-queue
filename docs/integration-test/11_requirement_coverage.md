@@ -247,10 +247,10 @@
 - **사전조건**: payment-service 기동 중. PortOne 호출을 12초 지연시키는 mock 서버(WireMock `fixedDelayMilliseconds: 12000` 등)를 띄우고, payment-service의 설정 키 `external.portone.base-url` 을 mock 주소로 오버라이드한다(예: `SPRING_APPLICATION_JSON='{"external":{"portone":{"base-url":"http://localhost:9999"}}}'` 환경변수로 재기동, 또는 integrationTest `@DynamicPropertySource`). 결제 confirm 대상 PENDING 결제 1건 준비
 - **실행 단계**:
   1. PortOne mock을 12초 지연 응답으로 설정
-  2. 결제 승인(confirm) 요청 — confirm은 JWT 기반 외부 엔드포인트(`POST /payments/confirm`)이며 paymentId는 요청 본문에 담는다:
+  2. 결제 승인(confirm) 요청 — 다른 문서와 동일하게 **게이트웨이(8080) 경유**로 호출한다(`POST /payments/confirm`, paymentId는 요청 본문). 게이트웨이가 JWT를 검증한 뒤 `X-User-Id`/`X-User-Role` 헤더를 주입해 payment-service로 라우팅하므로, 서비스(8085)를 직접 호출하면 `X-User-Id` 누락으로 실패한다. (PortOne 10초 타임아웃 < 게이트웨이 30초 타임아웃이라 게이트웨이가 먼저 끊지 않는다.)
      ```bash
      curl -s -o /dev/null -w "%{http_code} %{time_total}\n" \
-       -X POST http://localhost:8085/payments/confirm \
+       -X POST http://localhost:8080/payments/confirm \
        -H "Authorization: Bearer <유효_JWT>" \
        -H "Content-Type: application/json" \
        -d '{"paymentId":"<paymentId>","paymentKey":"<key>","amount":<amt>}'
