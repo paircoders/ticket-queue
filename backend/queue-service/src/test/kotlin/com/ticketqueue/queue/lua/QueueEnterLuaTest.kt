@@ -5,8 +5,8 @@ import io.kotest.matchers.shouldBe
 import io.lettuce.core.RedisClient
 import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.StatefulRedisConnection
+import org.springframework.core.io.ClassPathResource
 import org.testcontainers.containers.GenericContainer
-import java.io.File
 
 class QueueEnterLuaTest : DescribeSpec({
 
@@ -16,8 +16,9 @@ class QueueEnterLuaTest : DescribeSpec({
     lateinit var connection: StatefulRedisConnection<String, String>
 
     val script: String by lazy {
-        File("/Users/taekwon/work/project/ticket-queue-199/backend/queue-service/src/main/resources/lua/queue-enter.lua")
-            .readText()
+        ClassPathResource("lua/queue-enter.lua").inputStream
+            .bufferedReader()
+            .use { it.readText() }
     }
 
     beforeSpec {
