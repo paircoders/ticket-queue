@@ -9,7 +9,7 @@
 
 ### TC-ENV-001 — 인프라 컨테이너 전체 기동 및 healthcheck 통과 확인
 
-- [ ] 미실행
+- [x] 통과 (2026-05-30, 근거: `docker compose up -d` 후 postgres/valkey/grafana=healthy, localstack=healthy, kafka/prometheus=running, kafka-init=exited(0). `KafkaRaftServer nodeId=1 Kafka Server started` 로그 확인. unhealthy/Exit 1 항목 0건)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
