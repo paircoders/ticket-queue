@@ -5,7 +5,7 @@
 > **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
 > **실행 결과 (2026-05-30)**: 통과 9건 | 부분 통과 2건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
-> **발견된 이슈**: ~~#257 스키마 소유자 불일치~~ (해결, PR #264) | ~~#258 localstack_init.sh 멱등성~~ (해결, PR #263) | ~~#259 reservation-service 테스트 ApplicationContext 실패~~ (해결, PR #265) | ~~#260 event-service 테스트 2종~~ (해결, PR #266) | ~~#261 integrationTest 태스크 없음~~ (해결, PR #267) | #268 queue-service Lua 테스트 하드코딩 절대경로 (미해결, OPEN)
+> **발견된 이슈**: ~~#257 스키마 소유자 불일치~~ (해결, PR #264) | ~~#258 localstack_init.sh 멱등성~~ (해결, PR #263) | ~~#259 reservation-service 테스트 ApplicationContext 실패~~ (해결, PR #265) | ~~#260 event-service 테스트 2종~~ (해결, PR #266) | ~~#261 integrationTest 태스크 없음~~ (해결, PR #267) | ~~#268 queue-service Lua 테스트 하드코딩 절대경로~~ (해소, PR #270)
 ---
 
 ### TC-ENV-001 — 인프라 컨테이너 전체 기동 및 healthcheck 통과 확인
@@ -422,7 +422,7 @@
 - [!] 실패 (2026-05-30, 근거:
   - `./gradlew build -x test`: BUILD SUCCESSFUL (557ms, 47 tasks up-to-date) ✓
   - `./gradlew test`: BUILD FAILED — reservation-service 29개, event-service 3개 실패
-    - reservation-service: 전 통합 테스트 `IllegalStateException: Failed to load ApplicationContext` — `NoSuchBeanDefinitionException: No bean named 'kafkaListenerContainerFactory'` → 이슈 #259 (해소 2026-05-30, PR #265: `application-test.yml` 의 `KafkaAutoConfiguration` 제외 제거 + `spring.kafka.listener.auto-startup=false`. `./gradlew :reservation-service:test` → 68건 green. 단, 별도 발견된 queue-service Lua 테스트 2종(`QueueEnterLuaTest`·`BatchApproveLuaTest`)이 소스에 하드코딩된 타 worktree 절대경로(`ticket-queue-199`)로 Lua 파일을 읽어 `./gradlew test` 전체는 여전히 실패 — #261과 무관, 별도 이슈 #268로 분리(OPEN, classpath 리소스 로딩으로 전환 권고))
+    - reservation-service: 전 통합 테스트 `IllegalStateException: Failed to load ApplicationContext` — `NoSuchBeanDefinitionException: No bean named 'kafkaListenerContainerFactory'` → 이슈 #259 (해소 2026-05-30, PR #265: `application-test.yml` 의 `KafkaAutoConfiguration` 제외 제거 + `spring.kafka.listener.auto-startup=false`. `./gradlew :reservation-service:test` → 68건 green. 단, 별도 발견된 queue-service Lua 테스트 2종(`QueueEnterLuaTest`·`BatchApproveLuaTest`)이 소스에 하드코딩된 타 worktree 절대경로(`ticket-queue-199`)로 Lua 파일을 읽어 `./gradlew test` 전체는 여전히 실패 — #261과 무관, 별도 이슈 #268로 분리·해소(PR #270: classpath 리소스 로딩 전환, ./gradlew :queue-service:test BUILD SUCCESSFUL — Lua 테스트 5+5건 green))
     - event-service(1): `EventControllerTest` `GET /events/schedules/{scheduleId}/seats` → 404 (URL 매핑 불일치) → 이슈 #260 (해소 2026-05-30, PR #266: 좌석 라우트는 `SeatController`(`/events/schedules`)에 매핑되나 `@WebMvcTest(EventController)` 슬라이스에 미포함되어 라우트 미등록 → 404. `controllers`·`includeFilters`·`@ContextConfiguration` 에 `SeatController` 추가. `GET /events/**` 는 SecurityConfig 에서 이미 permitAll 이라 공개 접근 200 통과)
     - event-service(2): `SeatServiceTest` `releaseHoldSeats` MockK vararg 매처 불일치 → 이슈 #260 (해소 2026-05-30, PR #266: 실제 `releaseHoldSeats` 는 DB AVAILABLE 복원 + 캐시 무효화만 수행하고 `hold_seats` SREM 은 Reservation Service 담당[KDoc/주석 명시]이므로, 발생하지 않는 `setOps.remove` stub/verify 가 stale → 제거. 실패 격리 검증은 실제 Redis 작업인 캐시 무효화(`redisTemplate.delete`) 실패 시나리오로 정정. `./gradlew :event-service:test` → 314건 green)
   - `./gradlew integrationTest`: Task 'integrationTest' not found — 태스크 미정의 → 이슈 #261 (해소 2026-05-30, PR #267: root `build.gradle.kts` `subprojects` 블록에 `integrationTest` Test 태스크 정의 — 기존 `test` 소스셋 재사용 + `*IntegrationTest`·`*.integration.*` 패키지 필터, `test` 태스크 동작은 불변. `./gradlew integrationTest` 태스크 인식 정상화[`Task 'integrationTest' not found` 해소], `./gradlew :queue-service:integrationTest` → 통합 테스트 2종 green 확인))
