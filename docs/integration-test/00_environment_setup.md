@@ -4,8 +4,8 @@
 > **사전 준비**: docker/secrets/ 하위 모든 .txt 파일 존재 확인, Docker Desktop 실행, 호스트 포트 5432·6379·9092·4566·9090·3001·8080-8085·9080-9085 미점유, JDK 21 및 ./gradlew 실행 권한
 > **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
-> **실행 결과 (2026-05-30)**: 통과 8건 | 부분 통과 3건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
-> **발견된 이슈**: #257 스키마 소유자 불일치 | #258 localstack_init.sh 멱등성(수정 완료) | #259 reservation-service 테스트 ApplicationContext 실패 | #260 event-service 테스트 2종 | #261 integrationTest 태스크 없음
+> **실행 결과 (2026-05-30)**: 통과 9건 | 부분 통과 2건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
+> **발견된 이슈**: ~~#257 스키마 소유자 불일치~~ (해결) | #258 localstack_init.sh 멱등성 | #259 reservation-service 테스트 ApplicationContext 실패 | #260 event-service 테스트 2종 | #261 integrationTest 태스크 없음
 ---
 
 ### TC-ENV-001 — 인프라 컨테이너 전체 기동 및 healthcheck 통과 확인
@@ -56,7 +56,7 @@
 
 ### TC-ENV-003 — PostgreSQL 스키마 분리 생성 확인 (5개 스키마)
 
-- [x] 부분 통과 (2026-05-30, 근거: 스키마 5개(`user_service`, `event_service`, `reservation_service`, `payment_service`, `common`) 존재 확인. `common.outbox_events`, `common.processed_events` 테이블 및 복합 PK(`event_id`, `consumer_service`) 확인. **단, 스키마 소유자 불일치 발견**: `user_service`/`event_service`/`payment_service`가 예상 소유자(`user_svc_user` 등) 대신 `ticket` 슈퍼유저 소유로 확인됨. `reservation_service`만 `reservation_svc_user` 소유 정상. 원인: `CREATE SCHEMA IF NOT EXISTS ... AUTHORIZATION` 은 스키마 이미 존재 시 소유자 변경 안 함(볼륨 잔존 데이터). → 관련 이슈: #257)
+- [x] 통과 (2026-05-30, 근거: 스키마 5개(`user_service`, `event_service`, `reservation_service`, `payment_service`, `common`) 존재 확인. `common.outbox_events`, `common.processed_events` 테이블 및 복합 PK(`event_id`, `consumer_service`) 확인. 스키마 소유자 전수 일치: `user_service`→`user_svc_user`, `event_service`→`event_svc_user`, `reservation_service`→`reservation_svc_user`, `payment_service`→`payment_svc_user`, `common`→`ticket`. 비고: 최초 실행 시 user/event/payment 스키마가 `ticket` 슈퍼유저 소유로 발견되었으나(#257), 원인인 `CREATE SCHEMA IF NOT EXISTS ... AUTHORIZATION` 의 소유자 미변경 동작을 `0_init_users_and_schemas.sh` 에 명시적 `ALTER SCHEMA ... OWNER TO ...` + 멱등 `CREATE USER` 가드 추가로 해결. 라이브 DB 재적용 후 소유자 전수 일치 재검증 완료. → #257 해결)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
