@@ -4,7 +4,7 @@
 > **사전 준비**: docker/secrets/ 하위 모든 .txt 파일 존재 확인, Docker Desktop 실행, 호스트 포트 5432·6379·9092·4566·9090·3001·8080-8085·9080-9085 미점유, JDK 21 및 ./gradlew 실행 권한
 > **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
-> **실행 결과 (2026-05-30)**: 통과 9건 | 부분 통과 2건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
+> **실행 결과 (2026-05-30, 재검증 2026-05-31)**: 통과 10건 | 부분 통과 2건 | 실패 0건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건). TC-ENV-014 는 실패 원인 4종(#259·#260·#261·#268)이 전부 해결·머지(PR #265·#266·#267·#270)되어 develop 트리 재검증 통과로 전환. 미실행 4건은 백엔드 서비스 미기동(GHCR 비공개 이미지) 제약으로 상태 유지
 > **발견된 이슈**: ~~#257 스키마 소유자 불일치~~ (해결, PR #264) | ~~#258 localstack_init.sh 멱등성~~ (해결, PR #263) | ~~#259 reservation-service 테스트 ApplicationContext 실패~~ (해결, PR #265) | ~~#260 event-service 테스트 2종~~ (해결, PR #266) | ~~#261 integrationTest 태스크 없음~~ (해결, PR #267) | ~~#268 queue-service Lua 테스트 하드코딩 절대경로~~ (해소, PR #270)
 ---
 
@@ -419,13 +419,14 @@
 
 ### TC-ENV-014 — ./gradlew build 및 integrationTest 통과
 
-- [!] 실패 (2026-05-30, 근거:
+- [x] 통과 (최초 2026-05-30 실패 → 2026-05-31 재검증 통과. 실패 원인 4종이 전부 해결·머지되어 현 develop 트리에서 green. 최초 실패 경과:
   - `./gradlew build -x test`: BUILD SUCCESSFUL (557ms, 47 tasks up-to-date) ✓
   - `./gradlew test`: BUILD FAILED — reservation-service 29개, event-service 3개 실패
     - reservation-service: 전 통합 테스트 `IllegalStateException: Failed to load ApplicationContext` — `NoSuchBeanDefinitionException: No bean named 'kafkaListenerContainerFactory'` → 이슈 #259 (해소 2026-05-30, PR #265: `application-test.yml` 의 `KafkaAutoConfiguration` 제외 제거 + `spring.kafka.listener.auto-startup=false`. `./gradlew :reservation-service:test` → 68건 green. 단, 별도 발견된 queue-service Lua 테스트 2종(`QueueEnterLuaTest`·`BatchApproveLuaTest`)이 소스에 하드코딩된 타 worktree 절대경로(`ticket-queue-199`)로 Lua 파일을 읽어 `./gradlew test` 전체는 여전히 실패 — #261과 무관, 별도 이슈 #268로 분리·해소(PR #270: classpath 리소스 로딩 전환, ./gradlew :queue-service:test BUILD SUCCESSFUL — Lua 테스트 5+5건 green))
     - event-service(1): `EventControllerTest` `GET /events/schedules/{scheduleId}/seats` → 404 (URL 매핑 불일치) → 이슈 #260 (해소 2026-05-30, PR #266: 좌석 라우트는 `SeatController`(`/events/schedules`)에 매핑되나 `@WebMvcTest(EventController)` 슬라이스에 미포함되어 라우트 미등록 → 404. `controllers`·`includeFilters`·`@ContextConfiguration` 에 `SeatController` 추가. `GET /events/**` 는 SecurityConfig 에서 이미 permitAll 이라 공개 접근 200 통과)
     - event-service(2): `SeatServiceTest` `releaseHoldSeats` MockK vararg 매처 불일치 → 이슈 #260 (해소 2026-05-30, PR #266: 실제 `releaseHoldSeats` 는 DB AVAILABLE 복원 + 캐시 무효화만 수행하고 `hold_seats` SREM 은 Reservation Service 담당[KDoc/주석 명시]이므로, 발생하지 않는 `setOps.remove` stub/verify 가 stale → 제거. 실패 격리 검증은 실제 Redis 작업인 캐시 무효화(`redisTemplate.delete`) 실패 시나리오로 정정. `./gradlew :event-service:test` → 314건 green)
   - `./gradlew integrationTest`: Task 'integrationTest' not found — 태스크 미정의 → 이슈 #261 (해소 2026-05-30, PR #267: root `build.gradle.kts` `subprojects` 블록에 `integrationTest` Test 태스크 정의 — 기존 `test` 소스셋 재사용 + `*IntegrationTest`·`*.integration.*` 패키지 필터, `test` 태스크 동작은 불변. `./gradlew integrationTest` 태스크 인식 정상화[`Task 'integrationTest' not found` 해소], `./gradlew :queue-service:integrationTest` → 통합 테스트 2종 green 확인))
+  - **재검증 (2026-05-31, develop HEAD `86d7f00`)**: 실패 원인 4종 이슈(#259·#260·#261·#268) 전부 CLOSED + 수정 PR(#265·#266·#267·#270) develop 머지 완료(OPEN 잔여 0건). 빌드 캐시까지 우회한 풀 빌드 `./gradlew clean build -x test --no-build-cache --rerun-tasks` → BUILD SUCCESSFUL (47 actionable tasks 전부 신규 실행, `common-kafka` 포함 from-scratch 컴파일 정상, event-service `scan()` deprecation 경고 1건 외 에러 없음). `./gradlew test --no-build-cache` (fresh) → BUILD SUCCESSFUL, 989건 중 failures 0 / errors 0 / skipped 1 (reservation 68·event 314·queue 86 포함). `./gradlew integrationTest` → 태스크 인식 + BUILD SUCCESSFUL. 비고: 일부 TestContainers 테스트 종료 시 `SpringApplicationShutdownHook` 의 HikariPool `Connection refused` 로그는 컨테이너 teardown 이후 노이즈로 테스트 실패와 무관(집계 failures/errors 0). → **실패 원인 해소 확인, `[!]` 실패 → `[x]` 통과 전환**
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
