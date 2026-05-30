@@ -41,4 +41,25 @@ subprojects {
     tasks.withType<Test> {
         useJUnitPlatform()
     }
+
+    // 통합 테스트(TestContainers 기반) 전용 실행 태스크.
+    // 기존 test 소스셋을 그대로 재사용하여 `*IntegrationTest` 클래스와 `*.integration.*`
+    // 패키지에 속한 테스트만 선별 실행한다. test 태스크 동작은 변경하지 않으므로
+    // `./gradlew test` 는 종전대로 단위+통합 테스트를 모두 수행한다. (이슈 #261)
+    plugins.withType<JavaPlugin> {
+        val testSourceSet = extensions.getByType<SourceSetContainer>()["test"]
+        tasks.register<Test>("integrationTest") {
+            description = "TestContainers 기반 통합 테스트 실행 (*IntegrationTest, *.integration.* 패키지)"
+            group = "verification"
+            testClassesDirs = testSourceSet.output.classesDirs
+            classpath = testSourceSet.runtimeClasspath
+            useJUnitPlatform()
+            filter {
+                includeTestsMatching("*IntegrationTest")
+                includeTestsMatching("*.integration.*")
+                isFailOnNoMatchingTests = false
+            }
+            shouldRunAfter(tasks.named("test"))
+        }
+    }
 }
