@@ -10,10 +10,15 @@ spring:
         config:
           event-service:
             url: http://localhost:8082
-  # Kafka auto-configuration 제외 (테스트에서 Kafka 브로커 불필요)
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  # Kafka: @EnableKafka + @KafkaListener(PaymentEventConsumer)가 kafkaListenerContainerFactory
+  # 빈을 요구하므로 KafkaAutoConfiguration 은 프로덕션과 동일하게 활성 상태로 둔다.
+  # 단, 리스너 컨테이너는 기동하지 않아(auto-startup=false) 브로커 연결을 시도하지 않으므로
+  # 컨텍스트 로드에 실제 Kafka 브로커가 필요 없다. 실제 브로커가 필요한 e2e 테스트
+  # (ReservationOutboxPollerIntegrationTest)는 @DynamicPropertySource 로 testcontainer
+  # 주소를 주입하고 자체 KafkaConsumer 로 검증한다.
+  kafka:
+    listener:
+      auto-startup: false
   jpa:
     hibernate:
       ddl-auto: validate
