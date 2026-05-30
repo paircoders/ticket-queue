@@ -386,27 +386,26 @@ class SeatServiceTest {
         private val seatIds = listOf(UUID.randomUUID(), UUID.randomUUID())
 
         @Test
-        @DisplayName("DB를 AVAILABLE로 복원하고 Redis hold_seats에서 좌석을 제거하며 캐시를 무효화한다")
-        fun removesFromHoldSeatsAndEvictsCache() {
+        @DisplayName("DB를 AVAILABLE로 복원하고 캐시를 무효화한다 (hold_seats SREM은 Reservation Service 담당)")
+        fun restoresAvailableAndEvictsCache() {
             every { seatRepository.updateStatusToAvailable(scheduleId, seatIds) } returns 2L
-            every { setOps.remove(any<String>(), *anyVararg()) } returns 2L
             every { redisTemplate.delete(any<String>()) } returns true
 
             seatService.releaseHoldSeats(scheduleId, seatIds)
 
             verify { seatRepository.updateStatusToAvailable(scheduleId, seatIds) }
-            verify { setOps.remove("hold_seats:$scheduleId", *anyVararg()) }
             verify { redisTemplate.delete("cache:seats:$scheduleId") }
         }
 
         @Test
-        @DisplayName("Redis 장애 시 예외를 전파하지 않는다")
+        @DisplayName("Redis 캐시 무효화 실패 시에도 예외를 전파하지 않는다")
         fun doesNotPropagateRedisFailure() {
             every { seatRepository.updateStatusToAvailable(scheduleId, seatIds) } returns 2L
-            every { setOps.remove(any<String>(), *anyVararg()) } throws RedisConnectionFailureException("connection failed")
-            every { redisTemplate.delete(any<String>()) } returns true
+            every { redisTemplate.delete(any<String>()) } throws RedisConnectionFailureException("connection failed")
 
             seatService.releaseHoldSeats(scheduleId, seatIds)
+
+            verify { seatRepository.updateStatusToAvailable(scheduleId, seatIds) }
         }
     }
 }

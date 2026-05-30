@@ -46,12 +46,12 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 @WebMvcTest(
-    controllers = [EventController::class],
+    controllers = [EventController::class, SeatController::class],
     useDefaultFilters = false,
     includeFilters = [
         ComponentScan.Filter(
             type = FilterType.ASSIGNABLE_TYPE,
-            classes = [EventController::class, GlobalExceptionHandler::class, SecurityConfig::class]
+            classes = [EventController::class, SeatController::class, GlobalExceptionHandler::class, SecurityConfig::class]
         )
     ],
     excludeAutoConfiguration = [
@@ -62,7 +62,7 @@ import java.util.UUID
         ParameterStoreAutoConfiguration::class
     ]
 )
-@ContextConfiguration(classes = [EventController::class, GlobalExceptionHandler::class, SecurityConfig::class])
+@ContextConfiguration(classes = [EventController::class, SeatController::class, GlobalExceptionHandler::class, SecurityConfig::class])
 @ActiveProfiles("test")
 @TestPropertySource(properties = [
     "spring.cloud.aws.region.static=us-east-1",
