@@ -4,7 +4,7 @@
 > **사전 준비**: docker/secrets/ 하위 모든 .txt 파일 존재 확인, Docker Desktop 실행, 호스트 포트 5432·6379·9092·4566·9090·3001·8080-8085·9080-9085 미점유, JDK 21 및 ./gradlew 실행 권한
 > **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
-> **실행 결과 (2026-05-30)**: 통과 7건 | 부분 통과 3건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
+> **실행 결과 (2026-05-30)**: 통과 8건 | 부분 통과 3건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
 > **발견된 이슈**: #257 스키마 소유자 불일치 | #258 localstack_init.sh 멱등성(수정 완료) | #259 reservation-service 테스트 ApplicationContext 실패 | #260 event-service 테스트 2종 | #261 integrationTest 태스크 없음
 
 ---
