@@ -5,7 +5,7 @@
 > **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
 > **실행 결과 (2026-05-30)**: 통과 7건 | 부분 통과 3건 | 실패 1건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건)
-> **발견된 이슈**: #257 스키마 소유자 불일치 | #258 localstack_init.sh 멱등성 | #259 reservation-service 테스트 ApplicationContext 실패 | #260 event-service 테스트 2종 | #261 integrationTest 태스크 없음
+> **발견된 이슈**: #257 스키마 소유자 불일치 | #258 localstack_init.sh 멱등성(수정 완료) | #259 reservation-service 테스트 ApplicationContext 실패 | #260 event-service 테스트 2종 | #261 integrationTest 태스크 없음
 
 ---
 
@@ -162,7 +162,7 @@
 
 ### TC-ENV-006 — LocalStack 시크릿 등록 전 서비스 기동 시 실패 케이스(시크릿 미주입)
 
-- [x] 부분 통과 (2026-05-30, 근거: `common/secure-config` 삭제 후 시크릿 목록에서 제거됨 확인. 복구 시도: `localstack_init.sh` 재실행 → `set -e` + `create-secret` 중복으로 첫 번째 시크릿(user-svc)에서 스크립트 중단, `common/secure-config` 미복구. 수동 `awslocal secretsmanager create-secret` 으로 복구 성공. **Spring Boot 서비스 기동 실패 시나리오(로그 확인)는 백엔드 컨테이너 이미지 없어 미검증**. `localstack_init.sh` 멱등성 버그 → 관련 이슈: #258)
+- [x] 부분 통과 (2026-05-30, 근거: `common/secure-config` 삭제 후 시크릿 목록에서 제거됨 확인. **[버그]** 복구 시도로 `localstack_init.sh` 재실행 시 `set -e` + 비멱등 명령 조합으로 S3 버킷 생성 단계(`s3 mb` → `BucketAlreadyOwnedByYou`)에서 즉시 중단되어 `common/secure-config` 미복구(시크릿 4개). 수동 `awslocal secretsmanager create-secret` 으로 복구. **[수정 완료 → #258]** `localstack_init.sh` 멱등화: S3는 `head-bucket` 분기, 시크릿은 `put_secret` 헬퍼(`describe-secret` 분기 후 update/create)로 통일. 동일 복구 시나리오 재실행 → exit 0, `common/secure-config` 정상 복구(시크릿 5개), 필수 키 정합 확인. 5개 모두 존재 상태 재실행도 전부 update 경로·`ResourceExistsException` 0건·exit 0으로 멱등성 재검증 완료. **Spring Boot 서비스 기동 실패 시나리오(로그 확인)는 백엔드 컨테이너 이미지 없어 여전히 미검증** → 부분 통과 유지)
 - **관련 REQ**: 해당 없음
 - **분류**: 예외
 - **우선순위**: P1(중요)
@@ -183,7 +183,7 @@
      ```
   4. common/secure-config 재등록(복구):
      ```bash
-     # localstack_init.sh 재실행 또는 개별 시크릿 재등록
+     # localstack_init.sh 재실행 — #258 수정 후 멱등하므로 기존 시크릿이 있어도 중단 없이 누락분만 복구
      docker exec ticket-localstack bash /etc/localstack/init/ready.d/localstack_init.sh
      ```
 - **기대 결과**: user-service 컨테이너가 `ResourceNotFoundException` 또는 Spring Boot `Application run failed` 로그를 남기고 재시작 루프 진입 또는 Exit
