@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.context.annotation.Import
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -35,6 +36,9 @@ import java.util.UUID
 @Import(OutboxPollerTestConfig::class)
 @ActiveProfiles("test")
 @Testcontainers
+// 클래스 종료 시 컨텍스트(+@Scheduled 폴러)를 닫아, 캐시된 컨텍스트의 폴러가 teardown 된 컨테이너로
+// 쿼리하며 30s Hikari 타임아웃을 유발하는 cross-context 누수를 방지한다.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OutboxPollerIntegrationTest {
 
     companion object {

@@ -16,6 +16,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.context.annotation.Import
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -41,6 +42,9 @@ import java.util.concurrent.TimeUnit
 @Import(OutboxPollerTestConfig::class)
 @ActiveProfiles("test")
 @Testcontainers
+// 클래스 종료 시 컨텍스트(+@Scheduled 폴러)를 닫아 cross-context 폴러 누수(teardown 된 컨테이너로의
+// 30s Hikari 타임아웃)를 방지한다.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OutboxPollerEdgeCaseIntegrationTest {
 
     @Autowired
