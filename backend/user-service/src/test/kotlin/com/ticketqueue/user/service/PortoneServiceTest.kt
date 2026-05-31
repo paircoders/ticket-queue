@@ -64,6 +64,29 @@ class PortoneServiceTest {
     }
 
     @Test
+    fun `본인인증 실패 - READY 상태이면 PORTONE_VERIFICATION_TIMEOUT 예외를 던진다`() {
+        // given
+        val identityVerificationId = "ready-id"
+        val accessToken = "Bearer test-token"
+        val response = PortoneIdentityV2Response(
+            id = identityVerificationId,
+            status = "READY",
+            verifiedCustomer = null
+        )
+
+        every { portoneTokenService.getAccessToken() } returns accessToken
+        every {
+            portoneClient.getIdentityVerification(identityVerificationId, "test-store-id", accessToken)
+        } returns response
+
+        // when & then
+        val exception = shouldThrow<UserException> {
+            portoneService.verifyIdentity(identityVerificationId)
+        }
+        exception.errorCode shouldBe ErrorCode.PORTONE_VERIFICATION_TIMEOUT
+    }
+
+    @Test
     fun `본인인증 실패 - 404 에러 발생 시 PORTONE_VERIFICATION_NOT_FOUND 예외를 던진다`() {
         // given
         val identityVerificationId = "invalid-id"
