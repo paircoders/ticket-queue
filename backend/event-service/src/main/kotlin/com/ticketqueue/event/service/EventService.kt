@@ -192,22 +192,25 @@ class EventService(
         val pageable = PageRequest.of(coercedPage, coercedSize)
         val result = eventRepository.findEventList(pageable, status, city, keyword)
 
-        // 4. Cache write (락 획득 성공 시에만)
-        if (lockAcquired) {
-            try {
-                val cachedList = CachedEventList(
-                    content = result.content,
-                    page = result.number,
-                    size = result.size,
-                    totalElements = result.totalElements
-                )
-                val json = objectMapper.writeValueAsString(cachedList)
+        // 4. Cache write
+        try {
+            val cachedList = CachedEventList(
+                content = result.content,
+                page = result.number,
+                size = result.size,
+                totalElements = result.totalElements
+            )
+            val json = objectMapper.writeValueAsString(cachedList)
+            if (lockAcquired) {
                 redisTemplate.opsForValue().set(cacheKey, json, Duration.ofSeconds(cacheProperties.event.ttl))
-            } catch (e: DataAccessException) {
-                log.warn("Redis cache write failed for key: $cacheKey", e)
-            } catch (e: JsonProcessingException) {
-                log.warn("Redis cache serialization failed for key: $cacheKey", e)
+            } else {
+                // 락 미획득이지만 캐시가 비어있으면 저장 (다른 스레드가 저장 중이면 setIfAbsent가 false 반환)
+                redisTemplate.opsForValue().setIfAbsent(cacheKey, json, Duration.ofSeconds(cacheProperties.event.ttl))
             }
+        } catch (e: DataAccessException) {
+            log.warn("Redis cache write failed for key: $cacheKey", e)
+        } catch (e: JsonProcessingException) {
+            log.warn("Redis cache serialization failed for key: $cacheKey", e)
         }
 
         return result
@@ -273,16 +276,19 @@ class EventService(
             updatedAt = event.updatedAt!!
         )
 
-        // 4. Cache write (락 획득 성공 시에만)
-        if (lockAcquired) {
-            try {
-                val json = objectMapper.writeValueAsString(detailResponse)
+        // 4. Cache write
+        try {
+            val json = objectMapper.writeValueAsString(detailResponse)
+            if (lockAcquired) {
                 redisTemplate.opsForValue().set(cacheKey, json, Duration.ofSeconds(cacheProperties.event.ttl))
-            } catch (e: DataAccessException) {
-                log.warn("Redis cache write failed for key: $cacheKey", e)
-            } catch (e: JsonProcessingException) {
-                log.warn("Redis cache serialization failed for key: $cacheKey", e)
+            } else {
+                // 락 미획득이지만 캐시가 비어있으면 저장 (다른 스레드가 저장 중이면 setIfAbsent가 false 반환)
+                redisTemplate.opsForValue().setIfAbsent(cacheKey, json, Duration.ofSeconds(cacheProperties.event.ttl))
             }
+        } catch (e: DataAccessException) {
+            log.warn("Redis cache write failed for key: $cacheKey", e)
+        } catch (e: JsonProcessingException) {
+            log.warn("Redis cache serialization failed for key: $cacheKey", e)
         }
 
         return detailResponse
