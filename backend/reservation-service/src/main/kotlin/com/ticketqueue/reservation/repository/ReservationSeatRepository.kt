@@ -8,6 +8,7 @@ import java.util.UUID
 
 interface ReservationSeatRepository : JpaRepository<ReservationSeat, UUID> {
     fun findByReservationId(reservationId: UUID): List<ReservationSeat>
+    fun findByReservationIdIn(reservationIds: List<UUID>): List<ReservationSeat>
     fun countByReservationIdIn(reservationIds: List<UUID>): Int
 
     @Modifying

@@ -649,3 +649,11 @@
      ```
 - **기대 결과**: `KEYS` 명령 0건; `hold_seats:<scheduleId>` 조회는 `SMEMBERS` 또는 `SMISMEMBER`(sMIsMember) 사용; SET TTL = 600초; Lua 스크립트(`SADD + EXPIRE` 원자 처리) 흔적 확인
 - **검증 포인트**: monitor 로그에 KEYS 0건 / SET 계열 명령 존재 / TTL > 0
+
+---
+
+### TC-RSV-023 — 내 예매 목록 조회: GET /reservations 응답 정합성
+
+- [x] 통과
+- **관련 REQ**: REQ-RSV-009
+- **결과 (2026-05-31)**: feat/291-reservation-endpoints — GET /reservations 및 GET /reservations/{id} 구현. EventServiceClient에 getEventInfo/getEventInfoBatch 추가. N+1 방지를 위한 배치 조회 적용.

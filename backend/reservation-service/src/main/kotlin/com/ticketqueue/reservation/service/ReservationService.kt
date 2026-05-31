@@ -9,11 +9,14 @@ import com.ticketqueue.common.event.ReservationCancelledEvent
 import com.ticketqueue.common.exception.ErrorCode
 import com.ticketqueue.common.outbox.OutboxEventRecorder
 import com.ticketqueue.reservation.client.EventServiceClient
+import com.ticketqueue.reservation.dto.ReservationDto
 import com.ticketqueue.reservation.dto.ReservationDto.CancelResponse
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsResponse
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.HoldResponse
+import com.ticketqueue.reservation.dto.ReservationDto.ReservationDetailResponse
+import com.ticketqueue.reservation.dto.ReservationDto.ReservationsListResponse
 import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
 import com.ticketqueue.reservation.entity.Reservation
 import com.ticketqueue.reservation.entity.ReservationSeat
@@ -433,6 +436,89 @@ class ReservationService(
                     "paymentId=${event.aggregateId}, reason=${event.reason}"
             }
         }
+    }
+
+    /**
+     * 내 예매 목록 조회 (REQ-RSV-009)
+     *
+     * N+1 방지를 위해 예매 ID와 공연 ID를 배치 조회한다.
+     * Event Service 장애 시 공연 정보는 기본값으로 대체하고 예매 목록은 정상 반환한다.
+     */
+    fun getMyReservations(userId: UUID): ReservationsListResponse {
+        val reservations = reservationRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        if (reservations.isEmpty()) return ReservationsListResponse(emptyList())
+
+        val reservationIds = reservations.mapNotNull { it.id }
+        val eventIds = reservations.map { it.eventId }.distinct()
+        val scheduleIds = reservations.map { it.scheduleId }.distinct()
+
+        // 배치 조회 — N+1 방지
+        val eventInfoMap = runCatching {
+            eventServiceClient.getEventInfoBatch(eventIds).events.associateBy { it.eventId }
+        }.getOrElse { emptyMap() }
+
+        val scheduleInfoMap = scheduleIds.associateWith { scheduleId ->
+            runCatching { eventServiceClient.getScheduleInfo(scheduleId) }.getOrNull()
+        }
+
+        val allSeats = reservationSeatRepository.findByReservationIdIn(reservationIds)
+        val seatsByReservation = allSeats.groupBy { it.reservationId }
+
+        val list = reservations.map { reservation ->
+            val eventInfo = eventInfoMap[reservation.eventId]
+            val scheduleInfo = scheduleInfoMap[reservation.scheduleId]
+            val seats = seatsByReservation[reservation.id] ?: emptyList()
+
+            ReservationDto.ReservationListItem(
+                reservationId = reservation.id!!,
+                eventTitle = eventInfo?.title ?: "알 수 없는 공연",
+                scheduleDate = scheduleInfo?.eventStartAt ?: LocalDateTime.MIN,
+                status = reservation.status,
+                seats = seats.map { ReservationDto.ReservationListItem.SeatInfo(it.seatNumber, it.grade) },
+                paymentAmount = reservation.totalAmount
+            )
+        }
+        return ReservationsListResponse(list)
+    }
+
+    /**
+     * 예매 상세 조회 (REQ-RSV-009)
+     *
+     * 소유권 검증 후 예매 상세, 공연 정보, 좌석 목록을 반환한다.
+     * CONFIRMED 예매는 ticketNumber 및 QR 데이터를 포함한다.
+     */
+    fun getReservationDetail(userId: UUID, reservationId: UUID): ReservationDetailResponse {
+        val reservation = reservationRepository.findByIdAndUserId(reservationId, userId)
+            ?: throw ReservationException(ErrorCode.RESERVATION_NOT_FOUND)
+
+        val seats = reservationSeatRepository.findByReservationId(reservationId)
+        val eventInfo = runCatching { eventServiceClient.getEventInfo(reservation.eventId) }.getOrNull()
+        val scheduleInfo = runCatching { eventServiceClient.getScheduleInfo(reservation.scheduleId) }.getOrNull()
+        val qrData = reservation.ticketNumber?.let { "https://ticket-queue.com/tickets/verify/$it" }
+
+        return ReservationDetailResponse(
+            reservationId = reservation.id!!,
+            eventId = reservation.eventId,
+            eventTitle = eventInfo?.title ?: "알 수 없는 공연",
+            artist = eventInfo?.artist ?: "",
+            venueName = eventInfo?.venueName ?: "",
+            hallName = eventInfo?.hallName ?: "",
+            scheduleDate = scheduleInfo?.eventStartAt ?: LocalDateTime.MIN,
+            status = reservation.status,
+            seats = seats.map {
+                ReservationDetailResponse.SeatDetail(
+                    seatId = it.seatId,
+                    seatNumber = it.seatNumber,
+                    grade = it.grade,
+                    price = it.price
+                )
+            },
+            totalAmount = reservation.totalAmount,
+            paymentId = reservation.paymentId,
+            ticketNumber = reservation.ticketNumber,
+            qrData = qrData,
+            createdAt = reservation.createdAt!!
+        )
     }
 
     private fun generateTicketNumber(): String {
