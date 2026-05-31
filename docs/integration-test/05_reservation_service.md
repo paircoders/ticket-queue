@@ -9,7 +9,7 @@
 
 ### TC-RSV-001 — 정상 좌석 선점: PENDING 예매 생성 및 Redis SET 갱신
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: HTTP 201, status=PENDING, hold_expires_at=now+5분, hold_seats SET에 두 좌석 UUID 존재 확인)
 - **관련 REQ**: REQ-RSV-001, REQ-RSV-008
 - **분류**: 정상
 - **우선순위**: P0
@@ -43,7 +43,7 @@
 
 ### TC-RSV-002 — 동시 선점 경쟁: 동일 좌석에 N명 동시 요청 시 1명만 성공
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 10명 동시 요청 중 정확히 1개 HTTP 201, 9개 HTTP 409(SEAT_ALREADY_HELD))
 - **관련 REQ**: REQ-RSV-001
 - **분류**: 동시성
 - **우선순위**: P0
@@ -83,7 +83,7 @@
 
 ### TC-RSV-003 — 사용자 락 TOCTOU: 동일 유저가 동시 선점 요청 시 즉시 409
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 동일 userId 동시 2요청 → 1개 201, 1개 409(RESERVATION_IN_PROGRESS))
 - **관련 REQ**: REQ-RSV-001, REQ-RSV-005
 - **분류**: 동시성
 - **우선순위**: P0
@@ -113,7 +113,7 @@
 
 ### TC-RSV-004 — 만료된 Queue Token으로 선점 시 401 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Redis에 토큰 미존재 확인 후 요청 → HTTP 401, code=QUEUE_TOKEN_EXPIRED)
 - **관련 REQ**: REQ-RSV-008
 - **분류**: 보안
 - **우선순위**: P0
@@ -139,7 +139,7 @@
 
 ### TC-RSV-005 — 다른 scheduleId의 Queue Token으로 선점 시 401 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: scheduleId-B 토큰으로 scheduleId-A 선점 시도 → HTTP 401, code=QUEUE_TOKEN_INVALID)
 - **관련 REQ**: REQ-RSV-008
 - **분류**: 보안
 - **우선순위**: P1
@@ -164,7 +164,7 @@
 
 ### TC-RSV-006 — 최대 좌석 수 초과 선점 시 400 거부 (단일 요청 5장)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 5개 seatIds 전송 → HTTP 400, code=INVALID_INPUT, message="seatIds: size must be between 1 and 4")
 - **관련 REQ**: REQ-RSV-005
 - **분류**: 예외
 - **우선순위**: P1
@@ -189,7 +189,7 @@
 
 ### TC-RSV-007 — 기존 PENDING 예매(3석) 존재 시 추가 2석 선점으로 합산 5석 초과 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 3석 선점 후 2석 추가 시도 → HTTP 400, code=MAX_SEATS_EXCEEDED, 기존 3석 유지)
 - **관련 REQ**: REQ-RSV-005
 - **분류**: 예외
 - **우선순위**: P1
@@ -218,7 +218,7 @@
 
 ### TC-RSV-008 — 이미 hold_seats SET에 있는 좌석 선점 시 409 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Redis SADD로 좌석 직접 삽입 후 동일 좌석 선점 시도 → HTTP 409, code=SEAT_ALREADY_HELD)
 - **관련 REQ**: REQ-RSV-001
 - **분류**: 예외
 - **우선순위**: P0
@@ -245,7 +245,7 @@
 
 ### TC-RSV-009 — Outbox 패턴: 선점 해제(취소) 시 직접 Kafka 발행 금지, outbox_events만 INSERT
 
-- [ ] 미실행
+- [ ] 실패 (사유: outbox INSERT·Kafka 발행 정상이나 cancelReservation() 내 detached 엔티티 미반영으로 DB status='PENDING' 유지됨, 이슈: #287)
 - **관련 REQ**: REQ-RSV-011, REQ-RSV-012
 - **분류**: 정상
 - **우선순위**: P0
@@ -279,7 +279,7 @@
 
 ### TC-RSV-010 — Outbox 트랜잭션 원자성: 비즈니스 롤백 시 outbox_events도 미삽입
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: CANCELLED 예매 재취소 시도 → HTTP 409, code=RESERVATION_ALREADY_CANCELLED, outbox 신규 row 0건)
 - **관련 REQ**: REQ-RSV-012
 - **분류**: 예외
 - **우선순위**: P0
@@ -304,7 +304,7 @@
 
 ### TC-RSV-011 — hold 만료 배치: holdExpiresAt 경과 PENDING 예매 자동 CANCELLED 및 Outbox 발행
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 과거 hold_expires_at(UTC 기준)으로 PENDING 예매 INSERT 후 배치 실행(매분 0초) → status=CANCELLED, outbox reason=HOLD_EXPIRED, Redis SISMEMBER=0)
 - **관련 REQ**: REQ-RSV-007, REQ-RSV-011
 - **분류**: 정상
 - **우선순위**: P0
@@ -345,7 +345,7 @@
 
 ### TC-RSV-012 — 경계값: holdExpiresAt 직전(만료 1초 전) 배치 스킵, 직후 처리
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: hold_expires_at=now_UTC+65초 삽입 → 첫 번째 배치(~60초 후) PENDING 유지, 두 번째 배치(~120초 후) CANCELLED 전환)
 - **관련 REQ**: REQ-RSV-007
 - **분류**: 경계값
 - **우선순위**: P1
@@ -375,16 +375,16 @@
 
 ### TC-RSV-013 — Kafka Consumer 멱등성: 동일 PaymentSuccess 이벤트 재전송 시 processed_events 중복 차단
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 동일 eventId PaymentSuccess 2회 발행 → status=CONFIRMED 1회 전이, processed_events row 1건, 두 번째 DataIntegrityViolationException 처리 후 ack)
 - **관련 REQ**: REQ-RSV-004, REQ-RSV-012
 - **분류**: 멱등성
 - **우선순위**: P0
 - **사전조건**: PENDING 예매 1건(reservationId-X), 동일 eventId의 PaymentSuccess 이벤트 메시지 2개
 - **실행 단계**:
-  1. PaymentSuccess JSON 준비(eventId 고정)
+  1. PaymentSuccess JSON 준비(eventId 고정, 반드시 유효한 UUID 형식)
      ```json
      {
-       "eventId": "fixed-event-uuid-001",
+       "eventId": "f1000000-1111-2222-3333-000000000001",
        "eventType": "PaymentSuccess",
        "aggregateId": "<paymentId>",
        "aggregateType": "Payment",
@@ -412,7 +412,7 @@
   4. processed_events 확인
      ```sql
      SELECT COUNT(*) FROM common.processed_events
-     WHERE event_id = 'fixed-event-uuid-001' AND consumer_service = 'reservation-service';
+     WHERE event_id = 'f1000000-1111-2222-3333-000000000001' AND consumer_service = 'reservation-service';
      ```
 - **기대 결과**: 예매 `status='CONFIRMED'`로 1회만 전이; `processed_events`에 (fixed-event-uuid-001, reservation-service) row 1건만 존재; 두 번째 메시지는 `DataIntegrityViolationException` 처리 후 ack 및 스킵
 - **검증 포인트**: DB `status='CONFIRMED'` / `processed_events` row 1건 / 로그에 "Skipping duplicate event" 포함
@@ -421,7 +421,7 @@
 
 ### TC-RSV-014 — PaymentFailed Consumer: SAGA 보상 체인 — 예매 CANCELLED + ReservationCancelled Outbox 발행
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: PaymentFailed 이벤트 발행 → status=CANCELLED, outbox reason=PAYMENT_FAILED, causationId 일치, hold_seats SISMEMBER=0)
 - **관련 REQ**: REQ-RSV-004, REQ-RSV-011
 - **분류**: 보상트랜잭션
 - **우선순위**: P0
@@ -448,7 +448,7 @@
 
 ### TC-RSV-015 — PaymentFailed Consumer 멱등성: 이미 CANCELLED 예매에 재전송 시 no-op
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: CANCELLED 예매에 새 eventId PaymentFailed 재전송 → 상태 불변, outbox 신규 row 0건, 로그 "Reservation already cancelled (idempotent skip)" 확인)
 - **관련 REQ**: REQ-RSV-004
 - **분류**: 멱등성
 - **우선순위**: P1
@@ -471,7 +471,7 @@
 
 ### TC-RSV-016 — DLQ 전략: 잘못된 JSON 수신 시 재시도 없이 즉시 dlq.payment 이동
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 파싱 불가 JSON 발행 → 서비스 로그 "Malformed JSON in payment.events, sending to DLQ" 즉시 출력, dlq.payment 토픽에 메시지 도달, 재시도 로그 없음)
 - **관련 REQ**: REQ-RSV-004
 - **분류**: 예외
 - **우선순위**: P1
@@ -498,7 +498,7 @@
 
 ### TC-RSV-017 — DLQ 전략: TimeoutException 발생 시 지수 백오프 3회 후 dlq.payment 이동
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 서비스 기동 로그 "Kafka error handler configured: backoff=exponential(1s/2x/10s), maxRetries=3" 및 실제 Retryable error 로그 패턴 확인. KafkaErrorHandlerConfig: initialInterval=1000, multiplier=2.0, maxElapsedTime=15000)
 - **관련 REQ**: REQ-RSV-004
 - **분류**: 예외
 - **우선순위**: P1
@@ -517,7 +517,7 @@
 
 ### TC-RSV-018 — 내부 API 보안: X-Service-Api-Key 없이 /internal/reservations/{id} 호출 시 401
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: API Key 미포함 → HTTP 401, code=INTERNAL_API_UNAUTHORIZED; API Key 포함 → HTTP 200, 예매 상세 반환)
 - **관련 REQ**: 해당 없음 (아키텍처 원칙)
 - **분류**: 보안
 - **우선순위**: P0
@@ -539,7 +539,7 @@
 
 ### TC-RSV-019 — 스키마 격리: reservation_svc_user 계정으로 event_service 스키마 직접 쿼리 시 권한 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: event_service 스키마 접근 → "ERROR: permission denied for schema event_service"; reservation_service 스키마 접근 → 정상 결과)
 - **관련 REQ**: 해당 없음 (아키텍처 원칙)
 - **분류**: 보안
 - **우선순위**: P0
@@ -562,7 +562,7 @@
 
 ### TC-RSV-020 — 선점 해제 API: DELETE /hold/{reservationId} 후 hold_seats SET에서 좌석 제거 확인
 
-- [ ] 미실행
+- [ ] 실패 (사유: HTTP 200·응답 status=CANCELLED·Redis SISMEMBER=0 정상이나 cancelReservation() detached 엔티티 버그로 DB status='PENDING' 미갱신, 이슈: #287)
 - **관련 REQ**: REQ-RSV-006
 - **분류**: 정상
 - **우선순위**: P1
@@ -593,7 +593,7 @@
 
 ### TC-RSV-021 — 공연 당일 취소 불가: cancelReservation 호출 시 422 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 오늘(2026-05-31 UTC) event_start_at 회차에 연결된 예매 취소 시도 → HTTP 422, code=CANCELLATION_NOT_ALLOWED, DB 상태 불변, outbox 0건)
 - **관련 REQ**: REQ-RSV-006
 - **분류**: 엣지
 - **우선순위**: P1
@@ -612,7 +612,7 @@
 
 ### TC-RSV-022 — hold_seats SET TTL 설계: KEYS 명령 미사용 및 SET 기반 O(1) 조회 확인
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Redis MONITOR 로그에서 KEYS 명령 0건, SMISMEMBER·SADD·SMEMBERS 명령 확인, hold_seats TTL=598(600 이하 양수), Lua 스크립트 SADD+EXPIRE 원자 처리 흔적 확인)
 - **관련 REQ**: REQ-RSV-001, REQ-RSV-003
 - **분류**: 엣지
 - **우선순위**: P1
