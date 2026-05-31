@@ -9,7 +9,7 @@
 
 ### TC-GW-001 — Authorization 헤더 완전 누락 시 보호 엔드포인트 401 UNAUTHORIZED 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 무인증 /users/me → HTTP 401, code=UNAUTHORIZED, X-Trace-Id 헤더 존재)
 - **관련 REQ**: REQ-GW-002, REQ-AUTH-006
 - **분류**: 예외
 - **우선순위**: P0(필수/핵심)
@@ -30,7 +30,7 @@
 
 ### TC-GW-002 — Bearer 형식 아닌 Authorization 헤더 (Basic, 토큰만) 시 401 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Basic·토큰만·빈 Authorization 모두 401, code=UNAUTHORIZED (INVALID_TOKEN 아님))
 - **관련 REQ**: REQ-GW-002
 - **분류**: 예외, 경계값
 - **우선순위**: P0(필수/핵심)
@@ -61,7 +61,7 @@
 
 ### TC-GW-003 — 서명 불일치 JWT (다른 시크릿으로 서명) 시 401 INVALID_TOKEN 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 무작위 64B 시크릿 서명 토큰 → 401 code=INVALID_TOKEN)
 - **관련 REQ**: REQ-GW-002, REQ-AUTH-009
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -93,7 +93,7 @@
 
 ### TC-GW-004 — 만료된 JWT 토큰으로 요청 시 401 EXPIRED_TOKEN 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: exp 과거 토큰 → 401 code=EXPIRED_TOKEN; 메트릭 gateway_jwt_rejected_total{reason="expired"} 증가 확인)
 - **관련 REQ**: REQ-GW-002, REQ-AUTH-010
 - **분류**: 예외
 - **우선순위**: P0(필수/핵심)
@@ -121,7 +121,7 @@
 
 ### TC-GW-005 — 필수 클레임(sub/role/jti) 누락 JWT 시 401 INVALID_TOKEN 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: sub/role/jti 각 누락 토큰 모두 401 code=INVALID_TOKEN)
 - **관련 REQ**: REQ-GW-002
 - **분류**: 예외, 경계값
 - **우선순위**: P1(중요)
@@ -142,7 +142,7 @@
 
 ### TC-GW-006 — HS256 알고리즘으로 서명된 토큰(Algorithm Confusion Attack) 시 401 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 동일 시크릿 HS256 토큰 → 401 INVALID_TOKEN; 로그 'Invalid JWT token: Algorithm mismatch detected')
 - **관련 REQ**: REQ-GW-002
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -172,7 +172,7 @@
 
 ### TC-GW-007 — 블랙리스트 등록된 토큰(로그아웃 토큰)으로 요청 시 401 INVALID_TOKEN 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Redis token:blacklist:{jti} 등록(EXISTS=1) 후 해당 토큰 → 401 INVALID_TOKEN)
 - **관련 REQ**: REQ-AUTH-011, REQ-GW-002
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -201,7 +201,7 @@
 
 ### TC-GW-008 — Redis 블랙리스트 CircuitBreaker OPEN 상태에서 fail-open (로그인 정상 허용)
 
-- [ ] 미실행
+- [x] NA (2026-05-31, 사유: redisBlacklist CircuitBreaker OPEN 강제 주입은 공유 Valkey 환경에서 RequestRateLimiter까지 동시 영향 → 안전 격리 불가. 대체 증빙: JwtAuthenticationWebFilter L127-138 — CallNotPermittedException(CB OPEN)→fail-open(Mono.just(false))+gateway.blacklist.circuit.open.passed 카운터, 그 외 Redis 오류→fail-closed(401) 코드 경로 확인. redisBlacklist CB 설정 application.yml L163-171)
 - **관련 REQ**: REQ-GW-002
 - **분류**: 예외, 동시성
 - **우선순위**: P1(중요)
@@ -229,7 +229,7 @@
 
 ### TC-GW-009 — X-User-Id/X-User-Role 헤더 인젝션 공격 차단 (Strip-First 패턴)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 8081 다운스트림(echo) 실제 수신 헤더 X-User-Id=1·X-User-Role=USER (인젝션값 99999/ADMIN 아님); 무JWT 인젝션은 401. strip-first: JwtAuthenticationWebFilter.injectUserHeaders L56-66)
 - **관련 REQ**: REQ-GW-002
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -259,7 +259,7 @@
 
 ### TC-GW-010 — USER 역할로 관리자 전용 엔드포인트(POST /events) 접근 시 403 FORBIDDEN 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: USER 토큰 → POST /events 403 code=FORBIDDEN; POST /venues·DELETE /events/1·GET /queue/admin/stats 모두 403)
 - **관련 REQ**: REQ-GW-015, REQ-GW-020
 - **분류**: 보안
 - **우선순위**: P1(중요)
@@ -286,7 +286,7 @@
 
 ### TC-GW-011 — /internal/** 외부 직접 접근 시 404 반환 (InternalPathBlockFilter)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: /internal/** GET·POST·유효JWT포함·중첩경로·쿼리파라미터 전부 404 (block-internal-api order:-1 SetStatus=404))
 - **관련 REQ**: REQ-INT-001, REQ-GW-003
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -313,7 +313,7 @@
 
 ### TC-GW-012 — Queue Token 필수 경로에서 X-Queue-Token 헤더 누락 시 401 QUEUE_TOKEN_MISSING
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 유효 JWT만으로 GET /reservations/seats/1·POST /reservations/hold·POST /payments 모두 401 QUEUE_TOKEN_MISSING)
 - **관련 REQ**: REQ-GW-016, REQ-QUEUE-010
 - **분류**: 예외
 - **우선순위**: P0(필수/핵심)
@@ -346,7 +346,7 @@
 
 ### TC-GW-013 — Queue Token 형식 위조 (qr_ prefix 없음, 대문자 UUID, 짧은 값) 시 401 QUEUE_TOKEN_INVALID
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: qr_ 미접두·대문자 UUID·qr_invalid-token-format → 401 QUEUE_TOKEN_INVALID; 정상 qr_<소문자UUID> 통과(503))
 - **관련 REQ**: REQ-GW-016, REQ-QUEUE-010
 - **분류**: 보안, 경계값
 - **우선순위**: P1(중요)
@@ -389,7 +389,7 @@
 
 ### TC-GW-014 — Queue Token 불필요 경로(GET /reservations)에서 토큰 없어도 정상 통과
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 토큰 없이 GET /reservations·GET /payments/1 모두 503 (401 아님 = QueueTokenWebFilter skip))
 - **관련 REQ**: REQ-GW-016
 - **분류**: 정상
 - **우선순위**: P1(중요)
@@ -410,7 +410,7 @@
 
 ### TC-GW-015 — 허용되지 않은 Origin에서 CORS 요청 시 Access-Control-Allow-Origin 헤더 부재
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Origin evil.com·null → ACAO 헤더 없음; 허용 Origin preflight(OPTIONS) → ACAO=https://ticketing.vercel.app + Allow-Credentials=true)
 - **관련 REQ**: REQ-GW-004
 - **분류**: 보안
 - **우선순위**: P1(중요)
@@ -444,7 +444,7 @@
 
 ### TC-GW-016 — 모든 응답에 보안 헤더 5종 포함 확인 (401 오류 응답 포함)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 401 응답에 보안헤더 5/5 — X-Content-Type-Options:nosniff, X-Frame-Options:DENY, HSTS, X-XSS-Protection:0, CSP:default-src 'self')
 - **관련 REQ**: REQ-GW-011
 - **분류**: 보안
 - **우선순위**: P1(중요)
@@ -472,7 +472,7 @@
 
 ### TC-GW-017 — TraceId 생성 및 요청-응답 X-Trace-Id 헤더 전파
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 무 X-Trace-Id → 신규 UUID 생성; 외부 제공 my-custom-trace-123 재사용; 401 본문 traceId == 응답 헤더 X-Trace-Id 일치)
 - **관련 REQ**: REQ-GW-009
 - **분류**: 정상
 - **우선순위**: P1(중요)
@@ -504,7 +504,7 @@
 
 ### TC-GW-018 — 유효하지 않은 X-Trace-Id (특수문자/65자 초과) 제공 시 신규 UUID 생성
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 특수문자(<script>)·65자 traceId 거부 후 신규 UUID; 64자 alphanumeric 그대로 재사용)
 - **관련 REQ**: REQ-GW-009
 - **분류**: 엣지, 경계값
 - **우선순위**: P2(선택)
@@ -537,7 +537,7 @@
 
 ### TC-GW-019 — user-service 경로에서 10KB 초과 요청 시 413 Payload Too Large 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: POST /auth/signup 10240B 통과(503)·10241B 413; POST /payments 20KB는 413 아님(401) — RequestSize는 user-service 라우트 한정)
 - **관련 REQ**: REQ-GW-014
 - **분류**: 경계값
 - **우선순위**: P1(중요)
@@ -571,7 +571,7 @@
 
 ### TC-GW-020 — 다운스트림 서비스 장애 시 Circuit Breaker Fallback 503 응답 및 traceId 포함
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: user-service 미기동 시 GET /users/me → 503 code=SERVICE_UNAVAILABLE, 서비스별 메시지('인증 서비스가...') + traceId 포함)
 - **관련 REQ**: REQ-GW-006, REQ-GW-017
 - **분류**: 예외
 - **우선순위**: P1(중요)
@@ -605,7 +605,7 @@
 
 ### TC-GW-021 — Rate Limiting 임계 초과 시 429 Too Many Requests 반환 (전역 IP 기반)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 동시 250요청/40병렬에서 429 47회 발생, 헤더 X-RateLimit-Remaining:0·Burst-Capacity:100·Replenish-Rate:50, Redis request_rate_limiter.*.tokens/.timestamp 버킷 키 확인. 참고: 표준 Spring RateLimit 헤더 노출, doc 예시의 X-RateLimit-Retry-After는 미노출)
 - **관련 REQ**: REQ-GW-005, REQ-GW-006
 - **분류**: 성능, 경계값
 - **우선순위**: P1(중요)
@@ -636,7 +636,7 @@
 
 ### TC-GW-022 — /auth/refresh (공개 라우트)에 만료 JWT를 Bearer로 전송해도 통과 (JWT 필터 스킵)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: /auth/refresh 만료JWT·무토큰 모두 503(401 EXPIRED_TOKEN 아님); POST /auth/login·/auth/signup도 JWT 필터 skip)
 - **관련 REQ**: REQ-GW-003, REQ-AUTH-012
 - **분류**: 엣지
 - **우선순위**: P1(중요)
