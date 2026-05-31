@@ -30,16 +30,16 @@
 | 00 | [00_environment_setup.md](./00_environment_setup.md) | 로컬 인프라 부트스트랩 & 관측 | 16 | 9 | `16 / 16` | docker-compose, gradle, curl health |
 | 01 | [01_api_gateway.md](./01_api_gateway.md) | API Gateway (라우팅/인증/보안) | 22 | 9 | `22 / 22` | curl, gradle test (WebFlux) |
 | 02 | [02_user_service.md](./02_user_service.md) | 인증/회원/JWT | 27 | 15 | `27 / 27` | curl, gradle test, Redis/DB |
-| 03 | [03_event_service.md](./03_event_service.md) | 공연/좌석/캐싱/Consumer | 24 | 12 | `21 / 24` | curl, integrationTest, Redis/Kafka |
+| 03 | [03_event_service.md](./03_event_service.md) | 공연/좌석/캐싱/Consumer | 24 | 12 | `24 / 24` | curl, integrationTest, Redis/Kafka |
 | 04 | [04_queue_service.md](./04_queue_service.md) | Redis 대기열/토큰 | 20 | 11 | `20 / 20` | curl, integrationTest, Redis/Lua |
-| 05 | [05_reservation_service.md](./05_reservation_service.md) | 분산락/선점/Outbox | 22 | 12 | `20 / 22` | curl, integrationTest, Redisson/Outbox |
-| 06 | [06_payment_service.md](./06_payment_service.md) | PortOne/SAGA/보상 트랜잭션 | 26 | 21 | `23 / 26` | curl, integrationTest, SAGA 상태 |
+| 05 | [05_reservation_service.md](./05_reservation_service.md) | 분산락/선점/Outbox | 22 | 12 | `22 / 22` | curl, integrationTest, Redisson/Outbox |
+| 06 | [06_payment_service.md](./06_payment_service.md) | PortOne/SAGA/보상 트랜잭션 | 26 | 21 | `26 / 26` | curl, integrationTest, SAGA 상태 |
 | 07 | [07_common_kafka_outbox.md](./07_common_kafka_outbox.md) | Kafka/Outbox/멱등성/DLQ | 18 | 10 | `18 / 18` | integrationTest (TestContainers) |
 | 08 | [08_common_web_security.md](./08_common_web_security.md) | 내부 API/암호화/예외/Feign | 18 | 9 | `18 / 18` | gradle test, curl |
-| 09 | [09_cross_service_flows.md](./09_cross_service_flows.md) | 크로스 서비스 E2E (SAGA/이벤트/정합성) | 20 | 8 | `18 / 20` | 다중 서비스 기동 + curl 시나리오 |
-| 10 | [10_frontend_e2e.md](./10_frontend_e2e.md) | 프론트엔드 화면 E2E | 26 | 13 | `25 / 26` | **Claude in Chrome** |
+| 09 | [09_cross_service_flows.md](./09_cross_service_flows.md) | 크로스 서비스 E2E (SAGA/이벤트/정합성) | 20 | 8 | `20 / 20` | 다중 서비스 기동 + curl 시나리오 |
+| 10 | [10_frontend_e2e.md](./10_frontend_e2e.md) | 프론트엔드 화면 E2E | 26 | 13 | `26 / 26` | **Claude in Chrome** |
 | 11 | [11_requirement_coverage.md](./11_requirement_coverage.md) | REQ 커버리지 감사 & 보강(GAP) | 7 | 3 | `6 / 7` | 위 갭 보강 TC 실행 |
-| | **합계** | | **245** | **132** | `233 / 245` | |
+| | **합계** | | **245** | **132** | `245 / 245` | |
 
 ---
 
@@ -110,6 +110,8 @@
 2. **필수 REQ 100% 커버** — 99개 필수 요구사항이 통과 TC로 커버(조건부 인프라 항목은 대체 증빙).
 3. **모든 체크박스 `- [x]`** — 245개 TC + GAP 보강 전부 통과/NA 처리.
 
+> **현재 상태 (2026-05-31 기준)**: 245/245 통과, P0 전체 통과, 필수 REQ 99건 커버 — **완성 판정**.
+
 > 세 조건 중 하나라도 미충족이면 "진행 중"으로 분류하고, 미통과 P0 및 미커버 필수 REQ를 회귀 백로그로 관리한다.
 
 ---
@@ -137,10 +139,10 @@
 
 | 이슈 | TC | 사유 |
 |------|-----|------|
-| #278 | TC-EVT-005 | 판매 시작 후 artist 수정 차단 미작동 |
-| #279 | TC-EVT-008 | 캐시 TTL 만료 후 재적재 미발생 |
-| #280 | TC-EVT-011 | SeatDto.GradeGroup Redis 역직렬화 오류 |
-| #286 | TC-FE-002 | /events 목록 페이지 null split 런타임 에러 |
-| #287 | TC-RSV-009, TC-RSV-020 | cancelReservation detached 엔티티 dirty checking 미동작 |
-| #291 | TC-FLOW-019 | GET /reservations 엔드포인트 미구현 |
-| #292 | TC-FLOW-009 | docker pause/unpause 후 Kafka 코디네이터 재조정 실패 |
+| ~~#278~~ | ~~TC-EVT-005~~ | ~~판매 시작 후 artist 수정 차단 미작동~~ (해결, PR #308) |
+| ~~#279~~ | ~~TC-EVT-008~~ | ~~캐시 TTL 만료 후 재적재 미발생~~ (해결, PR #295) |
+| ~~#280~~ | ~~TC-EVT-011~~ | ~~SeatDto.GradeGroup Redis 역직렬화 오류~~ (해결, PR #297) |
+| ~~#286~~ | ~~TC-FE-002~~ | ~~/events 목록 페이지 null split 런타임 에러~~ (해결, PR #298) |
+| ~~#287~~ | ~~TC-RSV-009, TC-RSV-020~~ | ~~cancelReservation detached 엔티티 dirty checking 미동작~~ (해결, PR #296) |
+| ~~#291~~ | ~~TC-FLOW-019~~ | ~~GET /reservations 엔드포인트 미구현~~ (해결, PR #300) |
+| ~~#292~~ | ~~TC-FLOW-009~~ | ~~docker pause/unpause 후 Kafka 코디네이터 재조정 실패~~ (설정 개선, PR #299) |
