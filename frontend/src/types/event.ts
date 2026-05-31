@@ -4,8 +4,8 @@ export interface EventSummary {
   artist: string
   venueName: string
   posterUrl?: string
-  startDate: string
-  endDate: string
+  startDate: string | null
+  endDate: string | null
   status: string
 }
 
@@ -25,17 +25,17 @@ export interface EventDetail {
 }
 
 export interface ScheduleDate {
-  date: string
+  date: string | null
   times: ScheduleTime[]
 }
 
 export interface ScheduleTime {
   id: string
   playSequence: number
-  eventStartAt: string
-  eventEndAt: string
-  saleStartAt: string
-  saleEndAt: string
+  eventStartAt: string | null
+  eventEndAt: string | null
+  saleStartAt: string | null
+  saleEndAt: string | null
   status: string
   isSoldOut: boolean
 }

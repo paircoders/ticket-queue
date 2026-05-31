@@ -5,14 +5,16 @@ import type { ScheduleDate, ScheduleTime } from '@/types/event'
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '날짜 미정'
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
   const dow = DAYS_KO[date.getDay()]
   return `${year}.${String(month).padStart(2, '0')}.${String(day).padStart(2, '0')} (${dow})`
 }
 
-function formatTime(datetimeStr: string): string {
+function formatTime(datetimeStr: string | null): string {
+  if (!datetimeStr) return '--:--'
   const timePart = datetimeStr.split('T')[1]
   if (!timePart) return '--:--'
   const [hours, minutes] = timePart.split(':')
@@ -24,7 +26,7 @@ type TimeStatus = 'cancelled' | 'ended' | 'upcoming' | 'soldout' | 'available'
 function getTimeStatus(time: ScheduleTime): TimeStatus {
   if (time.status === 'CANCELLED') return 'cancelled'
   if (time.status === 'ENDED') return 'ended'
-  if (new Date(time.saleStartAt) > new Date()) return 'upcoming'
+  if (time.saleStartAt && new Date(time.saleStartAt) > new Date()) return 'upcoming'
   if (time.isSoldOut) return 'soldout'
   return 'available'
 }
