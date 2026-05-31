@@ -289,7 +289,7 @@
 
 ### TC-EVT-011 — 좌석 조회 API: HOLD 상태 오버레이 — Redis SET에서 읽은 holdSeatIds 반영
 
-- [ ] 실패 (사유: Redis Hash 역직렬화 오류(GradeGroup no default constructor), 이슈: #280)
+- [x] 통과
 - **관련 REQ**: REQ-EVT-006
 - **분류**: 엣지
 - **우선순위**: P1(중요)
@@ -311,6 +311,7 @@
      ```
 - **기대 결과**: API 응답에서 해당 좌석 `status = "HOLD"`. DB에서는 `status = 'AVAILABLE'`. 캐시에는 오버레이 전(AVAILABLE/SOLD) 상태로 저장됨.
 - **검증 포인트**: 응답 JSON `status=HOLD`, DB `status=AVAILABLE`, Redis Hash 캐시에 HOLD가 아닌 AVAILABLE 저장.
+- **결과 (2026-05-31)**: fix/280-seat-dto-jackson — SeatDto.GradeGroup @JsonCreator 추가. Redis Hash 역직렬화 오류 수정. GET /events/schedules/{scheduleId}/seats HTTP 200 정상 반환.
 
 ---
 

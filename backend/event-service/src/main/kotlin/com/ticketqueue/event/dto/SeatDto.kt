@@ -1,5 +1,7 @@
 package com.ticketqueue.event.dto
 
+import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.ticketqueue.event.entity.Seat
 import com.ticketqueue.event.entity.SeatGrade
 import com.ticketqueue.event.entity.SeatStatus
@@ -17,11 +19,11 @@ import java.util.UUID
 class SeatDto {
 
     /** 개별 좌석 정보 */
-    data class SeatInfo(
-        val id: UUID,
-        val seatNumber: String,
-        val grade: SeatGrade,
-        val status: SeatStatus
+    data class SeatInfo @JsonCreator constructor(
+        @JsonProperty("id") val id: UUID,
+        @JsonProperty("seatNumber") val seatNumber: String,
+        @JsonProperty("grade") val grade: SeatGrade,
+        @JsonProperty("status") val status: SeatStatus
     ) {
         companion object {
             fun from(seat: Seat): SeatInfo = SeatInfo(
@@ -34,10 +36,10 @@ class SeatDto {
     }
 
     /** 등급별 좌석 그룹 */
-    data class GradeGroup(
-        val grade: SeatGrade,
-        val price: BigDecimal,
-        val seats: List<SeatInfo>
+    data class GradeGroup @JsonCreator constructor(
+        @JsonProperty("grade") val grade: SeatGrade,
+        @JsonProperty("price") val price: BigDecimal,
+        @JsonProperty("seats") val seats: List<SeatInfo>
     )
 
     /** 공개 API 응답 - 회차별 등급 그룹핑 (REQ-EVT-006) */
