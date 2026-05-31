@@ -129,4 +129,25 @@ class PortoneTokenServiceTest {
         // 기존 initialRefresh가 계속 사용되어야 함
         verify(exactly = 2) { portoneClient.refreshToken(PortoneRefreshRequest(initialRefresh)) }
     }
+    // TC-SEC-017: 동시성 검증 — 동시 10 스레드에서 login이 정확히 1회만 호출되는지 확인 (synchronized + double-check)
+    @Test
+    fun `동시 10개 스레드에서 최초 토큰 발급 시 login은 정확히 1회 호출된다`() {
+        // Given
+        val now = java.time.Instant.parse("2026-02-20T10:00:00Z")
+        every { java.time.Instant.now() } returns now
+        every { portoneClient.login(any()) } answers {
+            Thread.sleep(10) // 경쟁 조건 유발
+            PortoneTokenResponse("concurrent-access-token", "concurrent-refresh-token")
+        }
+
+        // When - 10개 스레드 동시 호출
+        val threads = (1..10).map {
+            Thread { portoneTokenService.getAccessToken() }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+
+        // Then - login은 정확히 1회만 호출되어야 함 (synchronized double-check)
+        verify(exactly = 1) { portoneClient.login(any()) }
+    }
 }
