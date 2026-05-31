@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.UUID
 
 /**
@@ -302,7 +303,10 @@ class EventService(
     @Transactional
     fun updateEvent(eventId: UUID, request: EventDto.UpdateRequest): EventDto.UpdateResponse {
         val event = findActiveEvent(eventId)
-        val hasSaleStarted = eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(eventId, LocalDateTime.now())
+        val hasSaleStarted = eventScheduleRepository.existsByEventIdAndSaleStartAtLessThanEqual(
+            eventId,
+            LocalDateTime.now(ZoneOffset.UTC)
+        )
 
         if (hasSaleStarted && request.artist != null) {
             throw EventException(ErrorCode.EVENT_NOT_MODIFIABLE)

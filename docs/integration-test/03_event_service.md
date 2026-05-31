@@ -127,7 +127,7 @@
 
 ### TC-EVT-005 — 판매 시작 후 artist 수정 시도 → 409 반환
 
-- [ ] 실패 (사유: 판매 시작(sale_start_at 과거) 후에도 artist 수정 가능 — existsByEventIdAndSaleStartAtLessThanEqual 반환값 오류 의심, 이슈: #278)
+- [x] 통과 (2026-05-31, 근거: existsByEventIdAndSaleStartAtLessThanEqual Native SQL @Query 교체 + LocalDateTime.now(ZoneOffset.UTC) 적용으로 Hibernate 6.x ManyToOne implicit join 모호성 제거. EventScheduleRepositoryTest 통합 테스트 4건 green (TC-EVT-005 핵심 시나리오 — sale_start_at=now()-1h → true 반환 검증). ./gradlew :event-service:test BUILD SUCCESSFUL)
 - **관련 REQ**: REQ-EVT-002
 - **분류**: 예외
 - **우선순위**: P1(중요)
