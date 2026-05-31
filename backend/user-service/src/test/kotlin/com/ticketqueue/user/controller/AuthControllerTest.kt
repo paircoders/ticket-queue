@@ -347,12 +347,12 @@ class AuthControllerTest {
         }
 
         @Test
-        @DisplayName("탈취된 토큰 사용 시 403 FORBIDDEN")
-        fun `should return 403 when token is revoked`() {
+        @DisplayName("탈취 감지(폐기된 Refresh Token 재사용) 시 401 UNAUTHORIZED")
+        fun `should return 401 when token is revoked`() {
             every { authService.refresh(validRequest) } throws BusinessException(ErrorCode.REVOKED_REFRESH_TOKEN)
 
             performPost(refreshUrl, validRequest)
-                .andExpect(status().isForbidden)
+                .andExpect(status().isUnauthorized)
                 .andExpect(jsonPath("$.code").value("REVOKED_REFRESH_TOKEN"))
         }
     }
