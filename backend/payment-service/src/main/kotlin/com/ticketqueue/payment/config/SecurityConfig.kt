@@ -24,7 +24,7 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                     .anyRequest().authenticated()
             }
             .exceptionHandling { exceptions ->
