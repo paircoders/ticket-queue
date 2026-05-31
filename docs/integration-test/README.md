@@ -30,16 +30,16 @@
 | 00 | [00_environment_setup.md](./00_environment_setup.md) | 로컬 인프라 부트스트랩 & 관측 | 16 | 9 | `16 / 16` | docker-compose, gradle, curl health |
 | 01 | [01_api_gateway.md](./01_api_gateway.md) | API Gateway (라우팅/인증/보안) | 22 | 9 | `22 / 22` | curl, gradle test (WebFlux) |
 | 02 | [02_user_service.md](./02_user_service.md) | 인증/회원/JWT | 27 | 15 | `27 / 27` | curl, gradle test, Redis/DB |
-| 03 | [03_event_service.md](./03_event_service.md) | 공연/좌석/캐싱/Consumer | 24 | 12 | `0 / 24` | curl, integrationTest, Redis/Kafka |
-| 04 | [04_queue_service.md](./04_queue_service.md) | Redis 대기열/토큰 | 20 | 11 | `0 / 20` | curl, integrationTest, Redis/Lua |
-| 05 | [05_reservation_service.md](./05_reservation_service.md) | 분산락/선점/Outbox | 22 | 12 | `0 / 22` | curl, integrationTest, Redisson/Outbox |
-| 06 | [06_payment_service.md](./06_payment_service.md) | PortOne/SAGA/보상 트랜잭션 | 26 | 21 | `0 / 26` | curl, integrationTest, SAGA 상태 |
-| 07 | [07_common_kafka_outbox.md](./07_common_kafka_outbox.md) | Kafka/Outbox/멱등성/DLQ | 18 | 10 | `0 / 18` | integrationTest (TestContainers) |
-| 08 | [08_common_web_security.md](./08_common_web_security.md) | 내부 API/암호화/예외/Feign | 18 | 9 | `0 / 18` | gradle test, curl |
-| 09 | [09_cross_service_flows.md](./09_cross_service_flows.md) | 크로스 서비스 E2E (SAGA/이벤트/정합성) | 20 | 8 | `0 / 20` | 다중 서비스 기동 + curl 시나리오 |
-| 10 | [10_frontend_e2e.md](./10_frontend_e2e.md) | 프론트엔드 화면 E2E | 26 | 13 | `0 / 26` | **Claude in Chrome** |
-| 11 | [11_requirement_coverage.md](./11_requirement_coverage.md) | REQ 커버리지 감사 & 보강(GAP) | 6 | 3 | `0 / 6` | 위 갭 보강 TC 실행 |
-| | **합계** | | **245** | **132** | `65 / 245` | |
+| 03 | [03_event_service.md](./03_event_service.md) | 공연/좌석/캐싱/Consumer | 24 | 12 | `21 / 24` | curl, integrationTest, Redis/Kafka |
+| 04 | [04_queue_service.md](./04_queue_service.md) | Redis 대기열/토큰 | 20 | 11 | `20 / 20` | curl, integrationTest, Redis/Lua |
+| 05 | [05_reservation_service.md](./05_reservation_service.md) | 분산락/선점/Outbox | 22 | 12 | `20 / 22` | curl, integrationTest, Redisson/Outbox |
+| 06 | [06_payment_service.md](./06_payment_service.md) | PortOne/SAGA/보상 트랜잭션 | 26 | 21 | `23 / 26` | curl, integrationTest, SAGA 상태 |
+| 07 | [07_common_kafka_outbox.md](./07_common_kafka_outbox.md) | Kafka/Outbox/멱등성/DLQ | 18 | 10 | `18 / 18` | integrationTest (TestContainers) |
+| 08 | [08_common_web_security.md](./08_common_web_security.md) | 내부 API/암호화/예외/Feign | 18 | 9 | `18 / 18` | gradle test, curl |
+| 09 | [09_cross_service_flows.md](./09_cross_service_flows.md) | 크로스 서비스 E2E (SAGA/이벤트/정합성) | 20 | 8 | `18 / 20` | 다중 서비스 기동 + curl 시나리오 |
+| 10 | [10_frontend_e2e.md](./10_frontend_e2e.md) | 프론트엔드 화면 E2E | 26 | 13 | `25 / 26` | **Claude in Chrome** |
+| 11 | [11_requirement_coverage.md](./11_requirement_coverage.md) | REQ 커버리지 감사 & 보강(GAP) | 7 | 3 | `6 / 7` | 위 갭 보강 TC 실행 |
+| | **합계** | | **245** | **132** | `233 / 245` | |
 
 ---
 
@@ -130,3 +130,17 @@
 | [09_cross_service_flows.md](./09_cross_service_flows.md) | 해피패스 E2E, 결제 실패 보상 체인, 동시성 통합, Kafka 코레오그래피, 캐시 무효화 전파 |
 | [10_frontend_e2e.md](./10_frontend_e2e.md) | Claude in Chrome 화면 E2E — 회원가입/로그인/대기열/좌석/결제/마이페이지/미들웨어 가드 |
 | [11_requirement_coverage.md](./11_requirement_coverage.md) | REQ↔TC 매핑, 카테고리별 커버리지, 보강 GAP TC, 완성 판정 기준 |
+
+---
+
+## 실행 이슈 목록 (회귀 백로그)
+
+| 이슈 | TC | 사유 |
+|------|-----|------|
+| #278 | TC-EVT-005 | 판매 시작 후 artist 수정 차단 미작동 |
+| #279 | TC-EVT-008 | 캐시 TTL 만료 후 재적재 미발생 |
+| #280 | TC-EVT-011 | SeatDto.GradeGroup Redis 역직렬화 오류 |
+| #286 | TC-FE-002 | /events 목록 페이지 null split 런타임 에러 |
+| #287 | TC-RSV-009, TC-RSV-020 | cancelReservation detached 엔티티 dirty checking 미동작 |
+| #291 | TC-FLOW-019 | GET /reservations 엔드포인트 미구현 |
+| #292 | TC-FLOW-009 | docker pause/unpause 후 Kafka 코디네이터 재조정 실패 |
