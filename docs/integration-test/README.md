@@ -29,7 +29,7 @@
 |---|------|------|------:|------:|:----:|------|
 | 00 | [00_environment_setup.md](./00_environment_setup.md) | 로컬 인프라 부트스트랩 & 관측 | 16 | 9 | `1 / 16` | docker-compose, gradle, curl health |
 | 01 | [01_api_gateway.md](./01_api_gateway.md) | API Gateway (라우팅/인증/보안) | 22 | 9 | `22 / 22` | curl, gradle test (WebFlux) |
-| 02 | [02_user_service.md](./02_user_service.md) | 인증/회원/JWT | 27 | 15 | `0 / 27` | curl, gradle test, Redis/DB |
+| 02 | [02_user_service.md](./02_user_service.md) | 인증/회원/JWT | 27 | 15 | `26 / 27` | curl, gradle test, Redis/DB |
 | 03 | [03_event_service.md](./03_event_service.md) | 공연/좌석/캐싱/Consumer | 24 | 12 | `0 / 24` | curl, integrationTest, Redis/Kafka |
 | 04 | [04_queue_service.md](./04_queue_service.md) | Redis 대기열/토큰 | 20 | 11 | `0 / 20` | curl, integrationTest, Redis/Lua |
 | 05 | [05_reservation_service.md](./05_reservation_service.md) | 분산락/선점/Outbox | 22 | 12 | `0 / 22` | curl, integrationTest, Redisson/Outbox |
@@ -39,7 +39,7 @@
 | 09 | [09_cross_service_flows.md](./09_cross_service_flows.md) | 크로스 서비스 E2E (SAGA/이벤트/정합성) | 20 | 8 | `0 / 20` | 다중 서비스 기동 + curl 시나리오 |
 | 10 | [10_frontend_e2e.md](./10_frontend_e2e.md) | 프론트엔드 화면 E2E | 26 | 13 | `0 / 26` | **Claude in Chrome** |
 | 11 | [11_requirement_coverage.md](./11_requirement_coverage.md) | REQ 커버리지 감사 & 보강(GAP) | 6 | 3 | `0 / 6` | 위 갭 보강 TC 실행 |
-| | **합계** | | **245** | **132** | `23 / 245` | |
+| | **합계** | | **245** | **132** | `49 / 245` | |
 
 ---
 
