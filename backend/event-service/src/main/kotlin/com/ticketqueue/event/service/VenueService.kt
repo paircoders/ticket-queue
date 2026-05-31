@@ -41,7 +41,7 @@ class VenueService(
             address = request.address,
             city = request.city
         )
-        val saved = venueRepository.save(venue)
+        val saved = venueRepository.saveAndFlush(venue)
         return VenueDto.Response.from(saved)
     }
 
