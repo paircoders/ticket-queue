@@ -79,11 +79,6 @@
      간격 (Spacing)
      ============================================ */
 
-  --spacing-xs: 0.25rem; /* 4px - 아이콘-텍스트 간격 */
-  --spacing-sm: 0.5rem; /* 8px - 컴포넌트 내부 간격 */
-  --spacing-md: 1rem; /* 16px - 컴포넌트 간 간격 */
-  --spacing-lg: 1.5rem; /* 24px - 섹션 간 간격 */
-  --spacing-xl: 2rem; /* 32px - 페이지 레벨 간격 */
   --spacing-header: 64px; /* 헤더 높이 */
   --spacing-sidebar: 280px; /* 사이드바 너비 */
 
@@ -113,4 +108,15 @@
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;
   --breakpoint-2xl: 1440px;
+}
+
+/* --spacing-xs/sm/md/lg/xl은 @theme에 넣으면 max-w-xl 등 Tailwind 기본 유틸리티를 덮어쓰므로 분리 */
+@layer base {
+  :root {
+    --spacing-xs: 0.25rem; /* 4px - 아이콘-텍스트 간격 */
+    --spacing-sm: 0.5rem; /* 8px - 컴포넌트 내부 간격 */
+    --spacing-md: 1rem; /* 16px - 컴포넌트 간 간격 */
+    --spacing-lg: 1.5rem; /* 24px - 섹션 간 간격 */
+    --spacing-xl: 2rem; /* 32px - 페이지 레벨 간격 */
+  }
 }
