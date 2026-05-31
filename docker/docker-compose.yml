@@ -87,6 +87,7 @@ services:
 
       # 데이터 저장 위치
       - KAFKA_LOG_DIRS=/var/lib/kafka/data
+      - KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS=60000
     volumes:
       - kafka_data:/var/lib/kafka/data
     networks:

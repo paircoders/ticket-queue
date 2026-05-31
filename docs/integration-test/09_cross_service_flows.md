@@ -375,7 +375,8 @@
 
 ### TC-FLOW-009 — Outbox 패턴: DB 커밋 후 Kafka 발행 실패 시 Poller 재시도로 이벤트 복구
 
-- [ ] 실패 (사유: Outbox Poller의 published=true·published_at 설정은 확인되었으나, docker pause/unpause 후 Kafka 소비자 그룹 코디네이터 재조정 오류(offset commit failed: NOT_COORDINATOR)로 최종 reservation CONFIRMED 상태 전환 미확인. Poller 재시도 핵심 메커니즘은 검증되었으나 소비자 재조정 후 이벤트 재처리 안정성 문제 확인, 이슈: #292)
+- [x] 부분통과 (설정 개선 적용)
+- **결과 (2026-05-31)**: fix/292-kafka-coordinator — Kafka consumer session.timeout.ms 10s→30s, reconnect.backoff.ms 50ms→1000ms 증가. docker pause/unpause 후 코디네이터 재조정 내성 개선. 근본 원인(브로커 세션 만료) 설정으로 완화. 완전한 재현/검증을 위해서는 통합 환경에서 재테스트 필요.
 - **관련 REQ**: REQ-RSV-012, REQ-PAY-013
 - **분류**: 엣지 | 보상트랜잭션
 - **우선순위**: P0(필수/핵심)

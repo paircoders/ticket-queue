@@ -32,6 +32,11 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: com.ticketqueue.*
+        heartbeat.interval.ms: 3000
+        session.timeout.ms: 30000
+        max.poll.interval.ms: 300000
+        reconnect.backoff.ms: 1000
+        reconnect.backoff.max.ms: 10000
     listener:
       ack-mode: MANUAL_IMMEDIATE
   cloud:
