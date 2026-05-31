@@ -318,30 +318,33 @@ class ReservationService(
         val preCancelStatus = reservation.status
 
         transactionTemplate.executeWithoutResult {
-            reservation.cancel()
+            // 트랜잭션 내에서 fresh re-fetch → JPA 영속성 컨텍스트에 managed 상태
+            val fresh = reservationRepository.findByIdAndUserId(reservationId, userId)
+                ?: throw ReservationException(ErrorCode.RESERVATION_NOT_FOUND)
+            fresh.cancel()  // managed 엔티티 → dirty checking → DB UPDATE 발생
             outboxEventRecorder.record(
                 ReservationCancelledEvent(
                     aggregateId = reservationId,
-                    scheduleId = reservation.scheduleId,
+                    scheduleId = fresh.scheduleId,
                     seatIds = seatIds,
-                    userId = reservation.userId,
+                    userId = fresh.userId,
                     reason = "USER_REQUEST",
                     metadata = EventMetadata(
                         correlationId = UUID.randomUUID(),
                         causationId = null,
-                        userId = reservation.userId
+                        userId = fresh.userId
                     )
                 )
             )
             registerAfterCommit {
-                scheduleHoldSeatsReconciliation(reservation.scheduleId, seatIds, emptyList())
+                scheduleHoldSeatsReconciliation(fresh.scheduleId, seatIds, emptyList())
             }
         }
 
         val refundAmount = if (preCancelStatus == ReservationStatus.CONFIRMED) reservation.totalAmount else BigDecimal.ZERO
 
-        log.info { "Reservation cancelled: userId=$userId, reservationId=$reservationId, status=${reservation.status}" }
-        return CancelResponse(id = reservationId, status = reservation.status, refundAmount = refundAmount)
+        log.info { "Reservation cancelled: userId=$userId, reservationId=$reservationId, status=${ReservationStatus.CANCELLED}" }
+        return CancelResponse(id = reservationId, status = ReservationStatus.CANCELLED, refundAmount = refundAmount)
     }
 
     /**
