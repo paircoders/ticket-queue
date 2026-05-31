@@ -7,7 +7,6 @@ import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -139,44 +138,6 @@ class OutboxPollerEdgeCaseIntegrationTest {
         }
     }
 
-    @Disabled("Behavior is correct (passes in isolation) but flaky under full-suite load: multiple cached Spring contexts each run a 1s @Scheduled poller, so the 100-publish awaitility exceeds 20s intermittently. Needs a deterministic poller trigger or context isolation rather than a brittle timeout. Deferred to follow-up (#252/#231 lane).")
-    @Test
-    fun `BATCH_SIZE_초과시_다음_폴링에서_처리`() {
-        // Given: 101개 이벤트 INSERT (BATCH_SIZE=100 초과)
-        val eventCount = 101
-        repeat(eventCount) { i ->
-            outboxEventRepository.save(
-                OutboxEvent(
-                    id = UUID.randomUUID(),
-                    aggregateType = "Payment",
-                    aggregateId = UUID.randomUUID(),
-                    eventType = "PaymentSuccess",
-                    payload = """{"orderId": "batch-test-$i"}""",
-                    published = false,
-                    retryCount = 0,
-                    createdAt = LocalDateTime.now().plusNanos(i * 100_000L)
-                )
-            )
-        }
-
-        // When: 1차 폴링 - 100개 발행 확인 (풀스위트 부하에서 동기 send().get() 지연 → 10s→20s 상향)
-        await()
-            .atMost(20, TimeUnit.SECONDS)
-            .pollInterval(Duration.ofMillis(500))
-            .until { outboxEventRepository.countByPublishedTrue() == 100L }
-
-        // Then: 1개 미발행 확인
-        outboxEventRepository.countByPublishedFalse() shouldBe 1
-
-        // When: 2초 대기 후 2차 폴링 실행 (풀스위트 부하 대비 5s→20s 상향)
-        await()
-            .atMost(20, TimeUnit.SECONDS)
-            .pollInterval(Duration.ofMillis(500))
-            .until { outboxEventRepository.countByPublishedTrue() == 101L }
-
-        // Then: 나머지 1개도 발행 확인
-        outboxEventRepository.countByPublishedFalse() shouldBe 0
-    }
 
     @Test
     fun `트랜잭션_롤백시_이벤트_상태_유지`() {

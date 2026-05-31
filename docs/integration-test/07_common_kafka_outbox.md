@@ -132,7 +132,7 @@
 
 ### TC-OBX-007 — 배치 크기 100 초과 시 잔여 이벤트 다음 폴링에서 처리
 
-- [x] NA (사유: `OutboxPollerEdgeCaseIntegrationTest.BATCH_SIZE_초과시_다음_폴링에서_처리`가 `@Disabled` 처리됨 — 동작 자체는 정상이나 풀스위트 실행 시 다중 캐시 Spring 컨텍스트의 @Scheduled 폴러 간섭으로 Awaitility 20s 타임아웃 intermittent 실패 발생, #252/#231 lane으로 defer. 단위 테스트 `OutboxPollerServiceTest.pollAndPublish - batch size limit - processes only 100 events`에서 batchSize=100 제한 로직 검증 통과)
+- [x] 통과 (2026-05-31, 근거: OutboxPollerBatchSizeIntegrationTest.BATCH_SIZE_초과시_다음_폴링에서_처리 통합 테스트 재활성화 (#302). outboxPollerService 빈을 enabled=false 인라인 프로퍼티로 오버라이드하여 @Scheduled 자동 실행 격리 후 pollerService.pollAndPublish() 수동 2회 호출 — 1차: countByPublishedTrue=100/countByPublishedFalse=1, 2차: countByPublishedTrue=101/countByPublishedFalse=0. ./gradlew :common-kafka:test BUILD SUCCESSFUL)
 - **관련 REQ**: 해당 없음
 - **분류**: 경계값
 - **우선순위**: P1(중요)
