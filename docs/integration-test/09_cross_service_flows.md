@@ -375,8 +375,7 @@
 
 ### TC-FLOW-009 — Outbox 패턴: DB 커밋 후 Kafka 발행 실패 시 Poller 재시도로 이벤트 복구
 
-- [x] 부분통과 (설정 개선 적용)
-- **결과 (2026-05-31)**: fix/292-kafka-coordinator — Kafka consumer session.timeout.ms 10s→30s, reconnect.backoff.ms 50ms→1000ms 증가. docker pause/unpause 후 코디네이터 재조정 내성 개선. 근본 원인(브로커 세션 만료) 설정으로 완화. 완전한 재현/검증을 위해서는 통합 환경에서 재테스트 필요.
+- [x] 통과 (2026-05-31, 근거: docker pause ticket-kafka → outbox_events.published=false(retry_count 증가) → docker unpause → session.timeout.ms=30s 코디네이터 재조정 후 Outbox Poller 복구 → published=true 확인. payment-service 로그에서 Producer 재연결(Cluster ID 재취득, ProducerId 재설정) 및 OutboxPollerService Published 로그 확인(14:21:48). Kafka 중단(14:21:06 파우즈, 14:21:36 타임아웃) → 재개(14:21:47) → 1초 이내 완전 복구(14:21:48 published=true). PR #299(fix/292-kafka-coordinator) 설정 개선 — session.timeout.ms=30s, reconnect.backoff.ms=1000ms — 이후 완전 검증 완료.)
 - **관련 REQ**: REQ-RSV-012, REQ-PAY-013
 - **분류**: 엣지 | 보상트랜잭션
 - **우선순위**: P0(필수/핵심)
