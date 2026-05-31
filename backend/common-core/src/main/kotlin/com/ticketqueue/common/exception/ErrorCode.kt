@@ -23,7 +23,7 @@ enum class ErrorCode(
     DUPLICATE_IDENTITY(HttpStatus.CONFLICT, "DUPLICATE_IDENTITY", "이미 본인인증이 완료된 다른 계정이 존재합니다."),
     RECAPTCHA_FAILED(HttpStatus.BAD_REQUEST, "RECAPTCHA_FAILED", "reCAPTCHA 검증에 실패했습니다."),
     JWT_CONFIGURATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "JWT_CONFIGURATION_ERROR", "서버 설정 오류로 로그인을 처리할 수 없습니다."),
-    REVOKED_REFRESH_TOKEN(HttpStatus.FORBIDDEN, "REVOKED_REFRESH_TOKEN", "이미 사용된 토큰입니다. 보안을 위해 재로그인이 필요합니다."),
+    REVOKED_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "REVOKED_REFRESH_TOKEN", "이미 사용된 토큰입니다. 보안을 위해 재로그인이 필요합니다."),
 
     // Queue
     QUEUE_FULL(HttpStatus.SERVICE_UNAVAILABLE, "QUEUE_FULL", "대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요."),

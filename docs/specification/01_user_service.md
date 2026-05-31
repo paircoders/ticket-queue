@@ -96,6 +96,11 @@ Refresh Token을 사용하여 새로운 Access Token 발급 (RTR 적용)
 }
 ```
 
+**Error Responses**
+- `401 Unauthorized`: 유효하지 않은 토큰 (`INVALID_TOKEN`) — 서명 위조, refresh 타입 아님 등
+- `401 Unauthorized`: 만료된 토큰 (`EXPIRED_TOKEN`)
+- `401 Unauthorized`: 폐기된 토큰 재사용 (`REVOKED_REFRESH_TOKEN`) — RTR 탈취 감지로 동일 `token_family` 전체 무효화. 재로그인 필요
+
 ## 2. 사용자 (Users)
 
 ### 2.1 내 프로필 조회

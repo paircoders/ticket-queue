@@ -266,6 +266,7 @@ X-Forwarded-For: <client>, <proxy1>, <proxy2>
 **탈취 감지:**
 - 이미 폐기된 Refresh Token 사용 시 → 해당 token_family 전체 무효화
 - 사용자에게 재로그인 강제 (보안 알림)
+- **응답 상태코드: `401 Unauthorized` + `{ "code": "REVOKED_REFRESH_TOKEN" }`** — 폐기된 토큰은 유효하지 않은 자격증명이므로, 만료/위조 등 다른 토큰 오류(`EXPIRED_TOKEN`, `INVALID_TOKEN`)와 동일하게 401로 통일한다. 클라이언트는 HTTP 상태가 아닌 `code` 필드로 탈취 감지(재로그인 강제)를 구분한다.
 
 **API Gateway 검증 플로우:**
 ```

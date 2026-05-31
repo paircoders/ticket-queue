@@ -350,7 +350,7 @@
 
 ### TC-USER-013 — 탈취 감지: 폐기된 Refresh Token 재사용 시 동일 Family 전체 무효화
 
-- [ ] 실패 (사유: 폐기된 Refresh 재사용 시 family 전체 무효화·REVOKED_REFRESH_TOKEN 코드는 정상이나 HTTP 403 반환(문서 기대 401, 스펙 미규정). 이슈: #273)
+- [x] 통과 (2026-05-31, 근거: 라이브 — #273 수정(REVOKED_REFRESH_TOKEN 403→401) 후 user-service 재빌드. 폐기 refresh 재사용 시 user-service:8081 및 Gateway:8080 양쪽 HTTP 401 `REVOKED_REFRESH_TOKEN` 반환 확인. family 전체 무효화·에러코드는 기존대로 정상. 전체 토큰 에러 패밀리(EXPIRED_TOKEN/INVALID_TOKEN)와 401로 통일. AuthControllerTest 401 동기화 후 --rerun-tasks 통과)
 - **관련 REQ**: REQ-AUTH-009
 - **분류**: 보안, 멱등성
 - **우선순위**: P0
