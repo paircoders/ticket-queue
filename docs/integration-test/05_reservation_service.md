@@ -245,7 +245,7 @@
 
 ### TC-RSV-009 — Outbox 패턴: 선점 해제(취소) 시 직접 Kafka 발행 금지, outbox_events만 INSERT
 
-- [ ] 실패 (사유: outbox INSERT·Kafka 발행 정상이나 cancelReservation() 내 detached 엔티티 미반영으로 DB status='PENDING' 유지됨, 이슈: #287)
+- [x] 통과
 - **관련 REQ**: REQ-RSV-011, REQ-RSV-012
 - **분류**: 정상
 - **우선순위**: P0
@@ -274,6 +274,7 @@
      ```
 - **기대 결과**: DB `common.outbox_events`에 `event_type='ReservationCancelled'`, `published=false` row 1건 INSERT; 1초 후 Poller가 발행하여 `published=true`로 갱신; Kafka `reservation.events` 토픽에 메시지 도달
 - **검증 포인트**: `outbox_events.event_type='ReservationCancelled'` / `aggregate_id=reservationId-1` / 초기 `published=false` / ~1초 후 `published=true` / Kafka 메시지 수신 확인
+- **결과 (2026-05-31)**: fix/287-cancel-reservation — detached 엔티티 버그 수정. `transactionTemplate` 블록 내 fresh re-fetch로 JPA dirty checking 정상 동작. DB status='CANCELLED' 반영 확인.
 
 ---
 
@@ -562,7 +563,7 @@
 
 ### TC-RSV-020 — 선점 해제 API: DELETE /hold/{reservationId} 후 hold_seats SET에서 좌석 제거 확인
 
-- [ ] 실패 (사유: HTTP 200·응답 status=CANCELLED·Redis SISMEMBER=0 정상이나 cancelReservation() detached 엔티티 버그로 DB status='PENDING' 미갱신, 이슈: #287)
+- [x] 통과
 - **관련 REQ**: REQ-RSV-006
 - **분류**: 정상
 - **우선순위**: P1
@@ -588,6 +589,7 @@
      ```
 - **기대 결과**: HTTP 200, `status='CANCELLED'`, `refundAmount=0`; Redis `hold_seats:<scheduleId>` SET에서 해당 좌석 제거(afterCommit 콜백)
 - **검증 포인트**: HTTP 200 / DB `status='CANCELLED'` / Redis SISMEMBER=0 / PENDING 취소 시 refundAmount=0
+- **결과 (2026-05-31)**: fix/287-cancel-reservation — detached 엔티티 버그 수정. `transactionTemplate` 블록 내 fresh re-fetch로 JPA dirty checking 정상 동작. DB status='CANCELLED' 반영 확인.
 
 ---
 
