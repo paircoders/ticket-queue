@@ -4,8 +4,8 @@
 > **사전 준비**: docker/secrets/ 하위 모든 .txt 파일 존재 확인, Docker Desktop 실행, 호스트 포트 5432·6379·9092·4566·9090·3001·8080-8085·9080-9085 미점유, JDK 21 및 ./gradlew 실행 권한
 > **주 실행 수단**: docker-compose, ./gradlew build/test, curl health check
 > **총 항목 수**: 16
-> **실행 결과 (2026-05-30, 재검증 2026-05-31)**: 통과 10건 | 부분 통과 2건 | 실패 0건 | 미실행 4건 (백엔드 서비스 기동 필요 3건 + Prometheus 타겟 1건). TC-ENV-014 는 실패 원인 4종(#259·#260·#261·#268)이 전부 해결·머지(PR #265·#266·#267·#270)되어 develop 트리 재검증 통과로 전환. 미실행 4건은 백엔드 서비스 미기동(GHCR 비공개 이미지) 제약으로 상태 유지
-> **발견된 이슈**: ~~#257 스키마 소유자 불일치~~ (해결, PR #264) | ~~#258 localstack_init.sh 멱등성~~ (해결, PR #263) | ~~#259 reservation-service 테스트 ApplicationContext 실패~~ (해결, PR #265) | ~~#260 event-service 테스트 2종~~ (해결, PR #266) | ~~#261 integrationTest 태스크 없음~~ (해결, PR #267) | ~~#268 queue-service Lua 테스트 하드코딩 절대경로~~ (해소, PR #270)
+> **실행 결과 (2026-05-30, 백엔드 기동 후 완료 2026-05-31)**: 통과 14건 | 부분 통과 2건 | 실패 0건 | 미실행 0건. 2026-05-31 `make build-local` 로 백엔드 6개 서비스를 로컬 빌드·기동하여, 차단됐던 미실행 4건(TC-ENV-009·010·011·012)을 전부 검증·통과. TC-ENV-012 는 user/event/reservation/payment 4개 서비스 `/actuator/prometheus` 401(SecurityConfig permitAll 누락) 결함을 발견·수정(이슈 #275, 본 PR)하여 Prometheus 6개 타겟 UP 으로 전환. TC-ENV-014 는 실패 원인 4종(#259·#260·#261·#268)이 전부 해결·머지(PR #265·#266·#267·#270)되어 develop 트리 재검증 통과. 부분 통과 2건(TC-ENV-002 Docker Compose v2 시크릿 검증 시점 차이 / TC-ENV-006 시크릿 미주입 시 기동 실패 로그)은 도구 구조상 한계로 상태 유지
+> **발견된 이슈**: ~~#257 스키마 소유자 불일치~~ (해결, PR #264) | ~~#258 localstack_init.sh 멱등성~~ (해결, PR #263) | ~~#259 reservation-service 테스트 ApplicationContext 실패~~ (해결, PR #265) | ~~#260 event-service 테스트 2종~~ (해결, PR #266) | ~~#261 integrationTest 태스크 없음~~ (해결, PR #267) | ~~#268 queue-service Lua 테스트 하드코딩 절대경로~~ (해소, PR #270) | ~~#275 user/event/reservation/payment 4개 서비스 /actuator/prometheus permitAll 누락(Prometheus 스크랩 401)~~ (해결, 본 PR)
 ---
 
 ### TC-ENV-001 — 인프라 컨테이너 전체 기동 및 healthcheck 통과 확인
@@ -252,7 +252,7 @@
 
 ### TC-ENV-009 — 6개 서비스 actuator health UP 확인
 
-- [ ] 미실행 (사전조건 미충족: 백엔드 6개 서비스 미기동. GHCR 이미지 비공개(unauthorized) — `docker-compose.backend.yml`로 로컬 빌드 후 기동 필요. TC-ENV-001 인프라만 기동된 상태)
+- [x] 통과 (2026-05-31, 근거: make build-local 로 백엔드 6개 서비스 기동 후 management 포트 9080~9085 actuator/health 전부 {"status":"UP"}, 서비스 메인 포트 8081 /actuator/health 는 404(노출 차단). 사전 차단 사유였던 백엔드 미기동(GHCR 비공개 이미지)을 로컬 빌드로 해소)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -278,7 +278,7 @@
 
 ### TC-ENV-010 — 서비스 기동 순서 위반 시 의존성 대기 동작 확인
 
-- [ ] 미실행 (사전조건 미충족: TC-ENV-009 의존 — 백엔드 서비스 미기동)
+- [x] 통과 (2026-05-31, 근거: docker pause ticket-postgres 중 reservation-service 가 HikariPool "Failed to validate connection (connection closed)" WARN 로그 출력, docker unpause 후 5초 내 actuator/health UP 복구. restart 정책 + HikariPool 재연결 동작 확인)
 - **관련 REQ**: 해당 없음
 - **분류**: 엣지
 - **우선순위**: P1(중요)
@@ -311,7 +311,7 @@
 
 ### TC-ENV-011 — /internal/** 엔드포인트 X-Service-Api-Key 없이 접근 차단
 
-- [ ] 미실행 (사전조건 미충족: TC-ENV-009 의존 — 백엔드 서비스 및 api-gateway 미기동)
+- [x] 통과 (2026-05-31, 근거: Gateway 경유 /internal/reservations/.../status 키없음·잘못된키 모두 404(외부 라우팅 차단), reservation-service 직접 8084 키없음·잘못된키 401(InternalApiAuthInterceptor), 올바른 X-Service-Api-Key 는 통과하여 404(미존재 ID) — 키로만 통과 확인)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -351,7 +351,7 @@
 
 ### TC-ENV-012 — Prometheus 메트릭 수집 타겟 UP 확인
 
-- [ ] 미실행 (사전조건 미충족: Prometheus 자체는 정상 기동(running). 그러나 백엔드 6개 서비스 미기동으로 모든 스크랩 타겟이 `down` 상태 — `api-gateway`, `event-service`, `payment-service`, `queue-service`, `reservation-service`, `user-service` 전체 down 확인. 백엔드 기동 후 재검증 필요)
+- [x] 통과 (2026-05-31, 근거: 최초 검증 시 user/event/reservation/payment 4개 서비스 /actuator/prometheus 가 401(SecurityConfig permitAll 누락)로 Prometheus 스크랩 실패 발견 → 본 PR 에서 4개 SecurityConfig 에 /actuator/prometheus permitAll 추가(queue-service 패턴 일치, 이슈 #275) 후 재빌드. Prometheus activeTargets 6개 job 전부 health=up 재검증, 6개 서비스 /actuator/prometheus 200 확인)
 - **관련 REQ**: REQ-GW-012
 - **분류**: 정상
 - **우선순위**: P1(중요)
