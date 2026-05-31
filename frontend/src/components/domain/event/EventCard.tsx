@@ -25,7 +25,8 @@ const secondaryTextStyle: CSSProperties = {
   color: 'var(--apple-ink-muted-48)',
 }
 
-function formatDateRange(startDate: string, endDate: string): string {
+function formatDateRange(startDate: string | null, endDate: string | null): string {
+  if (!startDate || !endDate) return '날짜 미정'
   const parseLocal = (s: string) => {
     const [y, m, d] = s.split('-').map(Number)
     return { y, m, d }

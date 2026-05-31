@@ -10,6 +10,7 @@
 ### TC-FE-001 — 홈 페이지 SSR 렌더링 및 공연 카드 표시
 
 - [x] 통과 (2026-05-31, 근거: 홈 페이지 공연 카드 "STELLAR, 2026 K-POP 월드 투어 서울" 렌더링 확인, title="공정한 티켓팅 플랫폼 | Ticket Queue")
+- **결과 (2026-05-31)**: fix/286-fe-date-null — startDate/endDate null guard 추가. split() 호출 전 optional chaining 적용. 날짜 NaN 및 런타임 에러 수정.
 - **관련 REQ**: REQ-FE-001, REQ-FE-004
 - **분류**: 정상
 - **우선순위**: P1
@@ -27,7 +28,8 @@
 
 ### TC-FE-002 — 공연 목록 페이지 스켈레톤 → 콘텐츠 전환 및 이미지 lazy-load
 
-- [ ] 실패 (사유: /events 목록 페이지에서 EventCard.formatDateRange 내 parseLocal(null).split() 런타임 에러 발생, 이슈: #286)
+- [x] 통과
+- **결과 (2026-05-31)**: fix/286-fe-date-null — startDate/endDate null guard 추가. split() 호출 전 optional chaining 적용. 날짜 NaN 및 런타임 에러 수정.
 - **관련 REQ**: REQ-FE-004, REQ-FE-012, REQ-FE-016
 - **분류**: 정상 | 성능
 - **우선순위**: P1
