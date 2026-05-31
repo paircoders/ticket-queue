@@ -795,7 +795,7 @@
 
 ### TC-FLOW-019 — 마이페이지 예매 내역: 결제 완료 후 GET /reservations 응답 정합성
 
-- [ ] 실패 (사유: reservation-service에 GET /reservations(목록)·GET /reservations/{id}(상세) 엔드포인트 미구현. GET /reservations→HTTP 404, GET /reservations/{id}→HTTP 405. GET /payments(목록)·GET /payments/{id}(소유권 403 포함)는 정상 동작 확인. 이슈: #291)
+- [x] 통과
 - **관련 REQ**: REQ-RSV-009, REQ-PAY-015
 - **분류**: 정상
 - **우선순위**: P1(중요)

@@ -5,6 +5,8 @@ import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsRequest
 import com.ticketqueue.reservation.dto.ReservationDto.ChangeSeatsResponse
 import com.ticketqueue.reservation.dto.ReservationDto.HoldRequest
 import com.ticketqueue.reservation.dto.ReservationDto.HoldResponse
+import com.ticketqueue.reservation.dto.ReservationDto.ReservationDetailResponse
+import com.ticketqueue.reservation.dto.ReservationDto.ReservationsListResponse
 import com.ticketqueue.reservation.dto.ReservationDto.SeatStatusResponse
 import com.ticketqueue.reservation.service.ReservationService
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -33,6 +35,32 @@ class ReservationController(
     companion object {
         private const val HEADER_USER_ID = "X-User-Id"
         private const val HEADER_QUEUE_TOKEN = "X-Queue-Token"
+    }
+
+    /**
+     * 내 예매 목록 조회 (REQ-RSV-009)
+     *
+     * Gateway가 JWT를 검증하고 X-User-Id 헤더로 userId를 주입한다.
+     */
+    @GetMapping
+    fun getMyReservations(
+        @RequestHeader(HEADER_USER_ID) userId: UUID
+    ): ReservationsListResponse {
+        return reservationService.getMyReservations(userId)
+    }
+
+    /**
+     * 예매 상세 조회 (REQ-RSV-009)
+     *
+     * Gateway가 JWT를 검증하고 X-User-Id 헤더로 userId를 주입한다.
+     * 소유권 검증 실패 시 404 반환 (정보 노출 방지).
+     */
+    @GetMapping("/{reservationId}")
+    fun getReservationDetail(
+        @RequestHeader(HEADER_USER_ID) userId: UUID,
+        @PathVariable reservationId: UUID
+    ): ReservationDetailResponse {
+        return reservationService.getReservationDetail(userId, reservationId)
     }
 
     /**
