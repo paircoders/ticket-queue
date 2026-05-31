@@ -9,7 +9,7 @@
 
 ### TC-QUEUE-001 — 정상 대기열 진입: WAITING 상태·rank·estimatedWaitTime 반환
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: HTTP 200, `{"status":"WAITING","rank":1,"estimatedWaitTime":1,"token":null}` 반환, Redis ZRANK=0, queue:active TTL=600, queue:active-schedules SISMEMBER=1 확인)
 - **관련 REQ**: REQ-QUEUE-001, REQ-QUEUE-005
 - **분류**: 정상
 - **우선순위**: P0
@@ -33,7 +33,7 @@
 
 ### TC-QUEUE-002 — 동일 회차 중복 진입 멱등성: 기존 rank 반환, 순서 불변
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 동일 userId·scheduleId 재진입 시 HTTP 200, rank=1 동일 반환, ZCARD=1 유지, TTL=600 갱신 확인)
 - **관련 REQ**: REQ-QUEUE-001, REQ-QUEUE-011
 - **분류**: 멱등성
 - **우선순위**: P0
@@ -51,7 +51,7 @@
 
 ### TC-QUEUE-003 — 다중 대기열 제한: 다른 회차 대기 중 진입 시도 → 409 ALREADY_IN_QUEUE
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: scheduleId-1 대기 중인 userId로 scheduleId-2 진입 시도 → HTTP 409 `{"code":"ALREADY_IN_QUEUE"}` 반환, ZCARD(scheduleId-2)=0, queue:active 값이 scheduleId-1 유지 확인)
 - **관련 REQ**: REQ-QUEUE-011
 - **분류**: 엣지, 예외
 - **우선순위**: P0
@@ -68,7 +68,7 @@
 
 ### TC-QUEUE-004 — 대기열 용량 한계값(50,000명) 초과 시 503 QUEUE_FULL
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: Lua EVAL로 50,000개 더미 멤버 삽입 후 50,001번째 진입 시도 → HTTP 503 `{"code":"QUEUE_FULL"}` 반환, ZCARD=50000 유지 확인)
 - **관련 REQ**: REQ-QUEUE-006
 - **분류**: 경계값, 예외
 - **우선순위**: P0
@@ -91,7 +91,7 @@
 
 ### TC-QUEUE-005 — 대기열 상태 조회: WAITING → ACTIVE 전환 후 token(qr_xxx) 발급 확인
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 배치 승인 후 GET /queue/status → HTTP 200, `{"status":"ACTIVE","token":"qr_..."}`, Cache-Control: no-store 헤더 확인, queue:token/{token} JSON에 userId·scheduleId·issuedAt 포함, TTL=510초(590~600 범위 내))
 - **관련 REQ**: REQ-QUEUE-002, REQ-QUEUE-004, REQ-QUEUE-005
 - **분류**: 정상
 - **우선순위**: P0
@@ -111,7 +111,7 @@
 
 ### TC-QUEUE-006 — 상태 조회 Rate Limit: 15회/분 초과 시 429 RATE_LIMIT_EXCEEDED
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 동일 userId로 15회 호출 모두 200/404, 16번째 호출 → HTTP 429 `{"code":"RATE_LIMIT_EXCEEDED"}`, rate:queue-status:{userId} 카운터=16, TTL=60초 확인)
 - **관련 REQ**: REQ-QUEUE-008
 - **분류**: 경계값, 예외
 - **우선순위**: P0
@@ -128,7 +128,7 @@
 
 ### TC-QUEUE-007 — Rate Limit Fail-open: Redis 장애 시 상태 조회 요청 허용
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: RateLimitFailOpenIntegrationTest — Valkey 컨테이너 pause 후 GET /queue/status 호출 → HTTP 429 아닌 응답(fail-open), queue.ratelimit.failopen.total 카운터 ≥ 1 확인. 통합테스트 1건 성공)
 - **관련 REQ**: REQ-QUEUE-008
 - **분류**: 예외
 - **우선순위**: P1
@@ -145,7 +145,7 @@
 
 ### TC-QUEUE-008 — 배치 승인 Lua 스크립트 원자성: 동시 배치 실행 시 중복 토큰 발급 없음
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: BatchApproveConcurrencyIntegrationTest — 10명 진입 후 2스레드에서 동시 batchApprove 호출, 반환값 합계=10, ZCARD=0, user-token 키 정확히 10개 확인. 통합테스트 1건 성공)
 - **관련 REQ**: REQ-QUEUE-005
 - **분류**: 동시성
 - **우선순위**: P0
@@ -168,7 +168,7 @@
 
 ### TC-QUEUE-009 — 배치 승인 후 active-schedules SREM: 대기열 소진 시 자동 제거
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 1명 진입 후 배치 승인 스케줄러 자동 실행(약 3초 대기), SISMEMBER(active-schedules)=0, ZCARD=0 확인)
 - **관련 REQ**: REQ-QUEUE-005
 - **분류**: 엣지
 - **우선순위**: P1
@@ -185,7 +185,7 @@
 
 ### TC-QUEUE-010 — 이미 배치 승인된 사용자의 재진입 시도 → 409 ALREADY_APPROVED
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: ACTIVE 상태(배치 승인 완료) userId로 동일 scheduleId 재진입 시도 → HTTP 409 `{"code":"ALREADY_APPROVED"}`, queue:active 키 유지 확인)
 - **관련 REQ**: REQ-QUEUE-001
 - **분류**: 엣지, 예외
 - **우선순위**: P1
@@ -201,7 +201,7 @@
 
 ### TC-QUEUE-011 — 대기열 이탈(WAITING 상태): Redis 키 2종 일괄 삭제
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: WAITING 상태 userId로 DELETE /queue/leave → HTTP 200 `{"message":"Removed from queue"}`, ZRANK=nil, EXISTS(queue:active)=0 확인)
 - **관련 REQ**: REQ-QUEUE-003
 - **분류**: 정상, 엣지
 - **우선순위**: P0
@@ -226,7 +226,7 @@
 
 ### TC-QUEUE-012 — 대기열 이탈(ACTIVE 상태): token 관련 키 3종 일괄 삭제
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: ACTIVE 상태 userId로 DELETE /queue/leave → HTTP 200, queue:active, queue:user-token, queue:token 세 키 모두 삭제 확인(EXISTS=0))
 - **관련 REQ**: REQ-QUEUE-003
 - **분류**: 엣지
 - **우선순위**: P0
@@ -249,7 +249,7 @@
 
 ### TC-QUEUE-013 — 이탈 후 재이탈 시도 → 404 NOT_IN_QUEUE
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 이탈 완료 userId로 DELETE /queue/leave 재호출 → HTTP 404 `{"code":"NOT_IN_QUEUE"}` 확인)
 - **관련 REQ**: REQ-QUEUE-003
 - **분류**: 멱등성, 예외
 - **우선순위**: P1
@@ -264,7 +264,7 @@
 
 ### TC-QUEUE-014 — 이탈 후 재진입 시 WAITING 상태로 성공, rank=1
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 이탈 완료 userId로 POST /queue/enter 재호출 → HTTP 200 `{"status":"WAITING","rank":1}`, ZCARD=1, queue:active 값=scheduleId 확인)
 - **관련 REQ**: REQ-QUEUE-001, REQ-QUEUE-003
 - **분류**: 엣지
 - **우선순위**: P1
@@ -280,7 +280,7 @@
 
 ### TC-QUEUE-015 — queue:status 조회 시 대기열 미등록 → 404 NOT_IN_QUEUE
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 진입 이력 없는 신규 userId로 GET /queue/status → HTTP 404 `{"code":"NOT_IN_QUEUE"}` 확인)
 - **관련 REQ**: REQ-QUEUE-002
 - **분류**: 예외
 - **우선순위**: P1
@@ -295,7 +295,7 @@
 
 ### TC-QUEUE-016 — 관리자 통계 API: ADMIN 권한 접근 성공, USER 권한 접근 403
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: USER 역할 → HTTP 403, 인증 없음 → HTTP 401, ADMIN 역할 → HTTP 200 `{"totalWaiting":0,"scheduleStats":[],"batchApprovalRate":10,"batchIntervalSeconds":1,"throughputPerMinute":600}` 확인)
 - **관련 REQ**: REQ-QUEUE-007
 - **분류**: 보안
 - **우선순위**: P1
@@ -315,7 +315,7 @@
 
 ### TC-QUEUE-017 — 관리자 통계 API: KEYS 명령 미사용, SMEMBERS + ZCARD(O(1)) 전용
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: redis-cli MONITOR로 GET /queue/admin/stats 호출 시 `SMEMBERS queue:active-schedules` + 각 scheduleId별 `ZCARD` 호출 확인, `KEYS` 명령 없음. 코드 검토에서도 KEYS 미사용 확인)
 - **관련 REQ**: REQ-QUEUE-007
 - **분류**: 보안
 - **우선순위**: P0
@@ -332,7 +332,7 @@
 
 ### TC-QUEUE-018 — scheduleId 없는 요청: scheduleId=null → 400 INVALID_INPUT
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: scheduleId 누락 및 명시적 null 두 경우 모두 HTTP 400 `{"code":"INVALID_INPUT","message":"scheduleId: 회차 ID는 필수입니다."}` 반환 확인)
 - **관련 REQ**: REQ-QUEUE-001
 - **분류**: 예외, 경계값
 - **우선순위**: P1
@@ -361,7 +361,7 @@
 
 ### TC-QUEUE-019 — 회차 판매 종료 후 대기열 진입 시도 → 400 TICKET_SALE_ENDED
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: QueueEnterSellableIntegrationTest — MockkBean EventServiceClient에서 sellable=false, reason=TICKET_SALE_ENDED 반환 시 HTTP 400 `{"code":"TICKET_SALE_ENDED"}`, Redis에 진입 흔적 없음 확인. 통합테스트 2건 성공)
 - **관련 REQ**: REQ-QUEUE-001
 - **분류**: 예외
 - **우선순위**: P1
@@ -382,7 +382,7 @@
 
 ### TC-QUEUE-020 — 동시 진입 폭주(100 스레드) 순서 정합성: ZADD NX race condition 없음
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: QueueEnterConcurrencyIntegrationTest — 100개 고유 userId CountDownLatch 동시 진입, ZCARD=100, 모든 userId rank 0~99 범위 고유 확인, 예외 없음. 통합테스트 1건 성공)
 - **관련 REQ**: REQ-QUEUE-001, REQ-QUEUE-009
 - **분류**: 동시성, 성능
 - **우선순위**: P0
