@@ -9,7 +9,7 @@
 
 ### TC-SEC-001 — X-Service-Api-Key 정상 인증 통과
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 PASS (BUILD SUCCESSFUL); curl 응답 404(SCHEDULE_NOT_FOUND) — 401 아님, 인증 통과 확인)
 - **관련 REQ**: REQ-INT-001
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -25,7 +25,7 @@
 
 ### TC-SEC-002 — X-Service-Api-Key 헤더 누락 시 401 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: curl 응답 401 + INTERNAL_API_UNAUTHORIZED; 단위테스트 '헤더가 없는 경우' PASS)
 - **관련 REQ**: REQ-INT-001, REQ-INT-002
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -40,7 +40,7 @@
 
 ### TC-SEC-003 — X-Service-Api-Key 값 불일치 시 401 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: curl 응답 401 + INTERNAL_API_UNAUTHORIZED; 로그 keyPresent=true 출력; 단위테스트 PASS)
 - **관련 REQ**: REQ-INT-001, REQ-INT-002
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -55,7 +55,7 @@
 
 ### TC-SEC-004 — X-Service-Api-Key 빈 문자열/공백 헤더 거부
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: curl 응답 401 + INTERNAL_API_UNAUTHORIZED; 단위테스트 '헤더가 빈 문자열/공백' PASS)
 - **관련 REQ**: REQ-INT-001
 - **분류**: 경계값
 - **우선순위**: P1(중요)
@@ -71,7 +71,7 @@
 
 ### TC-SEC-005 — 타이밍 어택 방어: 길이 상이/동일 키 상수 시간 비교
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 Timing Attack 방어 케이스 2개 모두 PASS; 소스코드 MessageDigest.isEqual 확인 (line 31))
 - **관련 REQ**: REQ-INT-002
 - **분류**: 보안
 - **우선순위**: P1(중요)
@@ -88,7 +88,7 @@
 
 ### TC-SEC-006 — GatewayAuthFilter: 신뢰 헤더(X-User-Id + X-User-Role) 기반 SecurityContext 설정
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 ROLE_USER/ROLE_ADMIN SecurityContext 설정 케이스 PASS; auth.name 및 authorities 검증 통과)
 - **관련 REQ**: REQ-GW-002
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -104,7 +104,7 @@
 
 ### TC-SEC-007 — GatewayAuthFilter: 허용되지 않은 Role(SUPERADMIN 등) 헤더 인젝션 차단
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 SUPERADMIN 헤더 인젝션 방어 케이스 PASS; SecurityContext authentication == null 확인)
 - **관련 REQ**: REQ-GW-002
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -120,7 +120,7 @@
 
 ### TC-SEC-008 — GatewayAuthFilter: 헤더 일부 누락 시 SecurityContext 미설정
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 X-User-Id 단독/X-User-Role 단독/두 헤더 모두 없는 경우 3개 케이스 PASS; filterChain.doFilter() 항상 호출)
 - **관련 REQ**: REQ-GW-002
 - **분류**: 엣지
 - **우선순위**: P1(중요)
@@ -136,7 +136,7 @@
 
 ### TC-SEC-009 — AES-256-GCM 암복호화 라운드트립 및 IV 랜덤성
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 10개 케이스 PASS; 라운드트립(한글/특수문자/1000자+), IV 랜덤성, Base64 구조 12바이트+ 모두 검증)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상
 - **우선순위**: P0(필수/핵심)
@@ -153,7 +153,7 @@
 
 ### TC-SEC-010 — AES-256-GCM: 암호문 1바이트 변조 시 GCM 인증 태그 실패
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 PASS; corruptedBytes[15] 1바이트 변조 → AEADBadTagException; 잘못된 키 → AEADBadTagException; 잘못된 Base64 → IllegalArgumentException)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안
 - **우선순위**: P0(필수/핵심)
@@ -170,7 +170,7 @@
 
 ### TC-SEC-011 — AES-256-GCM: IV 영역 변조 시에도 GCM 인증 태그 실패
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 신규 테스트 추가 및 실행 PASS; bytes[5](IV 영역) 변조 후 decrypt 호출 → AEADBadTagException 발생 확인)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안
 - **우선순위**: P1(중요)
@@ -187,7 +187,7 @@
 
 ### TC-SEC-012 — HMAC-SHA256: 결정론적 해시 및 salt 변경 시 다른 결과
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 4개 케이스 PASS; 결정론적 해시, salt 변경 시 다른 결과, 길이 44자, 빈 문자열 정상 반환)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상 | 경계값
 - **우선순위**: P1(중요)
@@ -205,7 +205,7 @@
 
 ### TC-SEC-013 — GlobalExceptionHandler: BusinessException → 표준 ErrorResponse 포맷 검증
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 PASS; BusinessException → HTTP status/code 일치, 커스텀 메시지 우선, traceId non-null 검증)
 - **관련 REQ**: 해당 없음
 - **분류**: 정상 | 예외
 - **우선순위**: P0(필수/핵심)
@@ -222,7 +222,7 @@
 
 ### TC-SEC-014 — GlobalExceptionHandler: @Valid 입력 검증 실패 → 필드명 포함 메시지
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 PASS; MethodArgumentNotValidException/ConstraintViolationException/MissingServletRequestParameterException/MethodArgumentTypeMismatchException 모두 HTTP 400 + INVALID_INPUT)
 - **관련 REQ**: 해당 없음
 - **분류**: 예외
 - **우선순위**: P1(중요)
@@ -239,7 +239,7 @@
 
 ### TC-SEC-015 — GlobalExceptionHandler: 미처리 Exception → 500 내부 오류, 세부 정보 미노출
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 PASS; RuntimeException('예기치 못한 오류') → HTTP 500 + INTERNAL_SERVER_ERROR + 원본 메시지 미노출)
 - **관련 REQ**: 해당 없음
 - **분류**: 보안 | 예외
 - **우선순위**: P1(중요)
@@ -255,7 +255,7 @@
 
 ### TC-SEC-016 — FeignErrorDecoder: 4xx/5xx 상태 코드별 예외 변환 계약
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 10개 케이스 PASS; 401→INTERNAL_API_UNAUTHORIZED, 404→RESOURCE_NOT_FOUND, 400/403→INVALID_INPUT, 500/503→RetryableException)
 - **관련 REQ**: REQ-INT-005
 - **분류**: 예외
 - **우선순위**: P0(필수/핵심)
@@ -273,7 +273,7 @@
 
 ### TC-SEC-017 — PortoneTokenService: 토큰 캐싱 및 만료 2분 전 자동 갱신 (Double-Check 동시성)
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 신규 동시성 테스트 추가 및 PASS; 동시 10 스레드에서 login 정확히 1회 호출; 캐싱·토큰 갱신 케이스 모두 통과)
 - **관련 REQ**: 해당 없음
 - **분류**: 동시성
 - **우선순위**: P1(중요)
@@ -298,7 +298,7 @@
 
 ### TC-SEC-018 — PortoneFallbackFactory: CallNotPermittedException → PortoneCircuitOpenException, 일반 예외는 원본 재전파
 
-- [ ] 미실행
+- [x] 통과 (2026-05-31, 근거: 단위테스트 4개 케이스 PASS; CallNotPermittedException → PortoneCircuitOpenException(cause=원본); RuntimeException → 원본 재전파)
 - **관련 REQ**: 해당 없음
 - **분류**: 예외 | 보상트랜잭션
 - **우선순위**: P1(중요)

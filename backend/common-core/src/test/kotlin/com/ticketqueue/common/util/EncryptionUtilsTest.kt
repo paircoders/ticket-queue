@@ -169,4 +169,22 @@ class EncryptionUtilsTest {
             EncryptionUtils.decrypt(invalidBase64, secretKey)
         }
     }
+    // TC-SEC-011: IV 영역(bytes[0..11]) 변조 시에도 GCM 인증 태그 실패 확인
+    @Test
+    fun `IV 영역 1바이트 변조 시 GCM 인증 태그 실패`() {
+        // Given - byteBuffer[0..11] = IV, byteBuffer[12..] = CipherText+Tag
+        val plainText = "test"
+        val secretKey = generateTestKey()
+        val encrypted = EncryptionUtils.encrypt(plainText, secretKey)
+
+        // When - IV 내부(bytes[5]) 변조
+        val bytes = Base64.getDecoder().decode(encrypted)
+        bytes[5] = (bytes[5] + 1).toByte()
+        val corrupted = Base64.getEncoder().encodeToString(bytes)
+
+        // Then - IV가 변조되면 GCM 태그 검증 실패
+        assertThrows<AEADBadTagException> {
+            EncryptionUtils.decrypt(corrupted, secretKey)
+        }
+    }
 }
