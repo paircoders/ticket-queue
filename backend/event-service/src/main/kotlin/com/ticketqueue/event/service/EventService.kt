@@ -124,7 +124,7 @@ class EventService(
             throw EventException(ErrorCode.INVALID_SEAT_TEMPLATE, cause = e)
         }
 
-        val event = eventRepository.save(
+        val event = eventRepository.saveAndFlush(
             Event(title = request.title, artist = request.artist, description = request.description, venue = venue, hall = hall)
         )
 

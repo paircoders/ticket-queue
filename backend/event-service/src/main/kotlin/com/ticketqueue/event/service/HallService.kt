@@ -75,7 +75,7 @@ class HallService(
             capacity = request.capacity,
             seatTemplate = seatTemplateJson
         )
-        val saved = hallRepository.save(hall)
+        val saved = hallRepository.saveAndFlush(hall)
         return HallDto.Response.from(saved)
     }
 
